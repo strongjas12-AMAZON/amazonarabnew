@@ -4,14 +4,14 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Users table
+-- Users table (Note: camelCase for JSON compatibility)
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY,
     email TEXT UNIQUE NOT NULL,
     name TEXT NOT NULL,
     role TEXT NOT NULL CHECK (role IN ('admin', 'seller', 'buyer')),
-    verification_status TEXT DEFAULT 'unverified' CHECK (verification_status IN ('unverified', 'pending', 'verified', 'rejected')),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    "verificationStatus" TEXT DEFAULT 'unverified' CHECK ("verificationStatus" IN ('unverified', 'pending', 'verified', 'rejected')),
+    "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Products table
