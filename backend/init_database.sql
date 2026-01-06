@@ -1,4 +1,4 @@
--- Supabase Database Schema for Multi-Vendor Marketplace
+-- Supabase Database Schema for Amazon Arab Multi-Vendor Marketplace
 -- Run this in Supabase SQL Editor
 
 -- Enable UUID extension
