@@ -1,4 +1,4 @@
-# LuxMarket - Premium Multi-Vendor Marketplace
+# Amazon Arab - Premium Multi-Vendor Marketplace
 
 A complete, production-ready multi-vendor marketplace with crypto payments, user verification, and admin management.
 
