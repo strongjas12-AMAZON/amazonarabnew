@@ -13,7 +13,6 @@ from typing import List, Optional
 from datetime import datetime, timezone
 import uuid
 from supabase import create_client, Client
-from io import BytesIO
 
 
 ROOT_DIR = Path(__file__).parent
@@ -89,19 +88,14 @@ def get_signed_document_url(file_path: str, expires_in: int = 3600) -> Optional[
             file_path,
             expires_in
         )
-        # Handle different response formats from supabase-py
         if result:
-            # Check for signedURL (older format)
             if isinstance(result, dict) and 'signedURL' in result:
                 return result['signedURL']
-            # Check for signed_url (newer format)
             if isinstance(result, dict) and 'signed_url' in result:
                 return result['signed_url']
-            # Check if result has data attribute (newer supabase-py)
             if hasattr(result, 'data') and result.data:
                 if isinstance(result.data, dict):
                     return result.data.get('signedUrl') or result.data.get('signedURL') or result.data.get('signed_url')
-            # If result is a string URL directly
             if isinstance(result, str) and result.startswith('http'):
                 return result
         logging.warning(f"Unexpected signed URL response format: {type(result)} - {result}")
@@ -111,23 +105,121 @@ def get_signed_document_url(file_path: str, expires_in: int = 3600) -> Optional[
         return None
 
 
+def format_user_response(user_data: dict) -> dict:
+    """Convert snake_case DB fields to camelCase for frontend"""
+    return {
+        'id': user_data.get('id'),
+        'email': user_data.get('email'),
+        'name': user_data.get('name'),
+        'role': user_data.get('role'),
+        'verificationStatus': user_data.get('verification_status'),
+        'createdAt': user_data.get('created_at')
+    }
+
+
+def format_product_response(product_data: dict) -> dict:
+    """Convert snake_case DB fields to camelCase for frontend"""
+    result = {
+        'id': product_data.get('id'),
+        'title': product_data.get('title'),
+        'description': product_data.get('description'),
+        'price': product_data.get('price'),
+        'images': product_data.get('images', []),
+        'sellerId': product_data.get('seller_id'),
+        'createdAt': product_data.get('created_at')
+    }
+    if 'users' in product_data and product_data['users']:
+        result['users'] = {
+            'name': product_data['users'].get('name'),
+            'verificationStatus': product_data['users'].get('verification_status')
+        }
+    return result
+
+
+def format_order_response(order_data: dict) -> dict:
+    """Convert snake_case DB fields to camelCase for frontend"""
+    result = {
+        'id': order_data.get('id'),
+        'buyerId': order_data.get('buyer_id'),
+        'totalAmount': order_data.get('total_amount'),
+        'paymentMethod': order_data.get('payment_method'),
+        'paymentWallet': order_data.get('payment_wallet'),
+        'paymentStatus': order_data.get('payment_status'),
+        'confirmedByAdmin': order_data.get('confirmed_by_admin'),
+        'confirmedAt': order_data.get('confirmed_at'),
+        'createdAt': order_data.get('created_at')
+    }
+    if 'users' in order_data and order_data['users']:
+        result['users'] = {
+            'name': order_data['users'].get('name'),
+            'email': order_data['users'].get('email')
+        }
+    if 'order_items' in order_data:
+        result['order_items'] = []
+        for item in order_data['order_items']:
+            formatted_item = {
+                'id': item.get('id'),
+                'orderId': item.get('order_id'),
+                'productId': item.get('product_id'),
+                'quantity': item.get('quantity'),
+                'price': item.get('price')
+            }
+            if 'products' in item and item['products']:
+                formatted_item['products'] = format_product_response(item['products'])
+            result['order_items'].append(formatted_item)
+    return result
+
+
+def format_verification_doc_response(doc_data: dict) -> dict:
+    """Convert snake_case DB fields to camelCase for frontend"""
+    result = {
+        'id': doc_data.get('id'),
+        'userId': doc_data.get('user_id'),
+        'documentType': doc_data.get('document_type'),
+        'documentUrl': doc_data.get('document_url'),
+        'status': doc_data.get('status'),
+        'merchantInviteCode': doc_data.get('merchant_invite_code'),
+        'rejectionReason': doc_data.get('rejection_reason'),
+        'reviewedAt': doc_data.get('reviewed_at'),
+        'createdAt': doc_data.get('created_at')
+    }
+    if 'users' in doc_data and doc_data['users']:
+        result['users'] = {
+            'name': doc_data['users'].get('name'),
+            'email': doc_data['users'].get('email'),
+            'role': doc_data['users'].get('role')
+        }
+    return result
+
+
+def format_invite_code_response(code_data: dict) -> dict:
+    """Convert snake_case DB fields to camelCase for frontend"""
+    return {
+        'id': code_data.get('id'),
+        'code': code_data.get('code'),
+        'isUsed': code_data.get('is_used'),
+        'createdByAdmin': code_data.get('created_by_admin'),
+        'usedByUserId': code_data.get('used_by_user_id'),
+        'usedAt': code_data.get('used_at'),
+        'createdAt': code_data.get('created_at')
+    }
+
+
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Get current user from JWT token"""
     try:
         token = credentials.credentials
         
-        # Verify token with Supabase
         response = supabase.auth.get_user(token)
         if not response.user:
             raise HTTPException(status_code=401, detail="Invalid token")
         
-        # Get user details from users table
         user_data = supabase_admin.table('users').select('*').eq('id', response.user.id).execute()
         
         if not user_data.data:
             raise HTTPException(status_code=404, detail="User not found")
         
-        return user_data.data[0]
+        return format_user_response(user_data.data[0])
     except Exception as e:
         raise HTTPException(status_code=401, detail=str(e))
 
@@ -145,7 +237,6 @@ async def setup_admin():
         admin_email = "support@arabshopping.org"
         admin_password = "Hadi1247@"
         
-        # Create auth user with admin client
         try:
             auth_response = supabase_admin.auth.admin.create_user({
                 "email": admin_email,
@@ -154,27 +245,23 @@ async def setup_admin():
             })
             user_id = auth_response.user.id
         except Exception as e:
-            # If user already exists, get their ID
             existing = supabase_admin.table('users').select('id').eq('email', admin_email).execute()
             if existing.data:
                 user_id = existing.data[0]['id']
             else:
                 raise e
         
-        # Create/update user in users table
         user_record = {
             'id': user_id,
             'email': admin_email,
             'name': 'Admin',
             'role': 'admin',
-            'verificationStatus': 'verified',
-            'createdAt': datetime.now(timezone.utc).isoformat()
+            'verification_status': 'verified',
+            'created_at': datetime.now(timezone.utc).isoformat()
         }
         
-        # Upsert user
         supabase_admin.table('users').upsert(user_record).execute()
         
-        # Update env flag
         env_path = ROOT_DIR / '.env'
         with open(env_path, 'r') as f:
             lines = f.readlines()
@@ -200,11 +287,10 @@ async def setup_admin():
 
 # Auth Routes
 @api_router.post("/auth/register")
-@limiter.limit("3/minute")  # 3 registrations per minute per IP
+@limiter.limit("3/minute")
 async def register(request: Request, req: RegisterRequest):
     """Register new user"""
     try:
-        # Create auth user
         auth_response = supabase.auth.sign_up({
             "email": req.email,
             "password": req.password
@@ -213,21 +299,20 @@ async def register(request: Request, req: RegisterRequest):
         if not auth_response.user:
             raise HTTPException(status_code=400, detail="Registration failed")
         
-        # Create user record
         user_data = {
             'id': auth_response.user.id,
             'email': req.email,
             'name': req.name,
             'role': req.role,
-            'verificationStatus': 'unverified',
-            'createdAt': datetime.now(timezone.utc).isoformat()
+            'verification_status': 'unverified',
+            'created_at': datetime.now(timezone.utc).isoformat()
         }
         
         supabase_admin.table('users').insert(user_data).execute()
         
         return {
             "success": True,
-            "user": user_data,
+            "user": format_user_response(user_data),
             "session": auth_response.session
         }
     except Exception as e:
@@ -236,11 +321,10 @@ async def register(request: Request, req: RegisterRequest):
 
 
 @api_router.post("/auth/login")
-@limiter.limit("5/minute")  # 5 login attempts per minute per IP
+@limiter.limit("5/minute")
 async def login(request: Request, req: LoginRequest):
     """Login user"""
     try:
-        # Sign in with Supabase
         auth_response = supabase.auth.sign_in_with_password({
             "email": req.email,
             "password": req.password
@@ -249,7 +333,6 @@ async def login(request: Request, req: LoginRequest):
         if not auth_response.user:
             raise HTTPException(status_code=401, detail="Invalid credentials")
         
-        # Get user details
         user_data = supabase_admin.table('users').select('*').eq('id', auth_response.user.id).execute()
         
         if not user_data.data:
@@ -257,7 +340,7 @@ async def login(request: Request, req: LoginRequest):
         
         return {
             "success": True,
-            "user": user_data.data[0],
+            "user": format_user_response(user_data.data[0]),
             "session": auth_response.session
         }
     except Exception as e:
@@ -280,14 +363,17 @@ async def logout(current_user: dict = Depends(get_current_user)):
 async def get_products():
     """Get all verified products"""
     try:
-        # Get products from verified sellers only
-        products = supabase_admin.table('products').select('*, users!seller_id(name, verificationStatus)').execute()
+        products = supabase_admin.table('products').select('*, users!seller_id(name, verification_status)').execute()
         
-        # Filter verified sellers
-        verified_products = [p for p in products.data if p.get('users') and p['users'].get('verificationStatus') == 'verified']
+        verified_products = [
+            format_product_response(p) 
+            for p in products.data 
+            if p.get('users') and p['users'].get('verification_status') == 'verified'
+        ]
         
         return {"success": True, "products": verified_products}
     except Exception as e:
+        logging.error(f"Get products error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -298,8 +384,8 @@ async def get_my_products(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Only sellers can access this")
     
     try:
-        products = supabase_admin.table('products').select('*').eq('sellerId', current_user['id']).execute()
-        return {"success": True, "products": products.data}
+        products = supabase_admin.table('products').select('*').eq('seller_id', current_user['id']).execute()
+        return {"success": True, "products": [format_product_response(p) for p in products.data]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -320,12 +406,12 @@ async def create_product(request: CreateProductRequest, current_user: dict = Dep
             'description': request.description,
             'price': request.price,
             'images': [],
-            'sellerId': current_user['id'],
-            'createdAt': datetime.now(timezone.utc).isoformat()
+            'seller_id': current_user['id'],
+            'created_at': datetime.now(timezone.utc).isoformat()
         }
         
         result = supabase_admin.table('products').insert(product_data).execute()
-        return {"success": True, "product": result.data[0]}
+        return {"success": True, "product": format_product_response(result.data[0])}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -337,8 +423,7 @@ async def update_product(product_id: str, request: UpdateProductRequest, current
         raise HTTPException(status_code=403, detail="Only sellers can update products")
     
     try:
-        # Verify ownership
-        product = supabase_admin.table('products').select('*').eq('id', product_id).eq('sellerId', current_user['id']).execute()
+        product = supabase_admin.table('products').select('*').eq('id', product_id).eq('seller_id', current_user['id']).execute()
         
         if not product.data:
             raise HTTPException(status_code=404, detail="Product not found or unauthorized")
@@ -354,7 +439,7 @@ async def update_product(product_id: str, request: UpdateProductRequest, current
             update_data['images'] = request.images
         
         result = supabase_admin.table('products').update(update_data).eq('id', product_id).execute()
-        return {"success": True, "product": result.data[0]}
+        return {"success": True, "product": format_product_response(result.data[0])}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -366,8 +451,7 @@ async def delete_product(product_id: str, current_user: dict = Depends(get_curre
         raise HTTPException(status_code=403, detail="Only sellers can delete products")
     
     try:
-        # Verify ownership
-        product = supabase_admin.table('products').select('*').eq('id', product_id).eq('sellerId', current_user['id']).execute()
+        product = supabase_admin.table('products').select('*').eq('id', product_id).eq('seller_id', current_user['id']).execute()
         
         if not product.data:
             raise HTTPException(status_code=404, detail="Product not found or unauthorized")
@@ -389,21 +473,17 @@ async def upload_product_image(
         raise HTTPException(status_code=403, detail="Only sellers can upload images")
     
     try:
-        # Verify ownership
-        product = supabase_admin.table('products').select('*').eq('id', product_id).eq('sellerId', current_user['id']).execute()
+        product = supabase_admin.table('products').select('*').eq('id', product_id).eq('seller_id', current_user['id']).execute()
         
         if not product.data:
             raise HTTPException(status_code=404, detail="Product not found or unauthorized")
         
-        # Check image limit
         current_images = product.data[0].get('images', [])
         if len(current_images) >= 10:
             raise HTTPException(status_code=400, detail="Maximum 10 images allowed")
         
-        # Read file
         contents = await file.read()
         
-        # Upload to Supabase Storage
         file_ext = file.filename.split('.')[-1]
         file_name = f"{product_id}/{str(uuid.uuid4())}.{file_ext}"
         
@@ -411,10 +491,8 @@ async def upload_product_image(
             'content-type': file.content_type
         })
         
-        # Get public URL
         public_url = supabase_admin.storage.from_('products').get_public_url(file_name)
         
-        # Update product images
         updated_images = current_images + [public_url]
         supabase_admin.table('products').update({'images': updated_images}).eq('id', product_id).execute()
         
@@ -426,7 +504,7 @@ async def upload_product_image(
 
 # Order Routes
 @api_router.post("/orders")
-@limiter.limit("10/hour")  # 10 orders per hour per IP
+@limiter.limit("10/hour")
 async def create_order(request: Request, req: CreateOrderRequest, current_user: dict = Depends(get_current_user)):
     """Create new order"""
     if current_user['role'] != 'buyer':
@@ -435,30 +513,29 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
     try:
         order_data = {
             'id': str(uuid.uuid4()),
-            'buyerId': current_user['id'],
-            'totalAmount': req.totalAmount,
-            'paymentMethod': 'USDT_TRON',
-            'paymentWallet': ADMIN_CRYPTO_WALLET,
-            'paymentStatus': 'pending_payment',
-            'confirmedByAdmin': False,
-            'createdAt': datetime.now(timezone.utc).isoformat()
+            'buyer_id': current_user['id'],
+            'total_amount': req.totalAmount,
+            'payment_method': 'USDT_TRON',
+            'payment_wallet': ADMIN_CRYPTO_WALLET,
+            'payment_status': 'pending_payment',
+            'confirmed_by_admin': False,
+            'created_at': datetime.now(timezone.utc).isoformat()
         }
         
         order_result = supabase_admin.table('orders').insert(order_data).execute()
         order_id = order_result.data[0]['id']
         
-        # Create order items
         for item in req.items:
             item_data = {
                 'id': str(uuid.uuid4()),
-                'orderId': order_id,
-                'productId': item['productId'],
+                'order_id': order_id,
+                'product_id': item['productId'],
                 'quantity': item['quantity'],
                 'price': item['price']
             }
             supabase_admin.table('order_items').insert(item_data).execute()
         
-        return {"success": True, "order": order_result.data[0]}
+        return {"success": True, "order": format_order_response(order_result.data[0])}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -468,25 +545,24 @@ async def get_my_orders(current_user: dict = Depends(get_current_user)):
     """Get user's orders"""
     try:
         if current_user['role'] == 'buyer':
-            orders = supabase_admin.table('orders').select('*, order_items(*, products(*))').eq('buyerId', current_user['id']).execute()
+            orders = supabase_admin.table('orders').select('*, order_items(*, products(*))').eq('buyer_id', current_user['id']).execute()
         elif current_user['role'] == 'seller':
-            # Get orders containing seller's products
             orders = supabase_admin.table('orders').select('*, order_items(*, products(*))').execute()
-            # Filter for seller's products
             filtered_orders = []
             for order in orders.data:
-                seller_items = [item for item in order['order_items'] if item['products']['sellerId'] == current_user['id']]
+                seller_items = [item for item in order['order_items'] if item['products']['seller_id'] == current_user['id']]
                 if seller_items:
                     order['order_items'] = seller_items
                     filtered_orders.append(order)
-            return {"success": True, "orders": filtered_orders}
+            return {"success": True, "orders": [format_order_response(o) for o in filtered_orders]}
         elif current_user['role'] == 'admin':
-            orders = supabase_admin.table('orders').select('*, order_items(*, products(*)), users!buyerId(name, email)').execute()
+            orders = supabase_admin.table('orders').select('*, order_items(*, products(*)), users!buyer_id(name, email)').execute()
         else:
             raise HTTPException(status_code=403, detail="Unauthorized")
         
-        return {"success": True, "orders": orders.data}
+        return {"success": True, "orders": [format_order_response(o) for o in orders.data]}
     except Exception as e:
+        logging.error(f"Get orders error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -498,15 +574,15 @@ async def update_order_status(order_id: str, request: UpdateOrderStatusRequest, 
     
     try:
         update_data = {
-            'paymentStatus': request.status
+            'payment_status': request.status
         }
         
         if request.status == 'paid':
-            update_data['confirmedByAdmin'] = True
-            update_data['confirmedAt'] = datetime.now(timezone.utc).isoformat()
+            update_data['confirmed_by_admin'] = True
+            update_data['confirmed_at'] = datetime.now(timezone.utc).isoformat()
         
         result = supabase_admin.table('orders').update(update_data).eq('id', order_id).execute()
-        return {"success": True, "order": result.data[0]}
+        return {"success": True, "order": format_order_response(result.data[0])}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -521,56 +597,48 @@ async def upload_verification_document(
 ):
     """Upload verification document"""
     try:
-        # For sellers, verify invite code
         if current_user['role'] == 'seller':
             if not merchantInviteCode:
                 raise HTTPException(status_code=400, detail="Merchant invite code required for sellers")
             
-            # Check if code exists and not used
-            code_check = supabase_admin.table('merchant_invite_codes').select('*').eq('code', merchantInviteCode).eq('isUsed', False).execute()
+            code_check = supabase_admin.table('merchant_invite_codes').select('*').eq('code', merchantInviteCode).eq('is_used', False).execute()
             
             if not code_check.data:
                 raise HTTPException(status_code=400, detail="Invalid or already used invite code")
         
-        # Read file
         contents = await file.read()
         
-        # Upload to Supabase Storage
         file_ext = file.filename.split('.')[-1]
-        file_name = f"verification/{current_user['id']}/{str(uuid.uuid4())}.{file_ext}"
+        file_name = f"{current_user['id']}/{str(uuid.uuid4())}.{file_ext}"
         
         supabase_admin.storage.from_('documents').upload(file_name, contents, {
             'content-type': file.content_type
         })
         
-        # Get public URL
         public_url = supabase_admin.storage.from_('documents').get_public_url(file_name)
         
-        # Create verification document record
         doc_data = {
             'id': str(uuid.uuid4()),
-            'userId': current_user['id'],
-            'documentType': documentType,
-            'documentUrl': public_url,
+            'user_id': current_user['id'],
+            'document_type': documentType,
+            'document_url': public_url,
             'status': 'pending',
-            'merchantInviteCode': merchantInviteCode if current_user['role'] == 'seller' else None,
-            'createdAt': datetime.now(timezone.utc).isoformat()
+            'merchant_invite_code': merchantInviteCode if current_user['role'] == 'seller' else None,
+            'created_at': datetime.now(timezone.utc).isoformat()
         }
         
         result = supabase_admin.table('verification_documents').insert(doc_data).execute()
         
-        # Update user status to pending
-        supabase_admin.table('users').update({'verificationStatus': 'pending'}).eq('id', current_user['id']).execute()
+        supabase_admin.table('users').update({'verification_status': 'pending'}).eq('id', current_user['id']).execute()
         
-        # Mark invite code as used if seller
         if current_user['role'] == 'seller' and merchantInviteCode:
             supabase_admin.table('merchant_invite_codes').update({
-                'isUsed': True,
-                'usedByUserId': current_user['id'],
-                'usedAt': datetime.now(timezone.utc).isoformat()
+                'is_used': True,
+                'used_by_user_id': current_user['id'],
+                'used_at': datetime.now(timezone.utc).isoformat()
             }).eq('code', merchantInviteCode).execute()
         
-        return {"success": True, "document": result.data[0]}
+        return {"success": True, "document": format_verification_doc_response(result.data[0])}
     except Exception as e:
         logging.error(f"Upload error: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
@@ -581,27 +649,24 @@ async def get_verification_documents(current_user: dict = Depends(get_current_us
     """Get verification documents with SIGNED URLs for private access"""
     try:
         if current_user['role'] == 'admin':
-            # Admin sees all pending documents
             docs = supabase_admin.table('verification_documents').select('*, users(name, email, role)').eq('status', 'pending').execute()
         else:
-            # Users see their own documents
-            docs = supabase_admin.table('verification_documents').select('*').eq('userId', current_user['id']).execute()
+            docs = supabase_admin.table('verification_documents').select('*').eq('user_id', current_user['id']).execute()
         
-        # Generate signed URLs for each document
+        formatted_docs = []
         for doc in docs.data:
-            if doc.get('documentUrl'):
-                # Extract file path from public URL
-                # Format: https://...supabase.co/storage/v1/object/public/documents/path/to/file.jpg
-                if '/documents/' in doc['documentUrl']:
-                    file_path = doc['documentUrl'].split('/documents/')[-1]
-                    # Replace with signed URL (1 hour expiry)
+            formatted_doc = format_verification_doc_response(doc)
+            if formatted_doc.get('documentUrl'):
+                if '/documents/' in formatted_doc['documentUrl']:
+                    file_path = formatted_doc['documentUrl'].split('/documents/')[-1]
                     signed_url = get_signed_document_url(file_path, expires_in=3600)
                     if signed_url:
-                        doc['documentUrl'] = signed_url
+                        formatted_doc['documentUrl'] = signed_url
                     else:
-                        logging.warning(f"Failed to generate signed URL for document {doc['id']}")
+                        logging.warning(f"Failed to generate signed URL for document {formatted_doc['id']}")
+            formatted_docs.append(formatted_doc)
         
-        return {"success": True, "documents": docs.data}
+        return {"success": True, "documents": formatted_docs}
     except Exception as e:
         logging.error(f"Failed to fetch verification documents: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -614,26 +679,23 @@ async def review_verification(doc_id: str, request: ReviewVerificationRequest, c
         raise HTTPException(status_code=403, detail="Only admins can review documents")
     
     try:
-        # Get document
         doc = supabase_admin.table('verification_documents').select('*').eq('id', doc_id).execute()
         
         if not doc.data:
             raise HTTPException(status_code=404, detail="Document not found")
         
-        # Update document
         update_data = {
             'status': request.status,
-            'reviewedAt': datetime.now(timezone.utc).isoformat()
+            'reviewed_at': datetime.now(timezone.utc).isoformat()
         }
         
         if request.rejectionReason:
-            update_data['rejectionReason'] = request.rejectionReason
+            update_data['rejection_reason'] = request.rejectionReason
         
         supabase_admin.table('verification_documents').update(update_data).eq('id', doc_id).execute()
         
-        # Update user verification status
-        user_id = doc.data[0]['userId']
-        supabase_admin.table('users').update({'verificationStatus': request.status}).eq('id', user_id).execute()
+        user_id = doc.data[0]['user_id']
+        supabase_admin.table('users').update({'verification_status': request.status}).eq('id', user_id).execute()
         
         return {"success": True, "message": "Review completed"}
     except Exception as e:
@@ -649,7 +711,7 @@ async def get_all_users(current_user: dict = Depends(get_current_user)):
     
     try:
         users = supabase_admin.table('users').select('*').execute()
-        return {"success": True, "users": users.data}
+        return {"success": True, "users": [format_user_response(u) for u in users.data]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -666,13 +728,13 @@ async def create_invite_code(current_user: dict = Depends(get_current_user)):
         code_data = {
             'id': str(uuid.uuid4()),
             'code': code,
-            'isUsed': False,
-            'createdByAdmin': current_user['id'],
-            'createdAt': datetime.now(timezone.utc).isoformat()
+            'is_used': False,
+            'created_by_admin': current_user['id'],
+            'created_at': datetime.now(timezone.utc).isoformat()
         }
         
         result = supabase_admin.table('merchant_invite_codes').insert(code_data).execute()
-        return {"success": True, "inviteCode": result.data[0]}
+        return {"success": True, "inviteCode": format_invite_code_response(result.data[0])}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -685,7 +747,7 @@ async def get_invite_codes(current_user: dict = Depends(get_current_user)):
     
     try:
         codes = supabase_admin.table('merchant_invite_codes').select('*').execute()
-        return {"success": True, "codes": codes.data}
+        return {"success": True, "codes": [format_invite_code_response(c) for c in codes.data]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
