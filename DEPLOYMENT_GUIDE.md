@@ -457,7 +457,7 @@ sudo tail -f /var/log/nginx/access.log
 
 ### Contact
 
-For issues specific to LuxMarket:
+For issues specific to Amazon Arab:
 - Email: support@arabshopping.org
 - Check logs in `/var/log/supervisor/` (current setup)
 - Review code in `/app/backend` and `/app/frontend`
