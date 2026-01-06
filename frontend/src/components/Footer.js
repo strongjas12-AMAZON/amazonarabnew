@@ -14,7 +14,7 @@ const Footer = () => {
                 <span className="text-[#0a0a0a] font-bold text-xl">L</span>
               </div>
               <span className="text-gold-gradient text-2xl font-['Playfair_Display'] font-bold">
-                LuxMarket
+                Amazon Arab
               </span>
             </div>
             <p className="text-gray-400 max-w-md">
