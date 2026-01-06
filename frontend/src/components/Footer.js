@@ -59,7 +59,7 @@ const Footer = () => {
 
         <div className="border-t border-[rgba(212,175,55,0.1)] mt-8 pt-8 text-center">
           <p className="text-gray-500 text-sm">
-            © 2025 LuxMarket. All rights reserved. | Secure crypto payments | Verified sellers
+            © 2025 Amazon Arab. All rights reserved. | Secure crypto payments | Verified sellers
           </p>
         </div>
       </div>
