@@ -194,3 +194,15 @@ USING ("isUsed" = false);
 -- Grant permissions to service role
 GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO service_role;
+
+-- Grant permissions to authenticated users
+GRANT SELECT, INSERT, UPDATE, DELETE ON users TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON products TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON orders TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON order_items TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON verification_documents TO authenticated;
+GRANT SELECT ON merchant_invite_codes TO authenticated;
+
+-- Allow anon users to read products and codes
+GRANT SELECT ON products TO anon;
+GRANT SELECT ON merchant_invite_codes TO anon;
