@@ -228,8 +228,8 @@ async def login(request: Request, req: LoginRequest):
     try:
         # Sign in with Supabase
         auth_response = supabase.auth.sign_in_with_password({
-            "email": request.email,
-            "password": request.password
+            "email": req.email,
+            "password": req.password
         })
         
         if not auth_response.user:
