@@ -222,7 +222,8 @@ async def register(request: Request, req: RegisterRequest):
 
 
 @api_router.post("/auth/login")
-async def login(request: LoginRequest):
+@limiter.limit("5/minute")  # 5 login attempts per minute per IP
+async def login(request: Request, req: LoginRequest):
     """Login user"""
     try:
         # Sign in with Supabase
