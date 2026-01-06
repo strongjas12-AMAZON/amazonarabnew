@@ -89,8 +89,22 @@ def get_signed_document_url(file_path: str, expires_in: int = 3600) -> Optional[
             file_path,
             expires_in
         )
-        if result and 'signedURL' in result:
-            return result['signedURL']
+        # Handle different response formats from supabase-py
+        if result:
+            # Check for signedURL (older format)
+            if isinstance(result, dict) and 'signedURL' in result:
+                return result['signedURL']
+            # Check for signed_url (newer format)
+            if isinstance(result, dict) and 'signed_url' in result:
+                return result['signed_url']
+            # Check if result has data attribute (newer supabase-py)
+            if hasattr(result, 'data') and result.data:
+                if isinstance(result.data, dict):
+                    return result.data.get('signedUrl') or result.data.get('signedURL') or result.data.get('signed_url')
+            # If result is a string URL directly
+            if isinstance(result, str) and result.startswith('http'):
+                return result
+        logging.warning(f"Unexpected signed URL response format: {type(result)} - {result}")
         return None
     except Exception as e:
         logging.error(f"Failed to generate signed URL for {file_path}: {str(e)}")
