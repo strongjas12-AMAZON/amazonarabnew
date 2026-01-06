@@ -146,12 +146,12 @@ except Exception as e:
 
 ### Method 1: cURL (Recommended)
 ```bash
-curl -X POST https://luxmarket-4.preview.emergentagent.com/api/setup-admin
+curl -X POST https://arabmarket-4.preview.emergentagent.com/api/setup-admin
 ```
 
 ### Method 2: Browser Console
 ```javascript
-fetch('https://luxmarket-4.preview.emergentagent.com/api/setup-admin', {
+fetch('https://arabmarket-4.preview.emergentagent.com/api/setup-admin', {
   method: 'POST'
 })
 .then(r => r.json())
@@ -160,7 +160,7 @@ fetch('https://luxmarket-4.preview.emergentagent.com/api/setup-admin', {
 
 ### Method 3: Postman/Insomnia
 ```
-POST https://luxmarket-4.preview.emergentagent.com/api/setup-admin
+POST https://arabmarket-4.preview.emergentagent.com/api/setup-admin
 Headers: Content-Type: application/json
 Body: (empty)
 ```
