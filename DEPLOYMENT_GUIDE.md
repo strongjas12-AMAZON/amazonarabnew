@@ -1,4 +1,4 @@
-# 🚀 LuxMarket Deployment Guide
+# 🚀 Amazon Arab Deployment Guide
 
 Complete step-by-step guide to deploy your multi-vendor marketplace.
 
