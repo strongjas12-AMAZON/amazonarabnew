@@ -27,7 +27,7 @@ const Navbar = () => {
               <span className="text-[#0a0a0a] font-bold text-xl">L</span>
             </div>
             <span className="text-gold-gradient text-2xl font-['Playfair_Display'] font-bold hidden sm:block">
-              LuxMarket
+              Amazon Arab
             </span>
           </Link>
 
