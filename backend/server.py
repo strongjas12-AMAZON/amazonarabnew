@@ -312,16 +312,27 @@ async def setup_admin():
 async def register(request: Request, req: RegisterRequest):
     """Register new user"""
     try:
-        auth_response = supabase.auth.sign_up({
-            "email": req.email,
-            "password": req.password
-        })
-        
-        if not auth_response.user:
-            raise HTTPException(status_code=400, detail="Registration failed")
+        # Use admin client to create user (bypasses email confirmation)
+        try:
+            auth_response = supabase_admin.auth.admin.create_user({
+                "email": req.email,
+                "password": req.password,
+                "email_confirm": True  # Auto-confirm email
+            })
+            user_id = auth_response.user.id
+        except Exception as auth_error:
+            # If user creation fails, try regular signup
+            logging.warning(f"Admin create_user failed, trying regular signup: {str(auth_error)}")
+            auth_response = supabase.auth.sign_up({
+                "email": req.email,
+                "password": req.password
+            })
+            if not auth_response.user:
+                raise HTTPException(status_code=400, detail="Registration failed")
+            user_id = auth_response.user.id
         
         user_data = {
-            'id': auth_response.user.id,
+            'id': user_id,
             'email': req.email,
             'name': req.name,
             'role': req.role,
@@ -331,10 +342,20 @@ async def register(request: Request, req: RegisterRequest):
         
         supabase_admin.table('users').insert(user_data).execute()
         
+        # Create a session for the user by signing them in
+        try:
+            login_response = supabase.auth.sign_in_with_password({
+                "email": req.email,
+                "password": req.password
+            })
+            session = login_response.session
+        except:
+            session = None
+        
         return {
             "success": True,
             "user": format_user_response(user_data),
-            "session": auth_response.session
+            "session": session
         }
     except Exception as e:
         logging.error(f"Registration error: {str(e)}")
