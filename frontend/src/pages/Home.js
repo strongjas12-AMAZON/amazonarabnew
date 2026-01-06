@@ -11,7 +11,7 @@ const Home = () => {
         <div className="relative max-w-7xl mx-auto text-center">
           <h1 className="font-['Playfair_Display'] text-5xl sm:text-6xl lg:text-7xl font-bold mb-6 animate-fade-in" data-testid="hero-title">
             Welcome to{' '}
-            <span className="text-gold-gradient">LuxMarket</span>
+            <span className="text-gold-gradient">Amazon Arab</span>
           </h1>
           <p className="text-xl sm:text-2xl text-gray-400 mb-12 max-w-3xl mx-auto animate-fade-in">
             Premium Multi-Vendor Marketplace with Secure Crypto Payments
