@@ -31,7 +31,7 @@ const Home = () => {
       <section className="py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <h2 className="font-['Playfair_Display'] text-4xl font-bold text-center mb-16 text-gold-gradient">
-            Why Choose LuxMarket?
+            Why Choose Amazon Arab?
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             <div className="luxury-card text-center" data-testid="feature-crypto">
