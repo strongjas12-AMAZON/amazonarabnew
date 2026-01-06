@@ -82,6 +82,21 @@ class ReviewVerificationRequest(BaseModel):
 
 
 # Helper functions
+def get_signed_document_url(file_path: str, expires_in: int = 3600) -> Optional[str]:
+    """Generate signed URL for private document access (1 hour expiry)"""
+    try:
+        result = supabase_admin.storage.from_('documents').create_signed_url(
+            file_path,
+            expires_in
+        )
+        if result and 'signedURL' in result:
+            return result['signedURL']
+        return None
+    except Exception as e:
+        logging.error(f"Failed to generate signed URL for {file_path}: {str(e)}")
+        return None
+
+
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Get current user from JWT token"""
     try:
