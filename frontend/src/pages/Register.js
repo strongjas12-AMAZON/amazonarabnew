@@ -61,7 +61,7 @@ const Register = () => {
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
           <h1 className="font-['Playfair_Display'] text-4xl font-bold text-gold-gradient mb-2" data-testid="register-title">
-            Join LuxMarket
+            Join Amazon Arab
           </h1>
           <p className="text-gray-400">Create your account today</p>
         </div>
