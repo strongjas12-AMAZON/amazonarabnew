@@ -422,7 +422,7 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
         order_data = {
             'id': str(uuid.uuid4()),
             'buyerId': current_user['id'],
-            'totalAmount': request.totalAmount,
+            'totalAmount': req.totalAmount,
             'paymentMethod': 'USDT_TRON',
             'paymentWallet': ADMIN_CRYPTO_WALLET,
             'paymentStatus': 'pending_payment',
@@ -434,7 +434,7 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
         order_id = order_result.data[0]['id']
         
         # Create order items
-        for item in request.items:
+        for item in req.items:
             item_data = {
                 'id': str(uuid.uuid4()),
                 'orderId': order_id,
