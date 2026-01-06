@@ -186,7 +186,8 @@ async def setup_admin():
 
 # Auth Routes
 @api_router.post("/auth/register")
-async def register(request: RegisterRequest):
+@limiter.limit("3/minute")  # 3 registrations per minute per IP
+async def register(request: Request, req: RegisterRequest):
     """Register new user"""
     try:
         # Create auth user
