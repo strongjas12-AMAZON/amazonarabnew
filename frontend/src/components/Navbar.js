@@ -47,6 +47,13 @@ const Navbar = () => {
             >
               Products
             </Link>
+            <Link
+              to="/contact"
+              className={`transition-colors ${isActive('/contact') ? 'text-[#D4AF37]' : 'text-gray-300 hover:text-[#D4AF37]'}`}
+              data-testid="nav-contact"
+            >
+              Contact
+            </Link>
             {user && (
               <Link
                 to="/orders"
