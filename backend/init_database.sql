@@ -21,8 +21,8 @@ CREATE TABLE IF NOT EXISTS products (
     description TEXT,
     price DECIMAL(10,2) NOT NULL,
     images TEXT[] DEFAULT '{}',
-    seller_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    "sellerId" UUID REFERENCES users(id) ON DELETE CASCADE,
+    "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Orders table
