@@ -429,15 +429,20 @@ const AdminDashboard = () => {
                     </span>
                   </div>
                   
-                  <a
-                    href={doc.documentUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-[#D4AF37] hover:underline mb-3"
-                  >
-                    <Eye className="w-4 h-4" />
-                    View Document
-                  </a>
+                  {doc.documentUrl ? (
+                    <a
+                      href={doc.documentUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 text-[#D4AF37] hover:underline mb-3"
+                      data-testid="view-document-link"
+                    >
+                      <Eye className="w-4 h-4" />
+                      View Document (Signed URL - expires in 1 hour)
+                    </a>
+                  ) : (
+                    <p className="text-gray-500 text-sm mb-3">Document URL unavailable</p>
+                  )}
                   
                   {doc.status === 'pending' && (
                     <div className="flex gap-2">
