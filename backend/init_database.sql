@@ -88,98 +88,104 @@ ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE verification_documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE merchant_invite_codes ENABLE ROW LEVEL SECURITY;
 
+-- ============================================
+-- IMPORTANT: NO RECURSIVE POLICIES
+-- ============================================
+-- Policies NEVER check the same table they protect
+-- Backend uses SERVICE_ROLE_KEY (bypasses all RLS)
+-- Frontend uses ANON_KEY (subject to these policies)
+-- Role validation happens in backend API layer
+-- ============================================
+
 -- Users policies
-CREATE POLICY "Users can read own data" ON users
-    FOR SELECT USING (auth.uid() = id OR EXISTS (
-        SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin'
-    ));
+CREATE POLICY "users_select_own"
+ON users FOR SELECT
+TO authenticated
+USING (auth.uid() = id);
 
-CREATE POLICY "Admin can read all users" ON users
-    FOR SELECT USING (EXISTS (
-        SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin'
-    ));
+CREATE POLICY "users_insert_own"
+ON users FOR INSERT
+TO authenticated
+WITH CHECK (auth.uid() = id);
 
-CREATE POLICY "Service role bypass" ON users
-    FOR ALL USING (true);
+CREATE POLICY "users_update_own"
+ON users FOR UPDATE
+TO authenticated
+USING (auth.uid() = id)
+WITH CHECK (auth.uid() = id);
 
 -- Products policies  
-CREATE POLICY "Anyone can read verified products" ON products
-    FOR SELECT USING (TRUE);
+CREATE POLICY "products_select_all"
+ON products FOR SELECT
+TO authenticated, anon
+USING (true);
 
-CREATE POLICY "Sellers can insert own products" ON products
-    FOR INSERT WITH CHECK (
-        "sellerId" = auth.uid() AND 
-        EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'seller')
-    );
+CREATE POLICY "products_insert_authenticated"
+ON products FOR INSERT
+TO authenticated
+WITH CHECK (auth.uid() = "sellerId");
 
-CREATE POLICY "Sellers can update own products" ON products
-    FOR UPDATE USING ("sellerId" = auth.uid());
+CREATE POLICY "products_update_own"
+ON products FOR UPDATE
+TO authenticated
+USING (auth.uid() = "sellerId")
+WITH CHECK (auth.uid() = "sellerId");
 
-CREATE POLICY "Sellers can delete own products" ON products
-    FOR DELETE USING ("sellerId" = auth.uid());
+CREATE POLICY "products_delete_own"
+ON products FOR DELETE
+TO authenticated
+USING (auth.uid() = "sellerId");
 
 -- Orders policies
-CREATE POLICY "Users can read own orders" ON orders
-    FOR SELECT USING (
-        "buyerId" = auth.uid() OR 
-        EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin')
-    );
+CREATE POLICY "orders_select_own"
+ON orders FOR SELECT
+TO authenticated
+USING (auth.uid() = "buyerId");
 
-CREATE POLICY "Buyers can create orders" ON orders
-    FOR INSERT WITH CHECK (
-        "buyerId" = auth.uid() AND 
-        EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'buyer')
-    );
-
-CREATE POLICY "Admin can update orders" ON orders
-    FOR UPDATE USING (EXISTS (
-        SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin'
-    ));
+CREATE POLICY "orders_insert_own"
+ON orders FOR INSERT
+TO authenticated
+WITH CHECK (auth.uid() = "buyerId");
 
 -- Order items policies
-CREATE POLICY "Users can read order items of own orders" ON order_items
-    FOR SELECT USING (
-        EXISTS (
-            SELECT 1 FROM orders 
-            WHERE orders.id = order_items."orderId" 
-            AND orders."buyerId" = auth.uid()
-        ) OR EXISTS (
-            SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin'
-        )
-    );
+CREATE POLICY "order_items_select_own"
+ON order_items FOR SELECT
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM orders 
+    WHERE orders.id = order_items."orderId" 
+    AND orders."buyerId" = auth.uid()
+  )
+);
 
-CREATE POLICY "Buyers can create order items" ON order_items
-    FOR INSERT WITH CHECK (
-        EXISTS (
-            SELECT 1 FROM orders 
-            WHERE orders.id = order_items."orderId" 
-            AND orders."buyerId" = auth.uid()
-        )
-    );
+CREATE POLICY "order_items_insert_own"
+ON order_items FOR INSERT
+TO authenticated
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM orders 
+    WHERE orders.id = order_items."orderId" 
+    AND orders."buyerId" = auth.uid()
+  )
+);
 
 -- Verification documents policies
-CREATE POLICY "Users can read own documents" ON verification_documents
-    FOR SELECT USING (
-        "userId" = auth.uid() OR 
-        EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin')
-    );
+CREATE POLICY "verification_select_own"
+ON verification_documents FOR SELECT
+TO authenticated
+USING (auth.uid() = "userId");
 
-CREATE POLICY "Users can create own documents" ON verification_documents
-    FOR INSERT WITH CHECK ("userId" = auth.uid());
-
-CREATE POLICY "Admin can update documents" ON verification_documents
-    FOR UPDATE USING (EXISTS (
-        SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin'
-    ));
+CREATE POLICY "verification_insert_own"
+ON verification_documents FOR INSERT
+TO authenticated
+WITH CHECK (auth.uid() = "userId");
 
 -- Invite codes policies
-CREATE POLICY "Admin can manage invite codes" ON merchant_invite_codes
-    FOR ALL USING (EXISTS (
-        SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin'
-    ));
-
-CREATE POLICY "Anyone can read unused codes" ON merchant_invite_codes
-    FOR SELECT USING ("isUsed" = FALSE);
+CREATE POLICY "invite_codes_select_unused"
+ON merchant_invite_codes FOR SELECT
+TO authenticated, anon
+USING ("isUsed" = false);
 
 -- Storage buckets (Run separately or via Supabase Dashboard)
 -- Products bucket for product images
