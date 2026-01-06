@@ -202,9 +202,9 @@ async def register(request: Request, req: RegisterRequest):
         # Create user record
         user_data = {
             'id': auth_response.user.id,
-            'email': request.email,
-            'name': request.name,
-            'role': request.role,
+            'email': req.email,
+            'name': req.name,
+            'role': req.role,
             'verificationStatus': 'unverified',
             'createdAt': datetime.now(timezone.utc).isoformat()
         }
