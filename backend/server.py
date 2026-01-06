@@ -564,7 +564,7 @@ async def upload_verification_document(
 
 @api_router.get("/verification/documents")
 async def get_verification_documents(current_user: dict = Depends(get_current_user)):
-    """Get verification documents"""
+    """Get verification documents with SIGNED URLs for private access"""
     try:
         if current_user['role'] == 'admin':
             # Admin sees all pending documents
@@ -573,8 +573,23 @@ async def get_verification_documents(current_user: dict = Depends(get_current_us
             # Users see their own documents
             docs = supabase_admin.table('verification_documents').select('*').eq('userId', current_user['id']).execute()
         
+        # Generate signed URLs for each document
+        for doc in docs.data:
+            if doc.get('documentUrl'):
+                # Extract file path from public URL
+                # Format: https://...supabase.co/storage/v1/object/public/documents/path/to/file.jpg
+                if '/documents/' in doc['documentUrl']:
+                    file_path = doc['documentUrl'].split('/documents/')[-1]
+                    # Replace with signed URL (1 hour expiry)
+                    signed_url = get_signed_document_url(file_path, expires_in=3600)
+                    if signed_url:
+                        doc['documentUrl'] = signed_url
+                    else:
+                        logging.warning(f"Failed to generate signed URL for document {doc['id']}")
+        
         return {"success": True, "documents": docs.data}
     except Exception as e:
+        logging.error(f"Failed to fetch verification documents: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
