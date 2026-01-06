@@ -33,8 +33,14 @@ supabase_admin: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 # Security
 security = HTTPBearer()
 
+# Rate Limiter
+limiter = Limiter(key_func=get_remote_address, default_limits=["200/hour"])
+
 # Create the main app
 app = FastAPI()
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 api_router = APIRouter(prefix="/api")
 
 # Models
