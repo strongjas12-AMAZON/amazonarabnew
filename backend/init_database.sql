@@ -121,13 +121,13 @@ CREATE POLICY "Sellers can delete own products" ON products
 -- Orders policies
 CREATE POLICY "Users can read own orders" ON orders
     FOR SELECT USING (
-        buyer_id = auth.uid() OR 
+        "buyerId" = auth.uid() OR 
         EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin')
     );
 
 CREATE POLICY "Buyers can create orders" ON orders
     FOR INSERT WITH CHECK (
-        buyer_id = auth.uid() AND 
+        "buyerId" = auth.uid() AND 
         EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'buyer')
     );
 
