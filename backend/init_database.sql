@@ -108,15 +108,15 @@ CREATE POLICY "Anyone can read verified products" ON products
 
 CREATE POLICY "Sellers can insert own products" ON products
     FOR INSERT WITH CHECK (
-        seller_id = auth.uid() AND 
+        "sellerId" = auth.uid() AND 
         EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'seller')
     );
 
 CREATE POLICY "Sellers can update own products" ON products
-    FOR UPDATE USING (seller_id = auth.uid());
+    FOR UPDATE USING ("sellerId" = auth.uid());
 
 CREATE POLICY "Sellers can delete own products" ON products
-    FOR DELETE USING (seller_id = auth.uid());
+    FOR DELETE USING ("sellerId" = auth.uid());
 
 -- Orders policies
 CREATE POLICY "Users can read own orders" ON orders
