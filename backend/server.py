@@ -412,7 +412,8 @@ async def upload_product_image(
 
 # Order Routes
 @api_router.post("/orders")
-async def create_order(request: CreateOrderRequest, current_user: dict = Depends(get_current_user)):
+@limiter.limit("10/hour")  # 10 orders per hour per IP
+async def create_order(request: Request, req: CreateOrderRequest, current_user: dict = Depends(get_current_user)):
     """Create new order"""
     if current_user['role'] != 'buyer':
         raise HTTPException(status_code=403, detail="Only buyers can create orders")
