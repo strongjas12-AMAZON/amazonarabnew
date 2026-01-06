@@ -24,7 +24,7 @@ const Navbar = () => {
           {/* Logo */}
           <Link to="/" className="flex items-center space-x-2">
             <div className="w-10 h-10 bg-gradient-to-br from-[#D4AF37] to-[#F4E4B0] rounded-lg flex items-center justify-center">
-              <span className="text-[#0a0a0a] font-bold text-xl">L</span>
+              <span className="text-[#0a0a0a] font-bold text-xl">A</span>
             </div>
             <span className="text-gold-gradient text-2xl font-['Playfair_Display'] font-bold hidden sm:block">
               Amazon Arab
