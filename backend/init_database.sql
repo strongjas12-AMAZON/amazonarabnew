@@ -72,10 +72,10 @@ CREATE TABLE IF NOT EXISTS merchant_invite_codes (
 );
 
 -- Create indexes
-CREATE INDEX IF NOT EXISTS idx_products_seller ON products(seller_id);
-CREATE INDEX IF NOT EXISTS idx_orders_buyer ON orders(buyer_id);
-CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
-CREATE INDEX IF NOT EXISTS idx_verification_user ON verification_documents(user_id);
+CREATE INDEX IF NOT EXISTS idx_products_seller ON products("sellerId");
+CREATE INDEX IF NOT EXISTS idx_orders_buyer ON orders("buyerId");
+CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items("orderId");
+CREATE INDEX IF NOT EXISTS idx_verification_user ON verification_documents("userId");
 CREATE INDEX IF NOT EXISTS idx_invite_codes_code ON merchant_invite_codes(code);
 
 -- Row Level Security (RLS) Policies
