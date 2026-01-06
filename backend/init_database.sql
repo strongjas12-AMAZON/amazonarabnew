@@ -41,8 +41,8 @@ CREATE TABLE IF NOT EXISTS orders (
 -- Order Items table
 CREATE TABLE IF NOT EXISTS order_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    order_id UUID REFERENCES orders(id) ON DELETE CASCADE,
-    product_id UUID REFERENCES products(id),
+    "orderId" UUID REFERENCES orders(id) ON DELETE CASCADE,
+    "productId" UUID REFERENCES products(id),
     quantity INTEGER NOT NULL,
     price DECIMAL(10,2) NOT NULL
 );
@@ -50,25 +50,25 @@ CREATE TABLE IF NOT EXISTS order_items (
 -- Verification Documents table
 CREATE TABLE IF NOT EXISTS verification_documents (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    document_type TEXT NOT NULL,
-    document_url TEXT NOT NULL,
+    "userId" UUID REFERENCES users(id) ON DELETE CASCADE,
+    "documentType" TEXT NOT NULL,
+    "documentUrl" TEXT NOT NULL,
     status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'verified', 'rejected')),
-    merchant_invite_code TEXT,
-    rejection_reason TEXT,
-    reviewed_at TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    "merchantInviteCode" TEXT,
+    "rejectionReason" TEXT,
+    "reviewedAt" TIMESTAMP WITH TIME ZONE,
+    "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Merchant Invite Codes table
 CREATE TABLE IF NOT EXISTS merchant_invite_codes (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     code TEXT UNIQUE NOT NULL,
-    is_used BOOLEAN DEFAULT FALSE,
-    created_by_admin UUID REFERENCES users(id),
-    used_by_user_id UUID REFERENCES users(id),
-    used_at TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    "isUsed" BOOLEAN DEFAULT FALSE,
+    "createdByAdmin" UUID REFERENCES users(id),
+    "usedByUserId" UUID REFERENCES users(id),
+    "usedAt" TIMESTAMP WITH TIME ZONE,
+    "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Create indexes
