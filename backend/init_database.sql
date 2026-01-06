@@ -28,14 +28,14 @@ CREATE TABLE IF NOT EXISTS products (
 -- Orders table
 CREATE TABLE IF NOT EXISTS orders (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    buyer_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    total_amount DECIMAL(10,2) NOT NULL,
-    payment_method TEXT DEFAULT 'USDT_TRON',
-    payment_wallet TEXT NOT NULL,
-    payment_status TEXT DEFAULT 'pending_payment' CHECK (payment_status IN ('pending_payment', 'paid', 'completed', 'cancelled')),
-    confirmed_by_admin BOOLEAN DEFAULT FALSE,
-    confirmed_at TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    "buyerId" UUID REFERENCES users(id) ON DELETE CASCADE,
+    "totalAmount" DECIMAL(10,2) NOT NULL,
+    "paymentMethod" TEXT DEFAULT 'USDT_TRON',
+    "paymentWallet" TEXT NOT NULL,
+    "paymentStatus" TEXT DEFAULT 'pending_payment' CHECK ("paymentStatus" IN ('pending_payment', 'paid', 'completed', 'cancelled')),
+    "confirmedByAdmin" BOOLEAN DEFAULT FALSE,
+    "confirmedAt" TIMESTAMP WITH TIME ZONE,
+    "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Order Items table
