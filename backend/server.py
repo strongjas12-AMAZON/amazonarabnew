@@ -236,20 +236,41 @@ async def setup_admin():
     try:
         admin_email = "support@arabshopping.org"
         admin_password = "Hadi1247@"
+        user_id = None
         
-        try:
-            auth_response = supabase_admin.auth.admin.create_user({
-                "email": admin_email,
-                "password": admin_password,
-                "email_confirm": True
-            })
-            user_id = auth_response.user.id
-        except Exception as e:
-            existing = supabase_admin.table('users').select('id').eq('email', admin_email).execute()
-            if existing.data:
-                user_id = existing.data[0]['id']
-            else:
-                raise e
+        # First check if user exists in our users table
+        existing_user = supabase_admin.table('users').select('id').eq('email', admin_email).execute()
+        if existing_user.data:
+            user_id = existing_user.data[0]['id']
+        else:
+            # Try to create new auth user
+            try:
+                auth_response = supabase_admin.auth.admin.create_user({
+                    "email": admin_email,
+                    "password": admin_password,
+                    "email_confirm": True
+                })
+                user_id = auth_response.user.id
+            except Exception as auth_error:
+                # User exists in auth but not in users table - get their ID via login
+                error_msg = str(auth_error)
+                if "already been registered" in error_msg:
+                    # Sign in to get the user ID
+                    try:
+                        login_response = supabase_admin.auth.sign_in_with_password({
+                            "email": admin_email,
+                            "password": admin_password
+                        })
+                        user_id = login_response.user.id
+                    except:
+                        # List all auth users and find the admin
+                        users_list = supabase_admin.auth.admin.list_users()
+                        for u in users_list:
+                            if u.email == admin_email:
+                                user_id = u.id
+                                break
+                if not user_id:
+                    raise auth_error
         
         user_record = {
             'id': user_id,
