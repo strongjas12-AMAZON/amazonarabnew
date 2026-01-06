@@ -306,6 +306,98 @@ async def setup_admin():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# Development endpoint to create test users
+@api_router.post("/setup-test-users")
+async def setup_test_users():
+    """Create test seller and buyer accounts for development - uses existing auth users from Supabase"""
+    try:
+        created_users = []
+        
+        # Define test users to create in our users table
+        # These should already exist in Supabase Auth (created via dashboard or previously)
+        test_users = [
+            {
+                'email': 'testseller@test.com',
+                'name': 'Test Seller',
+                'role': 'seller',
+                'verification_status': 'verified'  # Pre-verified for testing
+            },
+            {
+                'email': 'testbuyer@test.com', 
+                'name': 'Test Buyer',
+                'role': 'buyer',
+                'verification_status': 'unverified'
+            }
+        ]
+        
+        for test_user in test_users:
+            # Check if already exists in our users table
+            existing = supabase_admin.table('users').select('id').eq('email', test_user['email']).execute()
+            if existing.data:
+                created_users.append({'email': test_user['email'], 'status': 'already exists'})
+                continue
+            
+            # Try to find user in Supabase Auth or create new one
+            user_id = None
+            try:
+                # Try to create new auth user
+                auth_response = supabase_admin.auth.admin.create_user({
+                    "email": test_user['email'],
+                    "password": "TestPass123!",
+                    "email_confirm": True
+                })
+                user_id = auth_response.user.id
+            except Exception as auth_error:
+                error_msg = str(auth_error)
+                if "already been registered" in error_msg:
+                    # User exists in auth - try to get their ID by listing users
+                    try:
+                        users_list = supabase_admin.auth.admin.list_users()
+                        for u in users_list:
+                            if u.email == test_user['email']:
+                                user_id = u.id
+                                break
+                    except:
+                        pass
+                
+                if not user_id:
+                    created_users.append({
+                        'email': test_user['email'], 
+                        'status': f'failed: {str(auth_error)[:100]}'
+                    })
+                    continue
+            
+            # Create user record in our table
+            user_record = {
+                'id': user_id,
+                'email': test_user['email'],
+                'name': test_user['name'],
+                'role': test_user['role'],
+                'verification_status': test_user['verification_status'],
+                'created_at': datetime.now(timezone.utc).isoformat()
+            }
+            
+            supabase_admin.table('users').insert(user_record).execute()
+            created_users.append({
+                'email': test_user['email'],
+                'status': 'created',
+                'role': test_user['role']
+            })
+        
+        return {
+            "success": True,
+            "message": "Test users setup complete",
+            "users": created_users,
+            "credentials": {
+                "seller": {"email": "testseller@test.com", "password": "TestPass123!"},
+                "buyer": {"email": "testbuyer@test.com", "password": "TestPass123!"}
+            }
+        }
+    except Exception as e:
+        logging.error(f"Test users setup error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Auth Routes
 @api_router.post("/auth/register")
 @limiter.limit("3/minute")
