@@ -141,8 +141,8 @@ CREATE POLICY "Users can read order items of own orders" ON order_items
     FOR SELECT USING (
         EXISTS (
             SELECT 1 FROM orders 
-            WHERE orders.id = order_items.order_id 
-            AND orders.buyer_id = auth.uid()
+            WHERE orders.id = order_items."orderId" 
+            AND orders."buyerId" = auth.uid()
         ) OR EXISTS (
             SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin'
         )
@@ -152,20 +152,20 @@ CREATE POLICY "Buyers can create order items" ON order_items
     FOR INSERT WITH CHECK (
         EXISTS (
             SELECT 1 FROM orders 
-            WHERE orders.id = order_items.order_id 
-            AND orders.buyer_id = auth.uid()
+            WHERE orders.id = order_items."orderId" 
+            AND orders."buyerId" = auth.uid()
         )
     );
 
 -- Verification documents policies
 CREATE POLICY "Users can read own documents" ON verification_documents
     FOR SELECT USING (
-        user_id = auth.uid() OR 
+        "userId" = auth.uid() OR 
         EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin')
     );
 
 CREATE POLICY "Users can create own documents" ON verification_documents
-    FOR INSERT WITH CHECK (user_id = auth.uid());
+    FOR INSERT WITH CHECK ("userId" = auth.uid());
 
 CREATE POLICY "Admin can update documents" ON verification_documents
     FOR UPDATE USING (EXISTS (
@@ -179,7 +179,7 @@ CREATE POLICY "Admin can manage invite codes" ON merchant_invite_codes
     ));
 
 CREATE POLICY "Anyone can read unused codes" ON merchant_invite_codes
-    FOR SELECT USING (is_used = FALSE);
+    FOR SELECT USING ("isUsed" = FALSE);
 
 -- Storage buckets (Run separately or via Supabase Dashboard)
 -- Products bucket for product images
