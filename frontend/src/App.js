@@ -14,6 +14,7 @@ import Products from './pages/Products';
 import Cart from './pages/Cart';
 import Checkout from './pages/Checkout';
 import Orders from './pages/Orders';
+import Contact from './pages/Contact';
 
 // Dashboards
 import AdminDashboard from './pages/dashboard/AdminDashboard';
