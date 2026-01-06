@@ -206,8 +206,8 @@ async def register(request: Request, req: RegisterRequest):
     try:
         # Create auth user
         auth_response = supabase.auth.sign_up({
-            "email": request.email,
-            "password": request.password
+            "email": req.email,
+            "password": req.password
         })
         
         if not auth_response.user:
