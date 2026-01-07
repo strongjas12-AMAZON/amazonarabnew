@@ -49,6 +49,8 @@ A premium multi-vendor marketplace with dark UI and gold accents, featuring cryp
   - New order notification to admin
   - Order completed notification to buyer
   - Order fulfilled notification to seller
+  - Verification approved email to seller
+  - Verification rejected email to seller (with reason)
 
 ## Complete User Flows (All Tested ✅)
 
