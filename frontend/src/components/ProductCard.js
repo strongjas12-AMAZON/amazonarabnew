@@ -1,5 +1,5 @@
 import React from 'react';
-import { X } from 'lucide-react';
+import { Tag } from 'lucide-react';
 
 const ProductCard = ({ product, onAddToCart, canAddToCart = true }) => {
   const mainImage = product.images && product.images.length > 0 ? product.images[0] : 'https://via.placeholder.com/400x300?text=No+Image';
@@ -18,6 +18,14 @@ const ProductCard = ({ product, onAddToCart, canAddToCart = true }) => {
         {product.users?.verificationStatus === 'verified' && (
           <div className="absolute top-2 right-2 bg-green-500/20 backdrop-blur-sm border border-green-500/30 px-2 py-1 rounded-full">
             <span className="text-green-400 text-xs font-semibold">Verified Seller</span>
+          </div>
+        )}
+        {/* Category Badge */}
+        {product.categoryName && (
+          <div className="absolute top-2 left-2 bg-[rgba(0,0,0,0.7)] backdrop-blur-sm px-2 py-1 rounded-full">
+            <span className="text-white text-xs font-medium">
+              {product.categoryIcon} {product.categoryName}
+            </span>
           </div>
         )}
       </div>
