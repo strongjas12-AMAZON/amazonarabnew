@@ -1069,6 +1069,51 @@ async def upload_product_image(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+class RemoveImageRequest(BaseModel):
+    imageUrl: str
+
+
+@api_router.delete("/products/{product_id}/remove-image")
+async def remove_product_image(
+    product_id: str,
+    request: RemoveImageRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Remove product image"""
+    if current_user['role'] != 'seller':
+        raise HTTPException(status_code=403, detail="Only sellers can remove images")
+    
+    try:
+        product = supabase_admin.table('products').select('*').eq('id', product_id).eq('seller_id', current_user['id']).execute()
+        
+        if not product.data:
+            raise HTTPException(status_code=404, detail="Product not found or unauthorized")
+        
+        current_images = product.data[0].get('images', [])
+        
+        if request.imageUrl not in current_images:
+            raise HTTPException(status_code=404, detail="Image not found in product")
+        
+        # Remove from database
+        updated_images = [img for img in current_images if img != request.imageUrl]
+        supabase_admin.table('products').update({'images': updated_images}).eq('id', product_id).execute()
+        
+        # Try to delete from storage (extract file path from URL)
+        try:
+            if '/products/' in request.imageUrl:
+                file_path = request.imageUrl.split('/products/')[-1].split('?')[0]
+                supabase_admin.storage.from_('products').remove([file_path])
+        except Exception as storage_error:
+            logging.warning(f"Could not delete image from storage: {str(storage_error)}")
+        
+        return {"success": True, "message": "Image removed", "remainingImages": updated_images}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Image removal error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 # Order Routes
 @api_router.post("/orders")
 @limiter.limit("10/hour")
