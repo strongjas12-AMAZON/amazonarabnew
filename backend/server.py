@@ -146,6 +146,9 @@ def format_user_response(user_data: dict) -> dict:
 
 def format_product_response(product_data: dict) -> dict:
     """Convert snake_case DB fields to camelCase for frontend"""
+    category_id = product_data.get('category')
+    category_info = next((c for c in PRODUCT_CATEGORIES if c['id'] == category_id), None)
+    
     result = {
         'id': product_data.get('id'),
         'title': product_data.get('title'),
@@ -153,6 +156,9 @@ def format_product_response(product_data: dict) -> dict:
         'price': product_data.get('price'),
         'images': product_data.get('images', []),
         'sellerId': product_data.get('seller_id'),
+        'category': category_id,
+        'categoryName': category_info['name'] if category_info else None,
+        'categoryIcon': category_info['icon'] if category_info else None,
         'createdAt': product_data.get('created_at')
     }
     if 'users' in product_data and product_data['users']:
