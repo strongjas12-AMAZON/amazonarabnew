@@ -948,11 +948,22 @@ async def logout(current_user: dict = Depends(get_current_user)):
 
 
 # Product Routes
+@api_router.get("/categories")
+async def get_categories():
+    """Get all product categories"""
+    return {"success": True, "categories": PRODUCT_CATEGORIES}
+
+
 @api_router.get("/products")
-async def get_products():
-    """Get all verified products"""
+async def get_products(category: Optional[str] = None):
+    """Get all verified products, optionally filtered by category"""
     try:
-        products = supabase_admin.table('products').select('*, users!seller_id(name, verification_status)').execute()
+        query = supabase_admin.table('products').select('*, users!seller_id(name, verification_status)')
+        
+        if category:
+            query = query.eq('category', category)
+        
+        products = query.execute()
         
         verified_products = [
             format_product_response(p) 
