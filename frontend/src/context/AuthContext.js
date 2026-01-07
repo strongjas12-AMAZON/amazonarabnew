@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { authService } from '../lib/auth';
+import { supabase } from '../lib/supabase';
+import authService from '../lib/auth';
 
 const AuthContext = createContext(null);
 
@@ -8,10 +9,34 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is logged in
-    const currentUser = authService.getUser();
-    setUser(currentUser);
-    setLoading(false);
+    // Check initial session
+    const initAuth = async () => {
+      try {
+        const currentUser = await authService.getUser();
+        setUser(currentUser);
+      } catch (error) {
+        console.error('Auth init error:', error);
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initAuth();
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        const currentUser = await authService.getUser();
+        setUser(currentUser);
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+      }
+    });
+
+    return () => {
+      subscription?.unsubscribe();
+    };
   }, []);
 
   const login = async (email, password) => {
@@ -31,8 +56,12 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  const getUser = async () => {
+    return await authService.getUser();
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, getUser }}>
       {children}
     </AuthContext.Provider>
   );
