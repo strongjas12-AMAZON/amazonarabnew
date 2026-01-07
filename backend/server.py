@@ -497,6 +497,37 @@ async def send_order_notifications(order_data: dict, order_items: list, notifica
                 'total_amount': float(order_data['total_amount'])
             })
             await send_email_async(buyer_info.get('email'), subject, html)
+        
+        elif notification_type == "order_completed":
+            # 1. Send completion notification to buyer
+            subject, html = get_email_template("order_completed_buyer", {
+                'order_id': order_data['id'],
+                'buyer_name': buyer_info.get('name', 'Customer'),
+                'total_amount': float(order_data['total_amount'])
+            })
+            await send_email_async(buyer_info.get('email'), subject, html)
+            await asyncio.sleep(0.6)  # Rate limit
+            
+            # 2. Get order items and notify sellers
+            order_items_result = supabase_admin.table('order_items').select('*, products(*, users!seller_id(*))').eq('order_id', order_data['id']).execute()
+            
+            notified_sellers = set()  # Track notified sellers to avoid duplicates
+            for item in order_items_result.data:
+                product = item.get('products', {})
+                seller_info = product.get('users', {})
+                seller_email = seller_info.get('email')
+                
+                if seller_email and seller_email not in notified_sellers:
+                    subject, html = get_email_template("order_completed_seller", {
+                        'order_id': order_data['id'],
+                        'seller_name': seller_info.get('name', 'Seller'),
+                        'product_title': product.get('title', 'Product'),
+                        'quantity': item.get('quantity', 1),
+                        'item_total': float(item.get('price', 0)) * item.get('quantity', 1)
+                    })
+                    await send_email_async(seller_email, subject, html)
+                    notified_sellers.add(seller_email)
+                    await asyncio.sleep(0.6)  # Rate limit
             
     except Exception as e:
         logging.error(f"Failed to send order notifications: {str(e)}")
