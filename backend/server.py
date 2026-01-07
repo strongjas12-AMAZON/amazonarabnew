@@ -885,6 +885,7 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
         order_result = supabase_admin.table('orders').insert(order_data).execute()
         order_id = order_result.data[0]['id']
         
+        order_items_list = []
         for item in req.items:
             item_data = {
                 'id': str(uuid.uuid4()),
@@ -894,6 +895,10 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
                 'price': item['price']
             }
             supabase_admin.table('order_items').insert(item_data).execute()
+            order_items_list.append(item_data)
+        
+        # Send email notifications (non-blocking)
+        asyncio.create_task(send_order_notifications(order_data, order_items_list, "order_placed"))
         
         return {"success": True, "order": format_order_response(order_result.data[0])}
     except Exception as e:
