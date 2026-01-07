@@ -27,6 +27,7 @@ A premium multi-vendor marketplace with dark UI and gold accents, featuring cryp
 - [x] Admin: Review and approve/reject verifications
 - [x] Admin: View orders and confirm payments
 - [x] Admin: Mark orders as completed
+- [x] Admin: Manage all products (view and remove any product)
 - [x] Seller: Dashboard with verification status
 - [x] Seller: Upload verification documents with invite code
 - [x] Seller: Create products after verification
