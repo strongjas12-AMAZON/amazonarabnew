@@ -444,6 +444,22 @@ const SellerDashboard = () => {
                 />
               </div>
               <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Category</label>
+                <select
+                  value={productForm.category}
+                  onChange={(e) => setProductForm({ ...productForm, category: e.target.value })}
+                  className="luxury-input"
+                  data-testid="product-category-input"
+                >
+                  <option value="">Select a category</option>
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.icon} {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Price ($)</label>
                 <input
                   type="number"
@@ -464,7 +480,7 @@ const SellerDashboard = () => {
                   onClick={() => {
                     setShowProductForm(false);
                     setEditingProduct(null);
-                    setProductForm({ title: '', description: '', price: '' });
+                    setProductForm({ title: '', description: '', price: '', category: '' });
                   }}
                   className="btn-gold-outline flex-1"
                 >
