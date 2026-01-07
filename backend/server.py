@@ -1064,6 +1064,14 @@ async def delete_product(product_id: str, current_user: dict = Depends(get_curre
         if not product.data:
             raise HTTPException(status_code=404, detail="Product not found or unauthorized")
         
+        # Check if product has orders
+        order_items = supabase_admin.table('order_items').select('id').eq('product_id', product_id).limit(1).execute()
+        if order_items.data:
+            raise HTTPException(
+                status_code=400, 
+                detail="Cannot delete product with existing orders. Order history must be preserved."
+            )
+        
         # Delete product images from storage
         try:
             product_images = product.data[0].get('images', [])
