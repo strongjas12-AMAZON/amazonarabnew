@@ -38,6 +38,12 @@ A premium multi-vendor marketplace with dark UI and gold accents, featuring cryp
 - [x] Buyer: Checkout with crypto payment (USDT TRC20)
 - [x] Buyer: View order history with payment status
 - [x] Products listing with "Verified Seller" badges
+- [x] **Product Categories** (10 predefined):
+  - Electronics & Gadgets, Fashion & Clothing, Home & Living
+  - Beauty & Health, Food & Beverages, Jewelry & Watches
+  - Books & Stationery, Sports & Outdoors, Baby & Kids, Automotive
+- [x] Category filter on Products page
+- [x] Category selection when creating/editing products
 - [x] Contact Us page
 - [x] Dark premium UI with gold accents
 - [x] Logo "A" branding as "Amazon Arab"
