@@ -1050,10 +1050,13 @@ async def update_order_status(order_id: str, request: UpdateOrderStatusRequest, 
         
         result = supabase_admin.table('orders').update(update_data).eq('id', order_id).execute()
         
-        # Send payment confirmation email to buyer
-        if request.status == 'paid' and result.data:
+        # Send email notifications based on status change
+        if result.data:
             order_data = result.data[0]
-            asyncio.create_task(send_order_notifications(order_data, [], "payment_confirmed"))
+            if request.status == 'paid':
+                asyncio.create_task(send_order_notifications(order_data, [], "payment_confirmed"))
+            elif request.status == 'completed':
+                asyncio.create_task(send_order_notifications(order_data, [], "order_completed"))
         
         return {"success": True, "order": format_order_response(result.data[0])}
     except Exception as e:
