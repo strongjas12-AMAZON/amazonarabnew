@@ -300,7 +300,7 @@ const SellerDashboard = () => {
               onClick={() => {
                 setShowProductForm(true);
                 setEditingProduct(null);
-                setProductForm({ title: '', description: '', price: '' });
+                setProductForm({ title: '', description: '', price: '', category: '' });
               }}
               className="btn-gold"
               data-testid="add-product-btn"
