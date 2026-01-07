@@ -101,6 +101,19 @@ const SellerDashboard = () => {
     }
   };
 
+  const handleRemoveImage = async (productId, imageUrl) => {
+    if (!window.confirm('Are you sure you want to remove this image?')) return;
+    try {
+      await api.delete(`/products/${productId}/remove-image`, {
+        data: { imageUrl }
+      });
+      toast.success('Image removed successfully');
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to remove image');
+    }
+  };
+
   const handleVerificationUpload = async (file) => {
     if (!verificationForm.merchantInviteCode) {
       toast.error('Please enter merchant invite code');
