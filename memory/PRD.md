@@ -1,7 +1,7 @@
 # Amazon Arab - Multi-Vendor Marketplace PRD
 
 ## Project Overview
-A premium multi-vendor marketplace with dark UI and gold accents, featuring crypto payments (USDT TRC20).
+A premium multi-vendor marketplace with dark UI and gold accents, featuring crypto payments (USDT TRC20) and email notifications.
 
 ## Tech Stack
 - **Frontend**: React + TailwindCSS + shadcn/ui
@@ -9,6 +9,7 @@ A premium multi-vendor marketplace with dark UI and gold accents, featuring cryp
 - **Database**: Supabase (PostgreSQL with RLS)
 - **Storage**: Supabase Storage (documents bucket - private, products bucket - public)
 - **Authentication**: Supabase Auth + JWT
+- **Email**: Resend (transactional emails)
 
 ## User Roles
 1. **Admin** - Manages users, verifications, orders, invite codes
