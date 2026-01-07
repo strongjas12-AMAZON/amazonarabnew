@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { authService } from './auth';
+import { supabase } from './supabase';
 
 const API_URL = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -8,10 +8,10 @@ const api = axios.create({
 });
 
 // Add auth token to requests
-api.interceptors.request.use((config) => {
-  const token = authService.getToken();
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+api.interceptors.request.use(async (config) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.access_token) {
+    config.headers.Authorization = `Bearer ${session.access_token}`;
   }
   return config;
 });
@@ -19,9 +19,9 @@ api.interceptors.request.use((config) => {
 // Handle 401 errors
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     if (error.response?.status === 401) {
-      authService.logout();
+      await supabase.auth.signOut();
       window.location.href = '/login';
     }
     return Promise.reject(error);
