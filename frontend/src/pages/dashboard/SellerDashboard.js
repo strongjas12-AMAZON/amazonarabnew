@@ -55,11 +55,12 @@ const SellerDashboard = () => {
     try {
       await api.post('/products', {
         ...productForm,
-        price: parseFloat(productForm.price)
+        price: parseFloat(productForm.price),
+        category: productForm.category || null
       });
       toast.success('Product created successfully');
       setShowProductForm(false);
-      setProductForm({ title: '', description: '', price: '' });
+      setProductForm({ title: '', description: '', price: '', category: '' });
       fetchData();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to create product');
@@ -71,11 +72,12 @@ const SellerDashboard = () => {
     try {
       await api.put(`/products/${editingProduct}`, {
         ...productForm,
-        price: parseFloat(productForm.price)
+        price: parseFloat(productForm.price),
+        category: productForm.category || null
       });
       toast.success('Product updated successfully');
       setEditingProduct(null);
-      setProductForm({ title: '', description: '', price: '' });
+      setProductForm({ title: '', description: '', price: '', category: '' });
       fetchData();
     } catch (error) {
       toast.error('Failed to update product');
