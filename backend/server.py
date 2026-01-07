@@ -1049,20 +1049,50 @@ async def update_product(product_id: str, request: UpdateProductRequest, current
 
 @api_router.delete("/products/{product_id}")
 async def delete_product(product_id: str, current_user: dict = Depends(get_current_user)):
-    """Delete product"""
-    if current_user['role'] != 'seller':
-        raise HTTPException(status_code=403, detail="Only sellers can delete products")
+    """Delete product (seller can delete own, admin can delete any)"""
+    if current_user['role'] not in ['seller', 'admin']:
+        raise HTTPException(status_code=403, detail="Only sellers or admins can delete products")
     
     try:
-        product = supabase_admin.table('products').select('*').eq('id', product_id).eq('seller_id', current_user['id']).execute()
+        if current_user['role'] == 'admin':
+            # Admin can delete any product
+            product = supabase_admin.table('products').select('*').eq('id', product_id).execute()
+        else:
+            # Seller can only delete their own products
+            product = supabase_admin.table('products').select('*').eq('id', product_id).eq('seller_id', current_user['id']).execute()
         
         if not product.data:
             raise HTTPException(status_code=404, detail="Product not found or unauthorized")
         
+        # Delete product images from storage
+        try:
+            product_images = product.data[0].get('images', [])
+            for img_url in product_images:
+                if '/products/' in img_url:
+                    file_path = img_url.split('/products/')[-1].split('?')[0]
+                    supabase_admin.storage.from_('products').remove([file_path])
+        except Exception as storage_error:
+            logging.warning(f"Could not delete product images from storage: {str(storage_error)}")
+        
         supabase_admin.table('products').delete().eq('id', product_id).execute()
         return {"success": True, "message": "Product deleted"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.get("/admin/products")
+async def get_all_products_admin(current_user: dict = Depends(get_current_user)):
+    """Get all products for admin management"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        products = supabase_admin.table('products').select('*, users!seller_id(name, email, verification_status)').execute()
+        return {"success": True, "products": [format_product_response(p) for p in products.data]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @api_router.post("/products/{product_id}/upload-image")
