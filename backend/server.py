@@ -1005,6 +1005,7 @@ async def create_product(request: CreateProductRequest, current_user: dict = Dep
             'title': request.title,
             'description': request.description,
             'price': request.price,
+            'category': request.category,
             'images': [],
             'seller_id': current_user['id'],
             'created_at': datetime.now(timezone.utc).isoformat()
