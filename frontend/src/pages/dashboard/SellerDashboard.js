@@ -346,7 +346,8 @@ const SellerDashboard = () => {
                         setProductForm({
                           title: product.title,
                           description: product.description,
-                          price: product.price.toString()
+                          price: product.price.toString(),
+                          category: product.category || ''
                         });
                       }}
                       className="p-2 hover:bg-[rgba(212,175,55,0.1)] rounded-lg transition-colors"
@@ -363,6 +364,16 @@ const SellerDashboard = () => {
                     </button>
                   </div>
                 </div>
+                
+                {/* Category Badge */}
+                {product.categoryName && (
+                  <div className="mt-2">
+                    <span className="inline-flex items-center gap-1 px-2 py-1 bg-[rgba(212,175,55,0.1)] text-[#D4AF37] rounded-full text-xs">
+                      <Tag className="w-3 h-3" />
+                      {product.categoryIcon} {product.categoryName}
+                    </span>
+                  </div>
+                )}
                 
                 {/* Product Images Gallery with Remove Buttons */}
                 {product.images && product.images.length > 0 && (
