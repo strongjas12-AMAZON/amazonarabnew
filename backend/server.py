@@ -46,6 +46,20 @@ security = HTTPBearer()
 # Rate Limiter
 limiter = Limiter(key_func=get_remote_address, default_limits=["200/hour"])
 
+# Predefined Product Categories
+PRODUCT_CATEGORIES = [
+    {"id": "electronics", "name": "Electronics & Gadgets", "icon": "📱"},
+    {"id": "fashion", "name": "Fashion & Clothing", "icon": "👔"},
+    {"id": "home", "name": "Home & Living", "icon": "🏠"},
+    {"id": "beauty", "name": "Beauty & Health", "icon": "💄"},
+    {"id": "food", "name": "Food & Beverages", "icon": "🍽️"},
+    {"id": "jewelry", "name": "Jewelry & Watches", "icon": "💎"},
+    {"id": "books", "name": "Books & Stationery", "icon": "📚"},
+    {"id": "sports", "name": "Sports & Outdoors", "icon": "⚽"},
+    {"id": "baby", "name": "Baby & Kids", "icon": "👶"},
+    {"id": "automotive", "name": "Automotive", "icon": "🚗"},
+]
+
 # Create the main app
 app = FastAPI()
 app.state.limiter = limiter
@@ -68,12 +82,14 @@ class CreateProductRequest(BaseModel):
     title: str
     description: str
     price: float
+    category: Optional[str] = None
 
 class UpdateProductRequest(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     price: Optional[float] = None
     images: Optional[List[str]] = None
+    category: Optional[str] = None
 
 class CreateOrderRequest(BaseModel):
     items: List[dict]
