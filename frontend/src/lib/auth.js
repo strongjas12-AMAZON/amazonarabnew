@@ -1,53 +1,138 @@
 import { supabase } from './supabase';
-import axios from 'axios';
 
-const API_URL = `${process.env.REACT_APP_BACKEND_URL}/api`;
-
-export const authService = {
+const authService = {
   async register(data) {
-    const response = await axios.post(`${API_URL}/auth/register`, data);
-    if (response.data.success && response.data.session) {
-      localStorage.setItem('accessToken', response.data.session.access_token);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
+    // Sign up with Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: data.email,
+      password: data.password,
+    });
+
+    if (authError) {
+      throw new Error(authError.message);
     }
-    return response.data;
+
+    if (!authData.user) {
+      throw new Error('Registration failed');
+    }
+
+    // Create user record in public.users table
+    const { error: insertError } = await supabase
+      .from('users')
+      .insert({
+        id: authData.user.id,
+        email: data.email,
+        name: data.name,
+        role: data.role,
+        verification_status: 'unverified'
+      });
+
+    if (insertError) {
+      throw new Error(insertError.message);
+    }
+
+    // Fetch the user profile with role
+    const { data: profile, error: profileError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', authData.user.id)
+      .single();
+
+    if (profileError) {
+      throw new Error(profileError.message);
+    }
+
+    return {
+      success: true,
+      user: {
+        id: profile.id,
+        email: profile.email,
+        name: profile.name,
+        role: profile.role,
+        verificationStatus: profile.verification_status
+      },
+      session: authData.session
+    };
   },
 
   async login(email, password) {
-    const response = await axios.post(`${API_URL}/auth/login`, { email, password });
-    if (response.data.success && response.data.session) {
-      localStorage.setItem('accessToken', response.data.session.access_token);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
+    // Sign in with Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (authError) {
+      throw new Error(authError.message);
     }
-    return response.data;
+
+    if (!authData.user) {
+      throw new Error('Invalid credentials');
+    }
+
+    // Fetch user profile with role from public.users table
+    const { data: profile, error: profileError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', authData.user.id)
+      .single();
+
+    if (profileError || !profile) {
+      throw new Error('User profile not found');
+    }
+
+    return {
+      success: true,
+      user: {
+        id: profile.id,
+        email: profile.email,
+        name: profile.name,
+        role: profile.role,
+        verificationStatus: profile.verification_status
+      },
+      session: authData.session
+    };
   },
 
   async logout() {
-    const token = localStorage.getItem('accessToken');
-    if (token) {
-      try {
-        await axios.post(`${API_URL}/auth/logout`, {}, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-      } catch (e) {
-        // Continue logout even if API fails
-      }
-    }
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('user');
     await supabase.auth.signOut();
   },
 
-  getUser() {
-    const user = localStorage.getItem('user');
-    return user ? JSON.parse(user) : null;
+  async getUser() {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      return null;
+    }
+
+    // Fetch role from public.users table
+    const { data: profile, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    if (error || !profile) {
+      return null;
+    }
+
+    return {
+      id: profile.id,
+      email: profile.email,
+      name: profile.name,
+      role: profile.role,
+      verificationStatus: profile.verification_status
+    };
   },
 
-  getToken() {
-    return localStorage.getItem('accessToken');
+  async getSession() {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session;
   },
 
   isAuthenticated() {
-    return !!this.getToken();
+    return supabase.auth.getSession().then(({ data: { session } }) => !!session);
   }
 };
+
+export default authService;
