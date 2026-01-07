@@ -120,9 +120,9 @@ const AdminDashboard = () => {
 
   const stats = [
     { label: 'Total Users', value: users.length, icon: Users, color: 'text-blue-400' },
+    { label: 'Total Products', value: products.length, icon: Package, color: 'text-purple-400' },
     { label: 'Pending Payments', value: pendingPaymentOrders.length, icon: Clock, color: 'text-yellow-400' },
     { label: 'Pending Verifications', value: verificationDocs.filter(d => d.status === 'pending').length, icon: CheckCircle, color: 'text-orange-400' },
-    { label: 'Available Invite Codes', value: inviteCodes.filter(c => !c.isUsed).length, icon: Code, color: 'text-green-400' }
   ];
 
   return (
