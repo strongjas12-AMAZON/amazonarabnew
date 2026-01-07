@@ -63,11 +63,20 @@ const authService = {
     });
 
     if (authError) {
-      throw new Error(authError.message);
+      // Transform Supabase error messages to user-friendly ones
+      const errorMessage = authError.message?.toLowerCase() || '';
+      if (errorMessage.includes('invalid') || errorMessage.includes('credentials') || errorMessage.includes('password')) {
+        throw new Error('Invalid email or password');
+      } else if (errorMessage.includes('email') && errorMessage.includes('confirmed')) {
+        throw new Error('Please verify your email address before logging in');
+      } else if (errorMessage.includes('rate') || errorMessage.includes('limit')) {
+        throw new Error('Too many login attempts. Please try again later');
+      }
+      throw new Error(authError.message || 'Login failed. Please try again.');
     }
 
     if (!authData.user) {
-      throw new Error('Invalid credentials');
+      throw new Error('Invalid email or password');
     }
 
     // Fetch user profile with role from public.users table
@@ -78,7 +87,7 @@ const authService = {
       .single();
 
     if (profileError || !profile) {
-      throw new Error('User profile not found');
+      throw new Error('User profile not found. Please contact support.');
     }
 
     return {
