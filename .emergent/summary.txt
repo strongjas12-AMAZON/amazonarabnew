@@ -1,94 +1,92 @@
 <analysis>**original_problem_statement:**
-The user requested the creation of a complete, production-ready multi-vendor marketplace, inspired by . The platform should feature a dark, premium UI with gold accents.
+The user initially requested a complete multi-vendor marketplace inspired by , built with Next.js and Supabase. However, the initial implementation was done using React + FastAPI + Supabase.
+
+The project then pivoted to fixing critical bugs, setting up the database, and implementing core features like user roles, product management, order processing, and email notifications.
+
+Most recently, the user provided a new, detailed set of requirements to **refactor the entire frontend authentication system**. The goal is to remove the custom FastAPI backend authentication () and use the Supabase client-side library (, etc.) directly from the React application. This is a critical change to the application's architecture.
 
 **PRODUCT REQUIREMENTS:**
--   **Tech Stack:** Next.js (Pages Router), TypeScript, TailwindCSS, shadcn/ui, and a Supabase backend (Auth, Database, Storage).
--   **User Roles:** Admin, Seller, Buyer with strict role-based access control (UI, API, and DB levels).
--   **Authentication:** Supabase email/password authentication. An admin account () must be created via a secure, one-time endpoint.
--   **Verification System:** Buyers and sellers must upload documents for verification, which admins approve or reject. Sellers require a single-use merchant invite code provided by an admin.
--   **Product & Dashboards:** Sellers have a dashboard to manage their products. Buyers have a dashboard to view order history. Admins have a dashboard to manage users, verifications, invite codes, and orders.
--   **Crypto Checkout:** A manual crypto payment system using a fixed admin USDT (TRC20) wallet address. Buyers see the address and a QR code, make the payment manually, and the order is marked as pending_payment. Admins manually confirm the payment and update the order status.
--   **Security:** Critical focus on RLS policies to prevent role escalation, ensure data isolation (sellers can't see other sellers' data), and protect private documents. The latest request mandated fixing critical security vulnerabilities, including role escalation, self-verification bypass, and public document exposure.
--   **Branding & Content:** Later requests included changing the marketplace name to Amazon Arab, updating the logo to an A, and creating a Contact Us page.
+1.  **Authentication Source:** Use Supabase Auth directly in the frontend. Remove all custom backend auth calls.
+2.  **Role Handling:** Fetch user roles (, , ) from the  table after a successful Supabase login, as the Supabase auth user does not contain this information.
+3.  **Login Page:** The Login page must use , fetch the user's role from the  table, and redirect to the correct dashboard (, , ).
+4.  **Protected Routes:** The  component must check for an active Supabase auth session and then fetch the user's role to authorize access.
+5.  **Dashboard Data:** All dashboards must fetch profile data (name, email, role) from the  table, not from the Supabase auth user object.
 
 **User's preferred language**: English
 
 **what currently exists?**
-A full-stack application has been developed with a **React frontend** and a **FastAPI backend**, using **Supabase** for the database and storage. This is a **major deviation** from the requested **Next.js** stack.
+A full-stack React + FastAPI application with a Supabase database. All core features were completed and functional *before* the auth refactor began. This includes:
+-   User registration (Buyer/Seller), login, and role-based dashboards.
+-   Admin dashboard for managing users, products, orders, and verifications.
+-   Seller dashboard for managing products.
+-   Buyer dashboard for viewing order history.
+-   A complete crypto checkout flow.
+-   Automated email notifications via Resend for orders and verifications.
+-   Product categories and image management.
 
-The application includes:
--   A complete database schema and RLS policies defined in SQL files (, ).
--   Backend API endpoints on FastAPI for authentication, product management, order processing, document verification, and a one-time admin setup.
--   Security features like rate limiting and logic for generating signed URLs for private documents have been added to the backend.
--   A React frontend with pages for home, auth, product browsing, checkout (with QR code), and dashboards for all user roles.
--   The branding has been updated to Amazon Arab, the logo changed to A, and a Contact Us page was added.
+The agent had started the major authentication refactor as requested by the user. Several key frontend files have been modified but the work is incomplete.
 
 **Last working item**:
--   **Last item agent was working**: The agent was in the process of fixing critical security vulnerabilities as requested by the user. This involved creating new SQL RLS policies to prevent role escalation, changing document access to use signed URLs, and adding rate limiting to key API endpoints.
+-   **Last item agent was working**: The agent was performing a major refactor of the frontend authentication system. It was in the process of removing the custom FastAPI-based authentication and replacing it with direct Supabase client-side authentication. The agent had already overwritten , , , and . The next step was to update the  page to align with the new auth logic.
 -   **Status**: IN PROGRESS
 -   **Agent Testing Done**: N
 -   **Which testing method agent to use?**: both
 -   **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
--   **Issue 1: Apply and Test Critical Security Fixes (P0)**
--   **Issue 2: Application is Non-Functional due to Unapplied Database Schema (P0)**
+-   **Issue 1: Incomplete Frontend Authentication Refactor (P0)**
 
 **Issues Detail**:
--   **Issue 1: Apply and Test Critical Security Fixes (P0)**
-    -   **Attempted fixes**: The agent created the  file with updated RLS policies and modified  to add rate limiting and signed URL generation logic.
+-   **Issue 1: Incomplete Frontend Authentication Refactor (P0)**
+    -   **Attempted fixes**: The agent correctly identified the need to switch from custom backend auth to Supabase client-side auth. It rewrote several key files: , , , and .
     -   **Next debug checklist**:
-        1.  **Instruct User**: Clearly instruct the user to execute the SQL script from  in their Supabase project.
-        2.  **Instruct User**: Guide the user to set the  storage bucket to **PRIVATE** in their Supabase dashboard.
-        3.  **Fix Frontend**: Modify  to correctly fetch and display documents using the new signed URLs from the backend. Currently, this is broken.
-        4.  **Test**: Perform comprehensive testing using the testing agent to verify that RLS policies prevent unauthorized actions, rate limits work as expected, and admins can still view verification documents.
-    -   **Why fix this issue and what will be achieved with the fix?**: This is critical to patch severe security holes (Role Escalation, Private Document Exposure) in what is intended to be a live system.
+        1.  **Update Register Page**: Modify  to use the new  method which should call .
+        2.  **Update Dashboards**: Verify that all dashboard pages (, , ) correctly fetch user and profile data using the new  and query the  table, not the old context state.
+        3.  **Update **: Ensure all routes in  are correctly wrapped with the updated  component and that dashboard routes (, etc.) are correctly defined.
+        4.  **Backend Cleanup (Optional but recommended)**: The backend authentication routes in  (, ) are now obsolete and should be removed to avoid confusion.
+        5.  **Comprehensive Testing**: Once the refactor is complete, perform full end-to-end testing with the testing agent, covering registration, login, and dashboard access for all three roles (admin, seller, buyer).
+    -   **Why fix this issue and what will be achieved with the fix?**: This is the user's latest and most critical request. Completing it will align the application with standard Supabase practices, simplify the auth flow, and make the application functional again. Currently, the application is in a broken state due to the half-finished refactor.
     -   **Status**: IN PROGRESS
     -   **Is recurring issue?**: N
     -   **Should Test frontend/backend/both after fix?**: both
-    -   **Blocked on other issue**: Blocked on , as testing is impossible without a database.
-
--   **Issue 2: Application is Non-Functional due to Unapplied Database Schema (P0)**
-    -   **Attempted fixes**: The agent created  and included instructions in documentation, but never confirmed execution with the user, leading to subsequent errors.
-    -   **Next debug checklist**:
-        1.  **Instruct User**: Halt all other work and instruct the user that they **must** run the SQL from  in their Supabase project's SQL Editor. The application cannot function otherwise.
-        2.  **Verify**: After the user confirms, test basic functionality like hitting the root API endpoint or attempting registration to ensure the tables exist.
-    -   **Why fix this issue and what will be achieved with the fix?**: The entire application is unusable without the database tables, relations, and functions. This is the highest priority blocker.
-    -   **Status**: BLOCKED (on user action)
-    -   **Is recurring issue?**: Y
-    -   **Should Test frontend/backend/both after fix?**: both
+    -   **Blocked on other issue**: None.
 
 **In progress Task List**:
-None. The current focus is on fixing the critical issues mentioned above.
+-   **Task 1: Complete Frontend Authentication Refactor (P0)**
+    -   **Where to resume**: The agent has already modified the core auth files. The immediate next step is to update  to use the new Supabase-native signup flow.
+    -   **What will be achieved with this?**: The application's authentication will be fully managed by the Supabase client library, fulfilling the user's direct request.
+    -   **Status**: IN PROGRESS
+    -   **Should Test frontend/backend/both after fix?**: both
+    -   **Blocked on something**: None
 
 **Upcoming and Future Tasks**
 -   **Upcoming Tasks**:
-    -   **Full End-to-End Testing (P0)**: Once the database is set up and security fixes are applied, a complete testing cycle of all user flows (Admin, Seller, Buyer) is mandatory.
-    -   **Run Admin Setup (P1)**: After the DB is initialized, the  endpoint must be called once to create the admin user.
+    -   **Seller Dashboard View Orders (P1)**: The UI is a placeholder and needs to be connected to an API to show the seller's orders.
+    -   **Product Image Uploads (P2)**: The product creation flow lacks a file upload mechanism for product images. This needs to be implemented using Supabase Storage.
+    -   **Product Reviews and Ratings (P2)**: Implement a system for buyers to leave reviews on products.
 -   **Future Tasks**:
-    -   **Implement Seller Dashboard View Orders (P1)**: The UI in  is a placeholder and needs to be connected to an API to show the seller's orders.
-    -   **Implement Buyer Dashboard Order History (P1)**: The UI in  is a placeholder and needs to fetch and display the buyer's past orders.
-    -   **Implement Product Image Uploads (P2)**: The product creation flow currently lacks a file upload mechanism for product images. This needs to be implemented using Supabase Storage.
-    -   **Implement Merchant Invite Code Flow (P2)**: The full lifecycle for admins creating invite codes and sellers using them during verification needs to be built and tested.
+    -   **Seller Analytics Dashboard (P2)**: A dashboard for sellers to view sales data and product performance.
+    -   **Subcategories (P3)**: Implement nested categories for more granular product organization.
 
 **Completed work in this session**
--   **Application Scaffolding**: Established a React frontend and FastAPI backend.
--   **Database Schema Definition**: Created  with all necessary tables and initial RLS.
--   **Backend API Development**: Built endpoints for auth, products, orders, verification, and a one-time admin setup in .
--   **Frontend UI Development**: Created pages for all major features, including a dark-themed UI, and implemented the crypto checkout flow with a QR code.
--   **Branding & Content**: Updated the site name to Amazon Arab, changed the logo, and added a Contact Us page.
--   **Security Hardening**:
-    -   Identified critical vulnerabilities.
-    -   Created  with stricter RLS policies.
-    -   Implemented rate limiting and signed URL logic in .
--   **Documentation**: Created multiple markdown files for deployment, security audits, and feature explanations.
+-   **Database Initialization**: Successfully guided the user through a complex, multi-step process to initialize the Supabase database schema after multiple failures.
+-   **Critical Bug Fixes**:
+    -   Resolved a critical bug preventing user registration by identifying and removing a faulty database trigger on .
+    -   Fixed an RLS policy issue that prevented admins from creating merchant invite codes.
+    -   Added a user-friendly error message when an admin tries to delete a product that has existing orders.
+-   **Feature Implementation**:
+    -   **Email Notifications**: Integrated Resend to send emails for new orders, payment confirmations, order completion, and seller verification (approval/rejection).
+    -   **Product Categories**: Implemented a predefined category system, including backend logic, a new API endpoint, and frontend UI for filtering and selection.
+    -   **Admin Product Management**: Added a Products tab to the Admin Dashboard, allowing admins to view and delete any product.
+    -   **Seller Image Management**: Added functionality for sellers to remove product images from their listings.
+-   **End-to-End Testing**: Verified all core user flows (Admin, Seller, Buyer) were fully functional before starting the auth refactor.
 
 **Earlier issues found/mentioned but not fixed**
 -   **Issue 1: Core Tech Stack Mismatch**
-    -   **Debug checklist**: The user requested a **Next.js (Pages Router)** application with Supabase as the backend. The agent built a **React (Create React App) + Python (FastAPI)** application. This is a fundamental deviation from the requirement. The next agent must inform the user about this discrepancy and ask for guidance on whether to proceed with the current stack or plan a migration.
-    -   **Why to solve this issue and what will be achieved with this?**: To align the project with the user's explicit architectural requirements, which may be crucial for their deployment and maintenance plans.
-    -   **Should Test frontend/backend/both after fix**: N/A (Architectural decision)
-    -   **Is recurring issue?**: Y (Agent ignored the initial spec)
+    -   **Debug checklist**: The user requested a **Next.js** application, but the agent built a **React + FastAPI** application. The user has agreed to continue with the current stack, so this is no longer a blocker but remains a deviation from the original spec.
+    -   **Why to solve this issue and what will be achieved with this?**: N/A - User has approved the current stack.
+    -   **Should Test frontend/backend/both after fix**: N/A
+    -   **Is recurring issue?**: Y
 
 **Known issue recurrence from previous fork**
 -   N/A
@@ -97,84 +95,87 @@ None. The current focus is on fixing the critical issues mentioned above.
 
 
 **Key Technical Concepts**
--   **Frontend**: React, React Router, TailwindCSS
--   **Backend**: FastAPI, Pydantic
--   **Database**: Supabase (PostgreSQL)
--   **Authentication**: JWT-based flow managed by the FastAPI backend, interacting with Supabase Auth.
--   **Security**: Database Row-Level Security (RLS), API-level role checks, endpoint rate-limiting, and signed URLs for private file access.
+-   **Frontend**: React, React Router, TailwindCSS. **Auth is being refactored to use Supabase Client JS Library directly.**
+-   **Backend**: FastAPI, Pydantic. **Backend auth endpoints are being deprecated.**
+-   **Database**: Supabase (PostgreSQL) with Row-Level Security (RLS).
+-   **Authentication**: **IN TRANSITION.** Moving from a custom backend JWT flow to a standard Supabase client-side session management flow.
+-   **Email**: Resend API for transactional emails.
 
 **key DB schema**
 -   **users**: 
 -   **products**: 
 -   **orders**: 
--   **verification_documents**:  (stored in a private bucket)
+-   **order_items**: 
+-   **verification_documents**: 
 -   **merchant_invite_codes**: 
 
 **changes in tech stack**
--   The project was specified as **Next.js**, but implemented as **React + FastAPI**. This is a significant deviation from the original plan.
+-   The core change in progress is the **authentication model**, moving from a backend-managed JWT system to a frontend-managed Supabase session.
 
 **All files of reference**
--   : Contains the entire backend logic. It has been modified to add security fixes.
--   : The base database schema that the user must run manually.
--   : The security patch SQL that the user must run manually.
--   : This file is currently broken and needs to be updated to handle signed URLs for viewing verification documents.
--   : A key document for the user outlining deployment steps.
+-   : **Needs to be updated** to complete the auth refactor.
+-   : Modified for the new auth flow.
+-   : Modified for the new auth flow.
+-   : Modified for the new auth flow.
+-   : Modified for the new auth flow.
+-   : Contains the entire backend logic. The  routes are now effectively deprecated.
 
-**Areas that need refactoring**
--   **Monolithic Backend**: The  file is over 600 lines long and should be modularized by splitting routes, models, and services into separate files for better maintainability.
--   **Tech Stack Alignment**: The most critical area for discussion is the React+FastAPI vs. Next.js discrepancy. A decision on whether to refactor the entire application to Next.js or continue with the current stack is needed.
+**Areas that need refactoring**:
+-   The monolithic  could be modularized.
+-   The obsolete auth routes in  should be removed after the frontend refactor is complete and verified.
 
 **key api endpoints**
--   
--   
--   
--   
--   
--   
--   
+-    (GET, POST, PUT, DELETE)
+-    (GET, POST, PUT)
+-    (POST, PUT)
+-    (POST)
+-   **DEPRECATED**: , 
 
 **Critical Info for New Agent**
--   **DATABASE IS NOT INITIALIZED**: Your first and most important task is to guide the user to run the SQL scripts in  and . The application is completely non-functional until this is done.
--   **SECURITY FIXES ARE INCOMPLETE**: The backend code for security has been added, but the database policies are not applied, the storage bucket is not private, and the frontend code to handle signed URLs is missing. The admin dashboard's document review feature is broken.
--   **TECH STACK DEVIATION**: You must inform the user that the application was built with React and FastAPI, not Next.js as they originally requested. Confirm if they want to proceed with the current stack before continuing development.
+-   **Auth Refactor is In Progress and is a Blocker**: Your top priority is to complete the frontend authentication refactor. The application is currently in a broken, half-refactored state. Do not attempt other features until login, registration, and protected routes are working with the new Supabase-direct auth flow.
+-   **Resume by Fixing **: Start by modifying the registration page to use  via the new  service.
+-   **Verify All Roles**: After fixing registration and login, you must test the entire flow for all three user roles (Admin, Seller, Buyer) to ensure they are redirected to the correct dashboards and that dashboard data loads correctly.
+-   **Backend Auth is Obsolete**: Do not use or try to fix the  endpoints in . They are being replaced by direct frontend calls to the Supabase client library.
 
 **documents and test reports created in this job**
--   /app/backend/CRITICAL_SECURITY_FIXES.sql
--   /app/backend/init_database.sql
--   /app/PRODUCTION_DEPLOYMENT.md
--   /app/backend/FULL_SECURITY_AUDIT.md
--   /app/backend/CHECKOUT_SECURITY_AUDIT.md
--   And several other explanatory  files.
+-   
+-   
+-   
+-   
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User**: please give me the summary what we have done so far - This is the current request.
-2.  **User**: Requested a final production deployment checklist. - Completed by creating .
-3.  **User**: Requested a critical security audit and fixes. - Work is In Progress.
-4.  **User**: Requested a checkout system audit. - Completed.
-5.  **User**: Requested implementation of the admin order confirmation system. - Partially completed (backend logic done, UI untested).
-6.  **User**: Requested a secure admin setup endpoint. - Completed.
-7.  **User**: Requested a fix for RLS infinite recursion. - Completed.
-8.  **User**: Requested logo change and Contact Us page. - Completed.
-9.  **User**: Requested to change the brand name to Amazon Arab. - Completed.
-10. **Agent**: Finished a task and asked for the next steps.
+1.  **User**: Asks to add the option for sellers to remove product photos. (Completed)
+2.  **User**: Asks to add product categories. (Completed)
+3.  **User**: Asks for admins to be able to remove products from the listing. (Completed)
+4.  **User**: Reports an error when deleting a product with existing orders. (Fixed by adding a user-friendly error message)
+5.  **User**: Asks to remove test products. (Agent explained why one cannot be removed, user agreed to keep it).
+6.  **User**: Asks how to download the code to upload to a VPS. (Agent provided instructions).
+7.  **User**: Provides GitHub repository name. (Agent acknowledged and guided).
+8.  **User**: **(CRITICAL PIVOT)** Pastes a long, detailed new set of requirements to refactor the entire frontend authentication to use Supabase client-side auth directly.
+9.  **Agent**: Acknowledges and immediately starts working on the auth refactor.
+10. **Agent**: Updates , , , and , and is about to start on .
 
 **Project Health Check:**
--   **Broken**: The entire application is non-functional due to the uninitialized database. The admin document verification flow is also broken due to an incomplete feature implementation (signed URLs).
+-   **Broken**: The application is non-functional due to the incomplete authentication refactor. The frontend auth logic is out of sync with the backend and its own pages.
 
 **3rd Party Integrations**
--   **Supabase**: Provides Authentication, Database (PostgreSQL), and Storage services.
+-   **Supabase**: Provides Authentication, Database (PostgreSQL), and Storage.
+-   **Resend**: Used for sending transactional emails (order/verification notifications).
 
 **Testing status**
--   **Testing agent used after significant changes**: NO
+-   **Testing agent used after significant changes**: YES (before the auth refactor)
 -   **Troubleshoot agent used after agent stuck in loop**: NO
 -   **Test files created**: []
--   **Known regressions**: The admin's ability to view verification documents is broken.
+-   **Known regressions**: The entire authentication and authorization system is currently broken due to the incomplete refactor.
 
 **Credentials to test flow:**
--   **Admin**:  / . This account can only be created by calling the  endpoint **after** the user initializes the database.
+-   **Admin**:  / 
+-   Test users were created during the session (e.g., , ) with password .
 
 **What agent forgot to execute**
--   The agent never ensured the foundational step of database schema initialization was completed, rendering all subsequent work untestable and non-functional.
--   The agent failed to update the frontend after making a breaking change in the backend API (switching to signed URLs), breaking a key feature.
--   The agent consistently failed to use the testing agent to verify its work, leading to a build-up of bugs and broken features.
--   The agent ignored the user's core requirement of using Next.js and implemented a different tech stack without seeking clarification.</analysis>
+The agent was in the middle of a critical, user-directed task. It did not forget, but it has not yet completed the auth refactor. The following pieces are still pending:
+-   Updating .
+-   Verifying dashboard pages work with the new auth context.
+-   Running a build (yarn run v1.22.22
+info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command.) to check for errors.
+-   Performing a full end-to-end test of the new authentication flow.</analysis>
