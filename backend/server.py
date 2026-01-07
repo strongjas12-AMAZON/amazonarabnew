@@ -441,6 +441,82 @@ def get_email_template(template_type: str, data: dict) -> tuple:
         """
         return subject, html
     
+    elif template_type == "verification_approved":
+        subject = "🎉 Verification Approved - Welcome to Amazon Arab!"
+        html = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #1a1a1a; color: #fff; padding: 20px;">
+            <div style="text-align: center; padding: 20px 0; border-bottom: 2px solid #D4AF37;">
+                <h1 style="color: #D4AF37; margin: 0;">Amazon Arab</h1>
+            </div>
+            <div style="padding: 30px 20px;">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <span style="font-size: 48px;">🎉</span>
+                </div>
+                <h2 style="color: #4CAF50; text-align: center;">Verification Approved!</h2>
+                <p>Hi {data['user_name']},</p>
+                <p>Congratulations! Your account has been verified and you're now ready to start selling on Amazon Arab.</p>
+                
+                <div style="background: #2a2a2a; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <h3 style="color: #D4AF37; margin-top: 0;">What's Next?</h3>
+                    <ul style="padding-left: 20px; line-height: 1.8;">
+                        <li>Log in to your Seller Dashboard</li>
+                        <li>Add your first product</li>
+                        <li>Start receiving orders from buyers</li>
+                    </ul>
+                </div>
+                
+                <div style="text-align: center; margin: 30px 0;">
+                    <p style="color: #D4AF37; font-size: 18px;">Welcome to the Amazon Arab family!</p>
+                </div>
+                
+                <p style="color: #888;">If you have any questions, feel free to contact our support team.</p>
+            </div>
+            <div style="text-align: center; padding: 20px; border-top: 1px solid #333; color: #666; font-size: 12px;">
+                <p>© 2026 Amazon Arab. All rights reserved.</p>
+            </div>
+        </div>
+        """
+        return subject, html
+    
+    elif template_type == "verification_rejected":
+        subject = "Verification Update - Action Required"
+        html = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #1a1a1a; color: #fff; padding: 20px;">
+            <div style="text-align: center; padding: 20px 0; border-bottom: 2px solid #D4AF37;">
+                <h1 style="color: #D4AF37; margin: 0;">Amazon Arab</h1>
+            </div>
+            <div style="padding: 30px 20px;">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <span style="font-size: 48px;">📋</span>
+                </div>
+                <h2 style="color: #FFA500; text-align: center;">Verification Requires Attention</h2>
+                <p>Hi {data['user_name']},</p>
+                <p>We've reviewed your verification documents and unfortunately, we couldn't approve them at this time.</p>
+                
+                <div style="background: #2a2a2a; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #FFA500;">
+                    <h3 style="color: #D4AF37; margin-top: 0;">Reason</h3>
+                    <p>{data.get('rejection_reason', 'Please ensure your documents are clear, valid, and match our requirements.')}</p>
+                </div>
+                
+                <div style="background: #2a2a2a; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <h3 style="color: #D4AF37; margin-top: 0;">What You Can Do</h3>
+                    <ul style="padding-left: 20px; line-height: 1.8;">
+                        <li>Review the rejection reason above</li>
+                        <li>Prepare new, clear documents</li>
+                        <li>Log in and submit your documents again</li>
+                        <li>Contact support if you need assistance</li>
+                    </ul>
+                </div>
+                
+                <p style="color: #888;">We're here to help you succeed. Don't hesitate to reach out if you have questions.</p>
+            </div>
+            <div style="text-align: center; padding: 20px; border-top: 1px solid #333; color: #666; font-size: 12px;">
+                <p>© 2026 Amazon Arab. All rights reserved.</p>
+            </div>
+        </div>
+        """
+        return subject, html
+    
     return "", ""
 
 
