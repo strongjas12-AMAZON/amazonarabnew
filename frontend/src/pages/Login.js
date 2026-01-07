@@ -16,18 +16,30 @@ const Login = () => {
 
     try {
       const result = await login(email, password);
+      
+      // Validate role exists
+      if (!result.user || !result.user.role) {
+        toast.error('User role not found. Please contact support.');
+        setLoading(false);
+        return;
+      }
+
       toast.success('Login successful!');
       
       // Redirect based on role
-      if (result.user.role === 'admin') {
+      const role = result.user.role;
+      if (role === 'admin') {
         navigate('/dashboard/admin');
-      } else if (result.user.role === 'seller') {
+      } else if (role === 'seller') {
         navigate('/dashboard/seller');
+      } else if (role === 'buyer') {
+        navigate('/dashboard/buyer');
       } else {
+        // Fallback for unknown role
         navigate('/products');
       }
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Login failed');
+      toast.error(error.message || 'Login failed');
     } finally {
       setLoading(false);
     }
