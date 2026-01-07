@@ -216,6 +216,221 @@ def format_invite_code_response(code_data: dict) -> dict:
     }
 
 
+# Email notification functions
+async def send_email_async(to_email: str, subject: str, html_content: str):
+    """Send email asynchronously using Resend"""
+    if not RESEND_API_KEY:
+        logging.warning("RESEND_API_KEY not configured, skipping email")
+        return None
+    
+    try:
+        params = {
+            "from": f"Amazon Arab <{SENDER_EMAIL}>",
+            "to": [to_email],
+            "subject": subject,
+            "html": html_content
+        }
+        result = await asyncio.to_thread(resend.Emails.send, params)
+        logging.info(f"Email sent to {to_email}: {result.get('id')}")
+        return result
+    except Exception as e:
+        logging.error(f"Failed to send email to {to_email}: {str(e)}")
+        return None
+
+
+def get_email_template(template_type: str, data: dict) -> tuple:
+    """Generate email subject and HTML content based on template type"""
+    
+    if template_type == "order_placed_buyer":
+        subject = f"Order Confirmed - #{data['order_id'][:8].upper()}"
+        html = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #1a1a1a; color: #fff; padding: 20px;">
+            <div style="text-align: center; padding: 20px 0; border-bottom: 2px solid #D4AF37;">
+                <h1 style="color: #D4AF37; margin: 0;">Amazon Arab</h1>
+            </div>
+            <div style="padding: 30px 20px;">
+                <h2 style="color: #D4AF37;">Thank you for your order!</h2>
+                <p>Hi {data['buyer_name']},</p>
+                <p>Your order has been placed successfully. Please complete the payment to proceed.</p>
+                
+                <div style="background: #2a2a2a; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <h3 style="color: #D4AF37; margin-top: 0;">Order Details</h3>
+                    <p><strong>Order ID:</strong> #{data['order_id'][:8].upper()}</p>
+                    <p><strong>Total Amount:</strong> ${data['total_amount']:.2f}</p>
+                    <p><strong>Payment Method:</strong> USDT (TRC20)</p>
+                </div>
+                
+                <div style="background: #D4AF37; color: #000; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <h3 style="margin-top: 0;">Payment Instructions</h3>
+                    <p><strong>Send exactly ${data['total_amount']:.2f} USDT to:</strong></p>
+                    <p style="font-family: monospace; background: #fff; padding: 10px; border-radius: 4px; word-break: break-all;">
+                        {data['wallet_address']}
+                    </p>
+                    <p style="font-size: 12px;">Network: TRC20 (Tron)</p>
+                </div>
+                
+                <p style="color: #888;">Once payment is confirmed, we'll update your order status.</p>
+            </div>
+            <div style="text-align: center; padding: 20px; border-top: 1px solid #333; color: #666; font-size: 12px;">
+                <p>© 2026 Amazon Arab. All rights reserved.</p>
+            </div>
+        </div>
+        """
+        return subject, html
+    
+    elif template_type == "payment_confirmed_buyer":
+        subject = f"Payment Confirmed - Order #{data['order_id'][:8].upper()}"
+        html = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #1a1a1a; color: #fff; padding: 20px;">
+            <div style="text-align: center; padding: 20px 0; border-bottom: 2px solid #D4AF37;">
+                <h1 style="color: #D4AF37; margin: 0;">Amazon Arab</h1>
+            </div>
+            <div style="padding: 30px 20px;">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <span style="font-size: 48px;">✅</span>
+                </div>
+                <h2 style="color: #4CAF50; text-align: center;">Payment Confirmed!</h2>
+                <p>Hi {data['buyer_name']},</p>
+                <p>Great news! Your payment has been confirmed by our team.</p>
+                
+                <div style="background: #2a2a2a; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <h3 style="color: #D4AF37; margin-top: 0;">Order Summary</h3>
+                    <p><strong>Order ID:</strong> #{data['order_id'][:8].upper()}</p>
+                    <p><strong>Total Paid:</strong> ${data['total_amount']:.2f}</p>
+                    <p><strong>Status:</strong> <span style="color: #4CAF50;">PAID</span></p>
+                </div>
+                
+                <p>The seller has been notified and will process your order soon.</p>
+                <p style="color: #888;">Thank you for shopping with Amazon Arab!</p>
+            </div>
+            <div style="text-align: center; padding: 20px; border-top: 1px solid #333; color: #666; font-size: 12px;">
+                <p>© 2026 Amazon Arab. All rights reserved.</p>
+            </div>
+        </div>
+        """
+        return subject, html
+    
+    elif template_type == "new_order_seller":
+        subject = f"New Order Received - #{data['order_id'][:8].upper()}"
+        html = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #1a1a1a; color: #fff; padding: 20px;">
+            <div style="text-align: center; padding: 20px 0; border-bottom: 2px solid #D4AF37;">
+                <h1 style="color: #D4AF37; margin: 0;">Amazon Arab</h1>
+            </div>
+            <div style="padding: 30px 20px;">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <span style="font-size: 48px;">🛒</span>
+                </div>
+                <h2 style="color: #D4AF37; text-align: center;">New Order Received!</h2>
+                <p>Hi {data['seller_name']},</p>
+                <p>You have received a new order for your product(s).</p>
+                
+                <div style="background: #2a2a2a; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <h3 style="color: #D4AF37; margin-top: 0;">Order Details</h3>
+                    <p><strong>Order ID:</strong> #{data['order_id'][:8].upper()}</p>
+                    <p><strong>Product:</strong> {data['product_title']}</p>
+                    <p><strong>Quantity:</strong> {data['quantity']}</p>
+                    <p><strong>Amount:</strong> ${data['item_total']:.2f}</p>
+                    <p><strong>Status:</strong> <span style="color: #FFA500;">Pending Payment</span></p>
+                </div>
+                
+                <p>You will be notified once the buyer completes the payment.</p>
+                <p style="color: #888;">Log in to your seller dashboard to view order details.</p>
+            </div>
+            <div style="text-align: center; padding: 20px; border-top: 1px solid #333; color: #666; font-size: 12px;">
+                <p>© 2026 Amazon Arab. All rights reserved.</p>
+            </div>
+        </div>
+        """
+        return subject, html
+    
+    elif template_type == "new_order_admin":
+        subject = f"[Admin] New Order - #{data['order_id'][:8].upper()}"
+        html = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #1a1a1a; color: #fff; padding: 20px;">
+            <div style="text-align: center; padding: 20px 0; border-bottom: 2px solid #D4AF37;">
+                <h1 style="color: #D4AF37; margin: 0;">Amazon Arab - Admin</h1>
+            </div>
+            <div style="padding: 30px 20px;">
+                <h2 style="color: #D4AF37;">New Order Notification</h2>
+                
+                <div style="background: #2a2a2a; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <h3 style="color: #D4AF37; margin-top: 0;">Order Details</h3>
+                    <p><strong>Order ID:</strong> #{data['order_id'][:8].upper()}</p>
+                    <p><strong>Buyer:</strong> {data['buyer_name']} ({data['buyer_email']})</p>
+                    <p><strong>Total Amount:</strong> ${data['total_amount']:.2f}</p>
+                    <p><strong>Payment Wallet:</strong></p>
+                    <p style="font-family: monospace; background: #333; padding: 5px; font-size: 12px;">{data['wallet_address']}</p>
+                </div>
+                
+                <p>Please monitor for incoming payment and confirm when received.</p>
+            </div>
+            <div style="text-align: center; padding: 20px; border-top: 1px solid #333; color: #666; font-size: 12px;">
+                <p>© 2026 Amazon Arab. All rights reserved.</p>
+            </div>
+        </div>
+        """
+        return subject, html
+    
+    return "", ""
+
+
+async def send_order_notifications(order_data: dict, order_items: list, notification_type: str = "order_placed"):
+    """Send all relevant notifications for an order"""
+    try:
+        # Get buyer info
+        buyer = supabase_admin.table('users').select('*').eq('id', order_data['buyer_id']).execute()
+        buyer_info = buyer.data[0] if buyer.data else {}
+        
+        if notification_type == "order_placed":
+            # 1. Send to buyer
+            subject, html = get_email_template("order_placed_buyer", {
+                'order_id': order_data['id'],
+                'buyer_name': buyer_info.get('name', 'Customer'),
+                'total_amount': float(order_data['total_amount']),
+                'wallet_address': order_data['payment_wallet']
+            })
+            await send_email_async(buyer_info.get('email'), subject, html)
+            
+            # 2. Send to each seller
+            for item in order_items:
+                product = supabase_admin.table('products').select('*, users!seller_id(*)').eq('id', item['product_id']).execute()
+                if product.data:
+                    prod = product.data[0]
+                    seller_info = prod.get('users', {})
+                    if seller_info and seller_info.get('email'):
+                        subject, html = get_email_template("new_order_seller", {
+                            'order_id': order_data['id'],
+                            'seller_name': seller_info.get('name', 'Seller'),
+                            'product_title': prod.get('title', 'Product'),
+                            'quantity': item['quantity'],
+                            'item_total': float(item['price']) * item['quantity']
+                        })
+                        await send_email_async(seller_info.get('email'), subject, html)
+            
+            # 3. Send to admin
+            subject, html = get_email_template("new_order_admin", {
+                'order_id': order_data['id'],
+                'buyer_name': buyer_info.get('name', 'Customer'),
+                'buyer_email': buyer_info.get('email', ''),
+                'total_amount': float(order_data['total_amount']),
+                'wallet_address': order_data['payment_wallet']
+            })
+            await send_email_async(ADMIN_EMAIL, subject, html)
+            
+        elif notification_type == "payment_confirmed":
+            # Send payment confirmation to buyer
+            subject, html = get_email_template("payment_confirmed_buyer", {
+                'order_id': order_data['id'],
+                'buyer_name': buyer_info.get('name', 'Customer'),
+                'total_amount': float(order_data['total_amount'])
+            })
+            await send_email_async(buyer_info.get('email'), subject, html)
+            
+    except Exception as e:
+        logging.error(f"Failed to send order notifications: {str(e)}")
+
+
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Get current user from JWT token"""
     try:
