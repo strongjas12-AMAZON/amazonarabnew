@@ -3,16 +3,17 @@ import { useAuth } from '../../context/AuthContext';
 import api from '../../lib/api';
 import { toast } from 'sonner';
 import { useDropzone } from 'react-dropzone';
-import { Package, Plus, Edit, Trash2, Upload, AlertCircle, CheckCircle } from 'lucide-react';
+import { Package, Plus, Edit, Trash2, Upload, AlertCircle, CheckCircle, Tag } from 'lucide-react';
 
 const SellerDashboard = () => {
   const { user } = useAuth();
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showProductForm, setShowProductForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
-  const [productForm, setProductForm] = useState({ title: '', description: '', price: '' });
+  const [productForm, setProductForm] = useState({ title: '', description: '', price: '', category: '' });
   const [uploadingImages, setUploadingImages] = useState({});
   const [showVerificationForm, setShowVerificationForm] = useState(false);
   const [verificationForm, setVerificationForm] = useState({
@@ -22,7 +23,17 @@ const SellerDashboard = () => {
 
   useEffect(() => {
     fetchData();
+    fetchCategories();
   }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const response = await api.get('/categories');
+      setCategories(response.data.categories || []);
+    } catch (error) {
+      console.error('Failed to load categories');
+    }
+  };
 
   const fetchData = async () => {
     try {
