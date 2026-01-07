@@ -373,6 +373,80 @@ const AdminDashboard = () => {
           </div>
         )}
 
+        {activeTab === 'products' && (
+          <div>
+            <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white mb-6">
+              All Products ({products.length})
+            </h2>
+            <p className="text-gray-400 text-sm mb-6">
+              Manage all products in the marketplace. Remove products that violate policies.
+            </p>
+            
+            {products.length === 0 ? (
+              <div className="text-center py-12">
+                <Package className="w-16 h-16 mx-auto text-gray-600 mb-4" />
+                <p className="text-gray-400">No products in the marketplace yet</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {products.map((product) => (
+                  <div key={product.id} className="p-4 bg-[rgba(30,30,30,0.6)] rounded-lg border border-[rgba(212,175,55,0.1)]">
+                    <div className="flex gap-4">
+                      {/* Product Image */}
+                      <div className="flex-shrink-0">
+                        {product.images && product.images.length > 0 ? (
+                          <img
+                            src={product.images[0]}
+                            alt={product.title}
+                            className="w-20 h-20 object-cover rounded-lg"
+                          />
+                        ) : (
+                          <div className="w-20 h-20 bg-[rgba(50,50,50,0.6)] rounded-lg flex items-center justify-center">
+                            <Package className="w-8 h-8 text-gray-500" />
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Product Info */}
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-white text-lg truncate">{product.title}</h3>
+                        <p className="text-gray-400 text-sm line-clamp-1">{product.description}</p>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          <span className="text-[#D4AF37] font-bold">${product.price?.toFixed(2)}</span>
+                          {product.categoryName && (
+                            <span className="px-2 py-0.5 bg-[rgba(212,175,55,0.1)] text-[#D4AF37] rounded text-xs">
+                              {product.categoryIcon} {product.categoryName}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Seller: {product.users?.name || 'Unknown'} ({product.users?.email || 'N/A'})
+                          {product.users?.verificationStatus === 'verified' && (
+                            <span className="ml-2 text-green-400">✓ Verified</span>
+                          )}
+                        </p>
+                      </div>
+                      
+                      {/* Actions */}
+                      <div className="flex-shrink-0 flex items-center">
+                        <button
+                          onClick={() => handleDeleteProduct(product.id, product.title)}
+                          className="p-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors flex items-center gap-2"
+                          data-testid="admin-delete-product-btn"
+                          title="Remove from marketplace"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                          <span className="hidden sm:inline">Remove</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {activeTab === 'users' && (
           <div>
             <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white mb-6">All Users</h2>
