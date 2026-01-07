@@ -39,7 +39,15 @@ const Login = () => {
         navigate('/products');
       }
     } catch (error) {
-      toast.error(error.message || 'Login failed');
+      // Handle common errors with user-friendly messages
+      const errorMsg = error?.message?.toLowerCase() || '';
+      if (errorMsg.includes('body stream') || errorMsg.includes('json')) {
+        toast.error('Invalid email or password');
+      } else if (errorMsg.includes('invalid') || errorMsg.includes('credentials') || errorMsg.includes('password')) {
+        toast.error('Invalid email or password');
+      } else {
+        toast.error(error.message || 'Login failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
