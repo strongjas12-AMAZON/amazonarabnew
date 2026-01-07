@@ -125,6 +125,11 @@ Tables use snake_case columns:
 - ✅ Tested complete buyer checkout flow
 - ✅ Tested admin order confirmation flow
 - ✅ All 5 user flows fully functional and tested
+- ✅ **Added Email Notifications via Resend**:
+  - Buyer receives order confirmation with crypto wallet details
+  - Buyer receives payment confirmation when admin confirms
+  - Seller receives notification when their product is ordered
+  - Admin receives notification for all new orders
 - ✅ Testing: 100% of core flows passing
 
 ### 2026-01-06
