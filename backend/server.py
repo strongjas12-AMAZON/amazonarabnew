@@ -1278,6 +1278,13 @@ async def review_verification(doc_id: str, request: ReviewVerificationRequest, c
         user_id = doc.data[0]['user_id']
         supabase_admin.table('users').update({'verification_status': request.status}).eq('id', user_id).execute()
         
+        # Send verification email to user
+        asyncio.create_task(send_verification_email(
+            user_id, 
+            request.status, 
+            request.rejectionReason
+        ))
+        
         return {"success": True, "message": "Review completed"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
