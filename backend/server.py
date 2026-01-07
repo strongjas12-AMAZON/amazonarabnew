@@ -372,6 +372,75 @@ def get_email_template(template_type: str, data: dict) -> tuple:
         """
         return subject, html
     
+    elif template_type == "order_completed_buyer":
+        subject = f"Order Completed - #{data['order_id'][:8].upper()}"
+        html = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #1a1a1a; color: #fff; padding: 20px;">
+            <div style="text-align: center; padding: 20px 0; border-bottom: 2px solid #D4AF37;">
+                <h1 style="color: #D4AF37; margin: 0;">Amazon Arab</h1>
+            </div>
+            <div style="padding: 30px 20px;">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <span style="font-size: 48px;">🎉</span>
+                </div>
+                <h2 style="color: #4CAF50; text-align: center;">Order Completed!</h2>
+                <p>Hi {data['buyer_name']},</p>
+                <p>Great news! Your order has been fulfilled and marked as complete.</p>
+                
+                <div style="background: #2a2a2a; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <h3 style="color: #D4AF37; margin-top: 0;">Order Summary</h3>
+                    <p><strong>Order ID:</strong> #{data['order_id'][:8].upper()}</p>
+                    <p><strong>Total Amount:</strong> ${data['total_amount']:.2f}</p>
+                    <p><strong>Status:</strong> <span style="color: #4CAF50;">✓ COMPLETED</span></p>
+                </div>
+                
+                <p>Thank you for shopping with us! We hope you enjoy your purchase.</p>
+                <p style="color: #888;">If you have any questions about your order, please contact our support team.</p>
+                
+                <div style="text-align: center; margin-top: 30px;">
+                    <p style="color: #D4AF37;">We'd love to see you again!</p>
+                </div>
+            </div>
+            <div style="text-align: center; padding: 20px; border-top: 1px solid #333; color: #666; font-size: 12px;">
+                <p>© 2026 Amazon Arab. All rights reserved.</p>
+            </div>
+        </div>
+        """
+        return subject, html
+    
+    elif template_type == "order_completed_seller":
+        subject = f"Order Fulfilled - #{data['order_id'][:8].upper()}"
+        html = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #1a1a1a; color: #fff; padding: 20px;">
+            <div style="text-align: center; padding: 20px 0; border-bottom: 2px solid #D4AF37;">
+                <h1 style="color: #D4AF37; margin: 0;">Amazon Arab</h1>
+            </div>
+            <div style="padding: 30px 20px;">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <span style="font-size: 48px;">✅</span>
+                </div>
+                <h2 style="color: #4CAF50; text-align: center;">Order Marked Complete</h2>
+                <p>Hi {data['seller_name']},</p>
+                <p>The following order has been marked as completed by the admin.</p>
+                
+                <div style="background: #2a2a2a; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <h3 style="color: #D4AF37; margin-top: 0;">Order Details</h3>
+                    <p><strong>Order ID:</strong> #{data['order_id'][:8].upper()}</p>
+                    <p><strong>Product:</strong> {data['product_title']}</p>
+                    <p><strong>Quantity:</strong> {data['quantity']}</p>
+                    <p><strong>Amount:</strong> ${data['item_total']:.2f}</p>
+                    <p><strong>Status:</strong> <span style="color: #4CAF50;">✓ COMPLETED</span></p>
+                </div>
+                
+                <p style="color: #888;">Great job! Keep up the excellent work.</p>
+            </div>
+            <div style="text-align: center; padding: 20px; border-top: 1px solid #333; color: #666; font-size: 12px;">
+                <p>© 2026 Amazon Arab. All rights reserved.</p>
+            </div>
+        </div>
+        """
+        return subject, html
+    
     return "", ""
 
 
