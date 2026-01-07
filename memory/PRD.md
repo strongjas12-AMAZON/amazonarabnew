@@ -32,6 +32,7 @@ A premium multi-vendor marketplace with dark UI and gold accents, featuring cryp
 - [x] Seller: Create products after verification
 - [x] Seller: View orders containing their products
 - [x] Seller: Product image upload capability
+- [x] Seller: Remove product images
 - [x] Buyer: Browse products page with search
 - [x] Buyer: Add products to cart
 - [x] Buyer: Checkout with crypto payment (USDT TRC20)
