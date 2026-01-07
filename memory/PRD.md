@@ -42,6 +42,11 @@ A premium multi-vendor marketplace with dark UI and gold accents, featuring cryp
 - [x] Logo "A" branding as "Amazon Arab"
 - [x] Database schema with RLS security policies
 - [x] Rate limiting on sensitive endpoints
+- [x] **Email Notifications (Resend)**:
+  - Order placed confirmation to buyer (with crypto wallet)
+  - Payment confirmed notification to buyer
+  - New order notification to seller
+  - New order notification to admin
 
 ## Complete User Flows (All Tested ✅)
 
