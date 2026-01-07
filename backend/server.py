@@ -609,6 +609,35 @@ async def send_order_notifications(order_data: dict, order_items: list, notifica
         logging.error(f"Failed to send order notifications: {str(e)}")
 
 
+async def send_verification_email(user_id: str, status: str, rejection_reason: str = None):
+    """Send verification approval/rejection email to user"""
+    try:
+        # Get user info
+        user = supabase_admin.table('users').select('*').eq('id', user_id).execute()
+        if not user.data:
+            logging.error(f"User not found for verification email: {user_id}")
+            return
+        
+        user_info = user.data[0]
+        
+        if status == 'verified':
+            subject, html = get_email_template("verification_approved", {
+                'user_name': user_info.get('name', 'Seller')
+            })
+        elif status == 'rejected':
+            subject, html = get_email_template("verification_rejected", {
+                'user_name': user_info.get('name', 'Seller'),
+                'rejection_reason': rejection_reason or 'Please ensure your documents are clear, valid, and match our requirements.'
+            })
+        else:
+            return
+        
+        await send_email_async(user_info.get('email'), subject, html)
+        
+    except Exception as e:
+        logging.error(f"Failed to send verification email: {str(e)}")
+
+
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Get current user from JWT token"""
     try:
