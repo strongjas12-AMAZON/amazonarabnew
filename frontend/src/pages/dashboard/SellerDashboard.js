@@ -350,6 +350,33 @@ const SellerDashboard = () => {
                     </button>
                   </div>
                 </div>
+                
+                {/* Product Images Gallery with Remove Buttons */}
+                {product.images && product.images.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-sm text-gray-400 mb-2">Product Images (click X to remove)</p>
+                    <div className="flex flex-wrap gap-2">
+                      {product.images.map((img, index) => (
+                        <div key={index} className="relative group">
+                          <img
+                            src={img}
+                            alt={`${product.title} - ${index + 1}`}
+                            className="w-20 h-20 object-cover rounded-lg border border-gray-700"
+                          />
+                          <button
+                            onClick={() => handleRemoveImage(product.id, img)}
+                            className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                            data-testid="remove-image-btn"
+                            title="Remove image"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
                 <div className="mt-4">
                   {uploadingImages[product.id] ? (
                     <div className="text-center py-4"><div className="spinner mx-auto"></div></div>
