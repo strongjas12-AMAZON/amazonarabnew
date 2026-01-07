@@ -391,6 +391,7 @@ async def send_order_notifications(order_data: dict, order_items: list, notifica
                 'wallet_address': order_data['payment_wallet']
             })
             await send_email_async(buyer_info.get('email'), subject, html)
+            await asyncio.sleep(0.6)  # Rate limit: 2 req/sec
             
             # 2. Send to each seller
             for item in order_items:
@@ -407,6 +408,7 @@ async def send_order_notifications(order_data: dict, order_items: list, notifica
                             'item_total': float(item['price']) * item['quantity']
                         })
                         await send_email_async(seller_info.get('email'), subject, html)
+                        await asyncio.sleep(0.6)  # Rate limit: 2 req/sec
             
             # 3. Send to admin
             subject, html = get_email_template("new_order_admin", {
