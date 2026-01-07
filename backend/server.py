@@ -1038,6 +1038,8 @@ async def update_product(product_id: str, request: UpdateProductRequest, current
             update_data['price'] = request.price
         if request.images is not None:
             update_data['images'] = request.images
+        if request.category is not None:
+            update_data['category'] = request.category
         
         result = supabase_admin.table('products').update(update_data).eq('id', product_id).execute()
         return {"success": True, "product": format_product_response(result.data[0])}
