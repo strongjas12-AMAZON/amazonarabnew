@@ -7,12 +7,14 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 import os
 import logging
+import asyncio
 from pathlib import Path
 from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional
 from datetime import datetime, timezone
 import uuid
 from supabase import create_client, Client
+import resend
 
 
 ROOT_DIR = Path(__file__).parent
@@ -24,6 +26,15 @@ SUPABASE_ANON_KEY = os.environ['NEXT_PUBLIC_SUPABASE_ANON_KEY']
 SUPABASE_SERVICE_KEY = os.environ['SUPABASE_SERVICE_ROLE_KEY']
 ADMIN_SETUP_COMPLETE = os.environ.get('ADMIN_SETUP_COMPLETE', 'false').lower() == 'true'
 ADMIN_CRYPTO_WALLET = os.environ.get('ADMIN_CRYPTO_WALLET', 'TY8Z91NMCjREyZVj9NjDsF8hVjyqfxFFRU')
+
+# Email setup (Resend)
+RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
+SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'support@arabshopping.org')
+ADMIN_EMAIL = 'support@arabshopping.org'
+
+# Initialize Resend
+if RESEND_API_KEY:
+    resend.api_key = RESEND_API_KEY
 
 # Create Supabase clients
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
