@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../lib/api';
 import { toast } from 'sonner';
-import { Users, Package, ShoppingCart, Code, CheckCircle, XCircle, Eye, Clock, DollarSign } from 'lucide-react';
+import { Users, Package, ShoppingCart, Code, CheckCircle, XCircle, Eye, Clock, DollarSign, Trash2 } from 'lucide-react';
 
 const AdminDashboard = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
   const [users, setUsers] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [products, setProducts] = useState([]);
   const [verificationDocs, setVerificationDocs] = useState([]);
   const [inviteCodes, setInviteCodes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -19,15 +20,17 @@ const AdminDashboard = () => {
 
   const fetchData = async () => {
     try {
-      const [usersRes, ordersRes, docsRes, codesRes] = await Promise.all([
+      const [usersRes, ordersRes, productsRes, docsRes, codesRes] = await Promise.all([
         api.get('/admin/users'),
         api.get('/orders/my'),
+        api.get('/admin/products'),
         api.get('/verification/documents'),
         api.get('/admin/invite-codes')
       ]);
 
       setUsers(usersRes.data.users || []);
       setOrders(ordersRes.data.orders || []);
+      setProducts(productsRes.data.products || []);
       setVerificationDocs(docsRes.data.documents || []);
       setInviteCodes(codesRes.data.codes || []);
     } catch (error) {
@@ -44,6 +47,17 @@ const AdminDashboard = () => {
       fetchData();
     } catch (error) {
       toast.error('Failed to create invite code');
+    }
+  };
+
+  const handleDeleteProduct = async (productId, productTitle) => {
+    if (!window.confirm(`Are you sure you want to remove "${productTitle}" from the marketplace?`)) return;
+    try {
+      await api.delete(`/products/${productId}`);
+      toast.success('Product removed from marketplace');
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to delete product');
     }
   };
 
