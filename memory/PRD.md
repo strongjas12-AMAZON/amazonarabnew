@@ -130,6 +130,21 @@ Tables use snake_case columns:
 
 ## Changelog
 
+### 2026-01-08
+- ✅ **COMPLETED: Frontend Authentication Refactor to Supabase Client-Side Auth**
+  - Removed custom backend auth endpoints (`/api/auth/login`, `/api/auth/register`)
+  - Now using `supabase.auth.signInWithPassword()` directly in frontend
+  - Now using `supabase.auth.signUp()` directly in frontend
+  - User roles fetched from `public.users` table after Supabase auth login
+  - Session persisted via Supabase localStorage
+- ✅ Fixed ProtectedRoute component:
+  - Now properly redirects users to their appropriate dashboard based on role
+  - No more infinite loading spinner when accessing unauthorized dashboards
+- ✅ Improved error handling:
+  - Invalid login credentials now show user-friendly "Invalid email or password" message
+- ✅ Updated `api.js` to use Supabase session token instead of custom auth token
+- ✅ Testing: 100% pass rate on all auth flows (iteration_5)
+
 ### 2026-01-07
 - ✅ Fixed Supabase auth trigger issue (dropped conflicting trigger)
 - ✅ Completed seller verification flow with document upload
