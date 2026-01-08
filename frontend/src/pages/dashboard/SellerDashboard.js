@@ -275,7 +275,7 @@ const SellerDashboard = () => {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-6 mb-8">
         <div className="luxury-card">
           <p className="text-gray-400 text-sm mb-1">Total Products</p>
           <p className="text-3xl font-bold text-[#D4AF37]">{products.length}</p>
@@ -285,11 +285,49 @@ const SellerDashboard = () => {
           <p className="text-3xl font-bold text-[#D4AF37]">{orders.length}</p>
         </div>
         <div className="luxury-card">
+          <p className="text-gray-400 text-sm mb-1">Revenue</p>
+          <p className="text-3xl font-bold text-green-400">
+            ${orders.filter(o => o.paymentStatus === 'paid' || o.paymentStatus === 'completed')
+              .reduce((sum, o) => {
+                const sellerTotal = o.orderItems?.reduce((itemSum, item) => itemSum + (item.price * item.quantity), 0) || 0;
+                return sum + sellerTotal;
+              }, 0).toFixed(2)}
+          </p>
+        </div>
+        <div className="luxury-card">
           <p className="text-gray-400 text-sm mb-1">Status</p>
           <span className={`status-badge ${user.verificationStatus === 'verified' ? 'status-verified' : 'status-pending'}`}>
             {user.verificationStatus}
           </span>
         </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-2 mb-8">
+        <button
+          onClick={() => setActiveTab('products')}
+          className={`px-6 py-3 rounded-lg font-medium transition-all flex items-center gap-2 ${
+            activeTab === 'products'
+              ? 'bg-[#D4AF37] text-[#0a0a0a]'
+              : 'bg-[rgba(30,30,30,0.6)] text-gray-300 hover:bg-[rgba(30,30,30,0.8)]'
+          }`}
+          data-testid="tab-products"
+        >
+          <Package className="w-4 h-4" />
+          Products ({products.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('orders')}
+          className={`px-6 py-3 rounded-lg font-medium transition-all flex items-center gap-2 ${
+            activeTab === 'orders'
+              ? 'bg-[#D4AF37] text-[#0a0a0a]'
+              : 'bg-[rgba(30,30,30,0.6)] text-gray-300 hover:bg-[rgba(30,30,30,0.8)]'
+          }`}
+          data-testid="tab-orders"
+        >
+          <ShoppingCart className="w-4 h-4" />
+          Orders ({orders.length})
+        </button>
       </div>
 
       {/* Products Section */}
