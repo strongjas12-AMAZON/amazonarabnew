@@ -50,7 +50,7 @@ curl -X POST https://supabase-auth-17.preview.emergentagent.com/api/setup-admin
 
 **Admin Credentials:**
 - Email: `support@arabshopping.org`
-- Password: `Hadi1247@`
+
 
 ⚠️ **IMPORTANT:** This endpoint runs only once. After successful creation, it's disabled automatically.
 
@@ -63,7 +63,7 @@ curl -X POST https://supabase-auth-17.preview.emergentagent.com/api/setup-admin
 
 ### USDT Wallet (Admin-Controlled)
 - **Network:** TRC20 ONLY
-- **Address:** `TY8Z91NMCjREyZVj9NjDsF8hVjyqfxFFRU`
+- **Address:** 
 - **QR Code:** Displayed at checkout
 - **Verification:** Manual admin confirmation
 
