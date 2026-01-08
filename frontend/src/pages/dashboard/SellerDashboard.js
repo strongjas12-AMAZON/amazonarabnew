@@ -331,6 +331,7 @@ const SellerDashboard = () => {
       </div>
 
       {/* Products Section */}
+      {activeTab === 'products' && (
       <div className="luxury-card mb-8">
         <div className="flex justify-between items-center mb-6">
           <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white">My Products</h2>
