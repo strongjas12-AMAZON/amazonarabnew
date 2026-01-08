@@ -143,7 +143,14 @@ Tables use snake_case columns:
 - ✅ Improved error handling:
   - Invalid login credentials now show user-friendly "Invalid email or password" message
 - ✅ Updated `api.js` to use Supabase session token instead of custom auth token
-- ✅ Testing: 100% pass rate on all auth flows (iteration_5)
+- ✅ **COMPLETED: Seller Dashboard "View Orders" Feature**
+  - Added Products/Orders tabs to Seller Dashboard
+  - Added Revenue stat card showing earnings from paid/completed orders
+  - Orders tab shows order status summary (Pending/Paid/Completed counts)
+  - Orders list displays order details with seller's products only
+  - Shows order items with images, quantities, and earnings per order
+  - Empty state when no orders exist
+- ✅ Testing: 100% pass rate on all features (iteration_5, iteration_6)
 
 ### 2026-01-07
 - ✅ Fixed Supabase auth trigger issue (dropped conflicting trigger)
