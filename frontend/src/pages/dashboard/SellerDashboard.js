@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import api from '../../lib/api';
 import { toast } from 'sonner';
 import { useDropzone } from 'react-dropzone';
-import { Package, Plus, Edit, Trash2, Upload, AlertCircle, CheckCircle, Tag } from 'lucide-react';
+import { Package, Plus, Edit, Trash2, Upload, AlertCircle, CheckCircle, Tag, ShoppingCart, Clock, DollarSign } from 'lucide-react';
 
 const SellerDashboard = () => {
   const { user } = useAuth();
