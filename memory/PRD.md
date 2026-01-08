@@ -8,7 +8,7 @@ A premium multi-vendor marketplace with dark UI and gold accents, featuring cryp
 - **Backend**: FastAPI (Python)
 - **Database**: Supabase (PostgreSQL with RLS)
 - **Storage**: Supabase Storage (documents bucket - private, products bucket - public)
-- **Authentication**: Supabase Auth + JWT
+- **Authentication**: Supabase Auth (client-side) - roles stored in public.users table
 - **Email**: Resend (transactional emails)
 
 ## User Roles
