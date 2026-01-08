@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import authService from '../lib/auth';
 
@@ -8,6 +8,16 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const initRef = useRef(false);
+
+  const fetchUserProfile = useCallback(async () => {
+    try {
+      const currentUser = await authService.getUser();
+      return currentUser;
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      return null;
+    }
+  }, []);
 
   useEffect(() => {
     // Prevent double initialization in strict mode
@@ -22,7 +32,7 @@ export const AuthProvider = ({ children }) => {
         
         if (session?.user) {
           // Session exists, fetch full user profile
-          const currentUser = await authService.getUser();
+          const currentUser = await fetchUserProfile();
           setUser(currentUser);
         } else {
           setUser(null);
@@ -40,23 +50,15 @@ export const AuthProvider = ({ children }) => {
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session) {
-        try {
-          const currentUser = await authService.getUser();
-          setUser(currentUser);
-        } catch (error) {
-          console.error('Error fetching user on sign in:', error);
-        }
+        const currentUser = await fetchUserProfile();
+        setUser(currentUser);
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
       } else if (event === 'TOKEN_REFRESHED' && session) {
-        // Keep user state on token refresh
-        if (!user) {
-          try {
-            const currentUser = await authService.getUser();
-            setUser(currentUser);
-          } catch (error) {
-            console.error('Error fetching user on token refresh:', error);
-          }
+        // Refresh user profile on token refresh
+        const currentUser = await fetchUserProfile();
+        if (currentUser) {
+          setUser(currentUser);
         }
       }
     });
@@ -64,7 +66,7 @@ export const AuthProvider = ({ children }) => {
     return () => {
       subscription?.unsubscribe();
     };
-  }, []);
+  }, [fetchUserProfile]);
 
   const login = async (email, password) => {
     const result = await authService.login(email, password);
