@@ -81,6 +81,9 @@
     "tailwindcss": "^3.4.17"
   },
   "overrides": {
-    "schema-utils": "4.3.0"
+    "schema-utils": "3.3.0",
+    "ajv": "8.17.1",
+    "ajv-keywords": "3.5.2",
+    "ajv-formats": "2.1.1"
   }
 }
