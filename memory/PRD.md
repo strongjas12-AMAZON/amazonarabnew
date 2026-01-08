@@ -166,10 +166,11 @@ Tables use snake_case columns:
 - Added RLS policies for merchant_invite_codes
 
 ## Future Enhancements (P2)
-- Email notifications for orders
+- Seller "View Orders" tab - connect to API to show seller's orders
+- Product image uploads via Supabase Storage
 - Seller analytics dashboard
 - Product search and filtering improvements
-- Product categories
 - Reviews and ratings system
 - Multi-image product galleries
 - Order tracking/shipping integration
+- Subcategories for products
