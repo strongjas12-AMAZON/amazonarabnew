@@ -59,8 +59,7 @@
   "scripts": {
     "start": "craco start",
     "build": "craco build",
-    "test": "craco test",
-    "postinstall": "rm -rf node_modules/fork-ts-checker-webpack-plugin/node_modules/schema-utils node_modules/eslint-webpack-plugin/node_modules/schema-utils 2>/dev/null || true"
+    "test": "craco test"
   },
   "browserslist": {
     "production": [
