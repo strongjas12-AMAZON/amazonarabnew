@@ -453,6 +453,131 @@ const SellerDashboard = () => {
           </div>
         )}
       </div>
+      )}
+
+      {/* Orders Section */}
+      {activeTab === 'orders' && (
+        <div className="luxury-card mb-8">
+          <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white mb-6">My Orders</h2>
+          
+          {orders.length === 0 ? (
+            <div className="text-center py-12">
+              <ShoppingCart className="w-16 h-16 mx-auto text-gray-600 mb-4" />
+              <p className="text-gray-400">No orders yet</p>
+              <p className="text-gray-500 text-sm mt-2">Orders containing your products will appear here</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Order Status Summary */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Clock className="w-4 h-4 text-yellow-400" />
+                    <span className="text-yellow-400 font-medium">Pending Payment</span>
+                  </div>
+                  <p className="text-2xl font-bold text-white">
+                    {orders.filter(o => o.paymentStatus === 'pending_payment').length}
+                  </p>
+                </div>
+                <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
+                  <div className="flex items-center gap-2 mb-1">
+                    <DollarSign className="w-4 h-4 text-green-400" />
+                    <span className="text-green-400 font-medium">Paid</span>
+                  </div>
+                  <p className="text-2xl font-bold text-white">
+                    {orders.filter(o => o.paymentStatus === 'paid').length}
+                  </p>
+                </div>
+                <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                  <div className="flex items-center gap-2 mb-1">
+                    <CheckCircle className="w-4 h-4 text-blue-400" />
+                    <span className="text-blue-400 font-medium">Completed</span>
+                  </div>
+                  <p className="text-2xl font-bold text-white">
+                    {orders.filter(o => o.paymentStatus === 'completed').length}
+                  </p>
+                </div>
+              </div>
+
+              {/* Orders List */}
+              {orders.map((order) => (
+                <div 
+                  key={order.id} 
+                  className={`p-5 rounded-lg border ${
+                    order.paymentStatus === 'pending_payment' ? 'bg-yellow-500/5 border-yellow-500/30' :
+                    order.paymentStatus === 'paid' ? 'bg-green-500/5 border-green-500/30' :
+                    order.paymentStatus === 'completed' ? 'bg-blue-500/5 border-blue-500/30' :
+                    'bg-[rgba(30,30,30,0.6)] border-[rgba(212,175,55,0.1)]'
+                  }`}
+                  data-testid="seller-order"
+                >
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <p className="text-white font-semibold text-lg">
+                        Order #{order.id?.slice(0, 8).toUpperCase()}
+                      </p>
+                      <p className="text-sm text-gray-400">
+                        {new Date(order.createdAt).toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <span className={`status-badge ${
+                        order.paymentStatus === 'paid' || order.paymentStatus === 'completed' ? 'status-verified' :
+                        order.paymentStatus === 'pending_payment' ? 'status-pending' :
+                        'status-rejected'
+                      }`}>
+                        {order.paymentStatus?.replace('_', ' ')}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Order Items (only seller's products) */}
+                  <div className="space-y-3 border-t border-[rgba(212,175,55,0.1)] pt-4">
+                    <p className="text-sm text-gray-400 mb-2">Your products in this order:</p>
+                    {order.orderItems?.map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-4 p-3 bg-[rgba(20,20,20,0.6)] rounded-lg">
+                        {item.product?.images?.[0] ? (
+                          <img
+                            src={item.product.images[0]}
+                            alt={item.product.title}
+                            className="w-16 h-16 object-cover rounded-lg"
+                          />
+                        ) : (
+                          <div className="w-16 h-16 bg-[rgba(50,50,50,0.6)] rounded-lg flex items-center justify-center">
+                            <Package className="w-6 h-6 text-gray-500" />
+                          </div>
+                        )}
+                        <div className="flex-1">
+                          <p className="text-white font-medium">{item.product?.title || 'Product'}</p>
+                          <p className="text-sm text-gray-400">Quantity: {item.quantity}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[#D4AF37] font-bold">${(item.price * item.quantity).toFixed(2)}</p>
+                          <p className="text-xs text-gray-500">${item.price?.toFixed(2)} each</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Order Total for Seller */}
+                  <div className="flex justify-between items-center mt-4 pt-4 border-t border-[rgba(212,175,55,0.1)]">
+                    <span className="text-gray-400">Your earnings from this order:</span>
+                    <span className="text-[#D4AF37] font-bold text-xl">
+                      ${order.orderItems?.reduce((sum, item) => sum + (item.price * item.quantity), 0).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Product Form Modal */}
       {(showProductForm || editingProduct) && (
