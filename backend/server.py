@@ -133,14 +133,15 @@ def get_signed_document_url(file_path: str, expires_in: int = 3600) -> Optional[
 
 
 def format_user_response(user_data: dict) -> dict:
-    """Convert snake_case DB fields to camelCase for frontend"""
+    """Convert database fields to camelCase for frontend"""
+    # Database uses camelCase: "verificationStatus", "createdAt"
     return {
         'id': user_data.get('id'),
         'email': user_data.get('email'),
         'name': user_data.get('name'),
         'role': user_data.get('role'),
-        'verificationStatus': user_data.get('verification_status'),
-        'createdAt': user_data.get('created_at')
+        'verificationStatus': user_data.get('verificationStatus') or user_data.get('verification_status') or 'unverified',
+        'createdAt': user_data.get('createdAt') or user_data.get('created_at')
     }
 
 
@@ -164,7 +165,7 @@ def format_product_response(product_data: dict) -> dict:
     if 'users' in product_data and product_data['users']:
         result['users'] = {
             'name': product_data['users'].get('name'),
-            'verificationStatus': product_data['users'].get('verification_status')
+            'verificationStatus': product_data['users'].get('verificationStatus') or product_data['users'].get('verification_status') or 'unverified'
         }
     return result
 
@@ -732,8 +733,8 @@ async def setup_admin():
             'email': admin_email,
             'name': 'Admin',
             'role': 'admin',
-            'verification_status': 'verified',
-            'created_at': datetime.now(timezone.utc).isoformat()
+            'verificationStatus': 'verified',  # Database column is "verificationStatus" (camelCase)
+            'createdAt': datetime.now(timezone.utc).isoformat()  # Database column is "createdAt" (camelCase)
         }
         
         supabase_admin.table('users').upsert(user_record).execute()
@@ -775,13 +776,13 @@ async def setup_test_users():
                 'email': 'testseller@test.com',
                 'name': 'Test Seller',
                 'role': 'seller',
-                'verification_status': 'verified'  # Pre-verified for testing
+                'verificationStatus': 'verified'  # Pre-verified for testing
             },
             {
                 'email': 'testbuyer@test.com', 
                 'name': 'Test Buyer',
                 'role': 'buyer',
-                'verification_status': 'unverified'
+                'verificationStatus': 'unverified'
             }
         ]
         
@@ -828,8 +829,8 @@ async def setup_test_users():
                 'email': test_user['email'],
                 'name': test_user['name'],
                 'role': test_user['role'],
-                'verification_status': test_user['verification_status'],
-                'created_at': datetime.now(timezone.utc).isoformat()
+                'verificationStatus': test_user['verificationStatus'],  # Database column is "verificationStatus" (camelCase)
+                'createdAt': datetime.now(timezone.utc).isoformat()  # Database column is "createdAt" (camelCase)
             }
             
             supabase_admin.table('users').insert(user_record).execute()
@@ -883,8 +884,8 @@ async def register(request: Request, req: RegisterRequest):
             'email': req.email,
             'name': req.name,
             'role': req.role,
-            'verification_status': 'unverified',
-            'created_at': datetime.now(timezone.utc).isoformat()
+            'verificationStatus': 'unverified',  # Database column is "verificationStatus" (camelCase)
+            'createdAt': datetime.now(timezone.utc).isoformat()  # Database column is "createdAt" (camelCase)
         }
         
         supabase_admin.table('users').insert(user_data).execute()
@@ -958,7 +959,7 @@ async def get_categories():
 async def get_products(category: Optional[str] = None):
     """Get all verified products, optionally filtered by category"""
     try:
-        query = supabase_admin.table('products').select('*, users!seller_id(name, verification_status)')
+        query = supabase_admin.table('products').select('*, users!seller_id(name, verificationStatus)')
         
         if category:
             query = query.eq('category', category)
@@ -968,7 +969,7 @@ async def get_products(category: Optional[str] = None):
         verified_products = [
             format_product_response(p) 
             for p in products.data 
-            if p.get('users') and p['users'].get('verification_status') == 'verified'
+            if p.get('users') and (p['users'].get('verificationStatus') == 'verified' or p['users'].get('verification_status') == 'verified')
         ]
         
         return {"success": True, "products": verified_products}
@@ -1097,7 +1098,7 @@ async def get_all_products_admin(current_user: dict = Depends(get_current_user))
         raise HTTPException(status_code=403, detail="Admin access required")
     
     try:
-        products = supabase_admin.table('products').select('*, users!seller_id(name, email, verification_status)').execute()
+        products = supabase_admin.table('products').select('*, users!seller_id(name, email, verificationStatus)').execute()
         return {"success": True, "products": [format_product_response(p) for p in products.data]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -1329,7 +1330,7 @@ async def upload_verification_document(
         
         result = supabase_admin.table('verification_documents').insert(doc_data).execute()
         
-        supabase_admin.table('users').update({'verification_status': 'pending'}).eq('id', current_user['id']).execute()
+        supabase_admin.table('users').update({'verificationStatus': 'pending'}).eq('id', current_user['id']).execute()
         
         if current_user['role'] == 'seller' and merchantInviteCode:
             supabase_admin.table('merchant_invite_codes').update({
@@ -1395,7 +1396,7 @@ async def review_verification(doc_id: str, request: ReviewVerificationRequest, c
         supabase_admin.table('verification_documents').update(update_data).eq('id', doc_id).execute()
         
         user_id = doc.data[0]['user_id']
-        supabase_admin.table('users').update({'verification_status': request.status}).eq('id', user_id).execute()
+        supabase_admin.table('users').update({'verificationStatus': request.status}).eq('id', user_id).execute()
         
         # Send verification email to user
         asyncio.create_task(send_verification_email(
