@@ -8,14 +8,23 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const initRef = useRef(false);
+  const fetchingRef = useRef(false);
 
   const fetchUserProfile = useCallback(async () => {
+    // Prevent multiple simultaneous calls
+    if (fetchingRef.current) {
+      return null;
+    }
+    
+    fetchingRef.current = true;
     try {
       const currentUser = await authService.getUser();
       return currentUser;
     } catch (error) {
       console.error('Error fetching user profile:', error);
       return null;
+    } finally {
+      fetchingRef.current = false;
     }
   }, []);
 
@@ -49,18 +58,15 @@ export const AuthProvider = ({ children }) => {
 
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // Only handle specific events to prevent unnecessary refreshes
       if (event === 'SIGNED_IN' && session) {
         const currentUser = await fetchUserProfile();
         setUser(currentUser);
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
-      } else if (event === 'TOKEN_REFRESHED' && session) {
-        // Refresh user profile on token refresh
-        const currentUser = await fetchUserProfile();
-        if (currentUser) {
-          setUser(currentUser);
-        }
       }
+      // Removed TOKEN_REFRESHED handler to prevent refresh loops
+      // Token refresh doesn't require user profile update
     });
 
     return () => {
