@@ -138,9 +138,8 @@ const SellerDashboard = () => {
       formData.append('file', file);
       formData.append('documentType', verificationForm.documentType);
       formData.append('merchantInviteCode', verificationForm.merchantInviteCode);
-      await api.post('/verification/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      // Don't set Content-Type explicitly - axios will set it automatically for FormData with the correct boundary
+      await api.post('/verification/upload', formData);
       toast.success('Verification document uploaded! Awaiting admin review.');
       setShowVerificationForm(false);
     } catch (error) {
