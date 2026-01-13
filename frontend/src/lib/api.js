@@ -4,22 +4,39 @@ import { supabase } from './supabase';
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 if (!BACKEND_URL) {
-  throw new Error('Missing REACT_APP_BACKEND_URL environment variable. Please check your .env file.');
+  throw new Error('Missing REACT_APP_BACKEND_URL environment variable. Please check your .env file and rebuild the frontend.');
 }
 
 const API_URL = `${BACKEND_URL}/api`;
 
 const api = axios.create({
   baseURL: API_URL,
+  timeout: 30000, // 30 seconds timeout
+  withCredentials: true, // Include credentials for CORS
 });
 
 // Add auth token to requests
 api.interceptors.request.use(async (config) => {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session?.access_token) {
-    config.headers.Authorization = `Bearer ${session.access_token}`;
+  // Don't override Content-Type for FormData - let axios handle it automatically
+  // Only set Content-Type for non-FormData requests
+  if (!(config.data instanceof FormData)) {
+    config.headers['Content-Type'] = config.headers['Content-Type'] || 'application/json';
   }
+  
+  // Get token from localStorage (we use backend API auth, not Supabase directly)
+  try {
+    const accessToken = localStorage.getItem('sb-access-token');
+    if (accessToken) {
+      config.headers.Authorization = `Bearer ${accessToken}`;
+    }
+  } catch (storageErr) {
+    // Silently fail - token will be null and request will be unauthenticated
+  }
+  
   return config;
+}, (error) => {
+  console.error('[API] Request interceptor error:', error);
+  return Promise.reject(error);
 });
 
 // Handle 401 errors (but not for auth endpoints where 401 is expected)

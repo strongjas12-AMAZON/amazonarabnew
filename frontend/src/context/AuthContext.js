@@ -36,22 +36,28 @@ export const AuthProvider = ({ children }) => {
     // Check initial session
     const initAuth = async () => {
       try {
-        // First check if there's an existing session
-        const { data: { session } } = await supabase.auth.getSession();
+        // Check localStorage only (we use backend API auth, not Supabase directly)
+        // This avoids AbortError issues during Supabase client initialization
+        const hasToken = localStorage.getItem('sb-access-token');
         
-        if (session?.user) {
-          // Session exists, fetch full user profile
+        if (hasToken) {
+          // Token exists, try to fetch user profile
           const currentUser = await fetchUserProfile();
           setUser(currentUser);
         } else {
+          // No token, user is not authenticated
           setUser(null);
         }
       } catch (error) {
-        console.error('Auth init error:', error);
         setUser(null);
       } finally {
         setLoading(false);
       }
+      
+      // Note: We don't call supabase.auth.getSession() here because:
+      // 1. It causes AbortError issues during initialization
+      // 2. We're using backend API auth, so tokens come from backend login response
+      // 3. The onAuthStateChange listener below handles Supabase auth events if needed
     };
 
     initAuth();

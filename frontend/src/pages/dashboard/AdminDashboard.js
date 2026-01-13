@@ -19,22 +19,57 @@ const AdminDashboard = () => {
   }, []);
 
   const fetchData = async () => {
-    try {
-      const [usersRes, ordersRes, productsRes, docsRes, codesRes] = await Promise.all([
-        api.get('/admin/users'),
-        api.get('/orders/my'),
-        api.get('/admin/products'),
-        api.get('/verification/documents'),
-        api.get('/admin/invite-codes')
-      ]);
+    setLoading(true);
+    
+    // Use Promise.allSettled so each request is handled independently
+    // This way if one fails, others can still succeed
+    const results = await Promise.allSettled([
+      api.get('/admin/users').catch(err => ({ error: err })),
+      api.get('/orders/my').catch(err => ({ error: err })),
+      api.get('/admin/products').catch(err => ({ error: err })),
+      api.get('/verification/documents').catch(err => ({ error: err })),
+      api.get('/admin/invite-codes').catch(err => ({ error: err }))
+    ]);
 
-      setUsers(usersRes.data.users || []);
-      setOrders(ordersRes.data.orders || []);
-      setProducts(productsRes.data.products || []);
-      setVerificationDocs(docsRes.data.documents || []);
-      setInviteCodes(codesRes.data.codes || []);
+    // Handle each result independently
+    try {
+      // Users
+      if (results[0].status === 'fulfilled' && !results[0].value.error) {
+        setUsers(results[0].value.data?.users || []);
+      } else {
+        setUsers([]);
+      }
+
+      // Orders
+      if (results[1].status === 'fulfilled' && !results[1].value.error) {
+        setOrders(results[1].value.data?.orders || []);
+      } else {
+        setOrders([]);
+      }
+
+      // Products
+      if (results[2].status === 'fulfilled' && !results[2].value.error) {
+        setProducts(results[2].value.data?.products || []);
+      } else {
+        toast.error('Failed to load products. Check backend logs.');
+        setProducts([]);
+      }
+
+      // Verification Documents
+      if (results[3].status === 'fulfilled' && !results[3].value.error) {
+        setVerificationDocs(results[3].value.data?.documents || []);
+      } else {
+        setVerificationDocs([]);
+      }
+
+      // Invite Codes
+      if (results[4].status === 'fulfilled' && !results[4].value.error) {
+        setInviteCodes(results[4].value.data?.codes || []);
+      } else {
+        setInviteCodes([]);
+      }
     } catch (error) {
-      toast.error('Failed to load data');
+      // Silently handle errors - individual requests already handled above
     } finally {
       setLoading(false);
     }
