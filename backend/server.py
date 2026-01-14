@@ -159,6 +159,8 @@ def format_product_response(product_data: dict) -> dict:
         'category': category_id,
         'categoryName': category_info['name'] if category_info else None,
         'categoryIcon': category_info['icon'] if category_info else None,
+        'isActive': product_data.get('is_active', True),
+        'createdByAdmin': product_data.get('created_by_admin'),
         'createdAt': product_data.get('created_at')
     }
     if 'users' in product_data and product_data['users']:
