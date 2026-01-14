@@ -973,25 +973,37 @@ async def get_products(category: Optional[str] = None):
 
 @api_router.get("/products/my")
 async def get_my_products(current_user: dict = Depends(get_current_user)):
-    """Get seller's own products"""
+    """Get seller's selected products from catalog"""
     if current_user['role'] != 'seller':
         raise HTTPException(status_code=403, detail="Only sellers can access this")
     
     try:
-        products = supabase_admin.table('products').select('*').eq('seller_id', current_user['id']).execute()
+        # Get seller's selected product IDs from seller_products table
+        seller_products = supabase_admin.table('seller_products').select('product_id').eq('seller_id', current_user['id']).eq('is_active', True).execute()
+        
+        if not seller_products.data:
+            return {"success": True, "products": []}
+        
+        product_ids = [sp['product_id'] for sp in seller_products.data]
+        
+        # Get full product details
+        products = supabase_admin.table('products').select('*').in_('id', product_ids).execute()
         return {"success": True, "products": [format_product_response(p) for p in products.data]}
     except Exception as e:
+        logging.error(f"Get my products error: {str(e)}")
+        # Fallback: if seller_products table doesn't exist yet, return empty
+        if "seller_products" in str(e):
+            return {"success": True, "products": []}
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@api_router.post("/products")
-async def create_product(request: CreateProductRequest, current_user: dict = Depends(get_current_user)):
-    """Create new product"""
-    if current_user['role'] != 'seller':
-        raise HTTPException(status_code=403, detail="Only sellers can create products")
-    
-    if current_user['verificationStatus'] != 'verified':
-        raise HTTPException(status_code=403, detail="Seller must be verified")
+# ============ ADMIN PRODUCT CATALOG ENDPOINTS ============
+
+@api_router.post("/admin/products")
+async def admin_create_product(request: CreateProductRequest, current_user: dict = Depends(get_current_user)):
+    """Admin creates a new product in the central catalog"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Only admins can create products")
     
     try:
         product_data = {
@@ -1001,27 +1013,30 @@ async def create_product(request: CreateProductRequest, current_user: dict = Dep
             'price': request.price,
             'category': request.category,
             'images': [],
-            'seller_id': current_user['id'],
+            'seller_id': None,  # Admin products don't have a seller
+            'is_active': True,
+            'created_by_admin': current_user['id'],
             'created_at': datetime.now(timezone.utc).isoformat()
         }
         
         result = supabase_admin.table('products').insert(product_data).execute()
         return {"success": True, "product": format_product_response(result.data[0])}
     except Exception as e:
+        logging.error(f"Admin create product error: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@api_router.put("/products/{product_id}")
-async def update_product(product_id: str, request: UpdateProductRequest, current_user: dict = Depends(get_current_user)):
-    """Update product"""
-    if current_user['role'] != 'seller':
-        raise HTTPException(status_code=403, detail="Only sellers can update products")
+@api_router.put("/admin/products/{product_id}")
+async def admin_update_product(product_id: str, request: UpdateProductRequest, current_user: dict = Depends(get_current_user)):
+    """Admin updates a product in the catalog"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Only admins can update products")
     
     try:
-        product = supabase_admin.table('products').select('*').eq('id', product_id).eq('seller_id', current_user['id']).execute()
+        product = supabase_admin.table('products').select('*').eq('id', product_id).execute()
         
         if not product.data:
-            raise HTTPException(status_code=404, detail="Product not found or unauthorized")
+            raise HTTPException(status_code=404, detail="Product not found")
         
         update_data = {}
         if request.title is not None:
@@ -1037,34 +1052,31 @@ async def update_product(product_id: str, request: UpdateProductRequest, current
         
         result = supabase_admin.table('products').update(update_data).eq('id', product_id).execute()
         return {"success": True, "product": format_product_response(result.data[0])}
+    except HTTPException:
+        raise
     except Exception as e:
+        logging.error(f"Admin update product error: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@api_router.delete("/products/{product_id}")
-async def delete_product(product_id: str, current_user: dict = Depends(get_current_user)):
-    """Delete product (seller can delete own, admin can delete any)"""
-    if current_user['role'] not in ['seller', 'admin']:
-        raise HTTPException(status_code=403, detail="Only sellers or admins can delete products")
+@api_router.delete("/admin/products/{product_id}")
+async def admin_delete_product(product_id: str, current_user: dict = Depends(get_current_user)):
+    """Admin deletes a product from the catalog"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Only admins can delete products")
     
     try:
-        if current_user['role'] == 'admin':
-            # Admin can delete any product
-            product = supabase_admin.table('products').select('*').eq('id', product_id).execute()
-        else:
-            # Seller can only delete their own products
-            product = supabase_admin.table('products').select('*').eq('id', product_id).eq('seller_id', current_user['id']).execute()
+        product = supabase_admin.table('products').select('*').eq('id', product_id).execute()
         
         if not product.data:
-            raise HTTPException(status_code=404, detail="Product not found or unauthorized")
+            raise HTTPException(status_code=404, detail="Product not found")
         
         # Check if product has orders
         order_items = supabase_admin.table('order_items').select('id').eq('product_id', product_id).limit(1).execute()
         if order_items.data:
-            raise HTTPException(
-                status_code=400, 
-                detail="Cannot delete product with existing orders. Order history must be preserved."
-            )
+            # Instead of deleting, just deactivate the product
+            supabase_admin.table('products').update({'is_active': False}).eq('id', product_id).execute()
+            return {"success": True, "message": "Product deactivated (has order history)"}
         
         # Delete product images from storage
         try:
@@ -1076,12 +1088,175 @@ async def delete_product(product_id: str, current_user: dict = Depends(get_curre
         except Exception as storage_error:
             logging.warning(f"Could not delete product images from storage: {str(storage_error)}")
         
+        # Also remove from seller_products if exists
+        try:
+            supabase_admin.table('seller_products').delete().eq('product_id', product_id).execute()
+        except:
+            pass  # Table might not exist yet
+        
         supabase_admin.table('products').delete().eq('id', product_id).execute()
         return {"success": True, "message": "Product deleted"}
     except HTTPException:
         raise
     except Exception as e:
+        logging.error(f"Admin delete product error: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.put("/admin/products/{product_id}/toggle-active")
+async def admin_toggle_product_active(product_id: str, current_user: dict = Depends(get_current_user)):
+    """Admin toggles product active status"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Only admins can manage products")
+    
+    try:
+        product = supabase_admin.table('products').select('*').eq('id', product_id).execute()
+        
+        if not product.data:
+            raise HTTPException(status_code=404, detail="Product not found")
+        
+        current_status = product.data[0].get('is_active', True)
+        new_status = not current_status
+        
+        result = supabase_admin.table('products').update({'is_active': new_status}).eq('id', product_id).execute()
+        return {"success": True, "product": format_product_response(result.data[0]), "message": f"Product {'activated' if new_status else 'deactivated'}"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Admin toggle product error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ============ SELLER CATALOG SELECTION ENDPOINTS ============
+
+@api_router.get("/catalog/products")
+async def get_catalog_products(category: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    """Sellers browse available products in the admin catalog"""
+    if current_user['role'] != 'seller':
+        raise HTTPException(status_code=403, detail="Only sellers can browse the catalog")
+    
+    try:
+        query = supabase_admin.table('products').select('*').eq('is_active', True)
+        
+        if category:
+            query = query.eq('category', category)
+        
+        products = query.order('created_at', desc=True).execute()
+        
+        # Get seller's already selected products
+        try:
+            seller_products = supabase_admin.table('seller_products').select('product_id').eq('seller_id', current_user['id']).eq('is_active', True).execute()
+            selected_ids = set(sp['product_id'] for sp in seller_products.data) if seller_products.data else set()
+        except:
+            selected_ids = set()  # Table might not exist yet
+        
+        # Mark which products the seller has already selected
+        catalog_products = []
+        for p in products.data:
+            product = format_product_response(p)
+            product['isSelected'] = p['id'] in selected_ids
+            catalog_products.append(product)
+        
+        return {"success": True, "products": catalog_products}
+    except Exception as e:
+        logging.error(f"Get catalog products error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/seller/products/{product_id}")
+async def seller_add_product(product_id: str, current_user: dict = Depends(get_current_user)):
+    """Seller adds a product from catalog to their store"""
+    if current_user['role'] != 'seller':
+        raise HTTPException(status_code=403, detail="Only sellers can add products to their store")
+    
+    if current_user['verificationStatus'] != 'verified':
+        raise HTTPException(status_code=403, detail="Seller must be verified to add products")
+    
+    try:
+        # Check product exists and is active
+        product = supabase_admin.table('products').select('*').eq('id', product_id).eq('is_active', True).execute()
+        
+        if not product.data:
+            raise HTTPException(status_code=404, detail="Product not found or inactive")
+        
+        # Check if already added
+        try:
+            existing = supabase_admin.table('seller_products').select('id').eq('seller_id', current_user['id']).eq('product_id', product_id).execute()
+            
+            if existing.data:
+                # Reactivate if was deactivated
+                supabase_admin.table('seller_products').update({'is_active': True}).eq('seller_id', current_user['id']).eq('product_id', product_id).execute()
+                return {"success": True, "message": "Product re-added to your store"}
+        except Exception as e:
+            if "seller_products" not in str(e):
+                raise e
+            # Table doesn't exist - will be created by first insert or needs manual setup
+        
+        # Add to seller's store
+        seller_product_data = {
+            'id': str(uuid.uuid4()),
+            'seller_id': current_user['id'],
+            'product_id': product_id,
+            'is_active': True,
+            'added_at': datetime.now(timezone.utc).isoformat()
+        }
+        
+        supabase_admin.table('seller_products').insert(seller_product_data).execute()
+        return {"success": True, "message": "Product added to your store"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Seller add product error: {str(e)}")
+        # If seller_products table doesn't exist, inform the user
+        if "seller_products" in str(e):
+            raise HTTPException(status_code=500, detail="Seller product system not yet configured. Please contact admin.")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.delete("/seller/products/{product_id}")
+async def seller_remove_product(product_id: str, current_user: dict = Depends(get_current_user)):
+    """Seller removes a product from their store"""
+    if current_user['role'] != 'seller':
+        raise HTTPException(status_code=403, detail="Only sellers can manage their store")
+    
+    try:
+        # Deactivate instead of delete to preserve history
+        result = supabase_admin.table('seller_products').update({'is_active': False}).eq('seller_id', current_user['id']).eq('product_id', product_id).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Product not found in your store")
+        
+        return {"success": True, "message": "Product removed from your store"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Seller remove product error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# Legacy endpoint - redirect to admin
+@api_router.post("/products")
+async def create_product(request: CreateProductRequest, current_user: dict = Depends(get_current_user)):
+    """Create new product - Admin only in new architecture"""
+    if current_user['role'] == 'admin':
+        return await admin_create_product(request, current_user)
+    raise HTTPException(status_code=403, detail="Only admins can create products. Sellers can select products from the catalog.")
+
+
+@api_router.put("/products/{product_id}")
+async def update_product(product_id: str, request: UpdateProductRequest, current_user: dict = Depends(get_current_user)):
+    """Update product - Admin only in new architecture"""
+    if current_user['role'] == 'admin':
+        return await admin_update_product(product_id, request, current_user)
+    raise HTTPException(status_code=403, detail="Only admins can update products.")
+
+
+@api_router.delete("/products/{product_id}")
+async def delete_product(product_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete product - Admin only in new architecture"""
+    if current_user['role'] == 'admin':
+        return await admin_delete_product(product_id, current_user)
+    raise HTTPException(status_code=403, detail="Only admins can delete products.")
 
 
 @api_router.get("/admin/products")
