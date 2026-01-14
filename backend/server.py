@@ -1288,7 +1288,6 @@ async def seed_product_catalog(current_user: dict = Depends(get_current_user)):
         if existing.data and len(existing.data) >= 5:
             return {"success": False, "message": f"Catalog already has {len(existing.data)}+ products. Delete existing products first to reseed."}
         
-        admin_id = current_user['id']
         seeded_count = 0
         
         for product in PRODUCT_CATALOG:
@@ -1300,8 +1299,6 @@ async def seed_product_catalog(current_user: dict = Depends(get_current_user)):
                 'category': product['category'],
                 'images': product.get('images', []),
                 'seller_id': None,
-                'is_active': True,
-                'created_by_admin': admin_id,
                 'created_at': datetime.now(timezone.utc).isoformat()
             }
             
