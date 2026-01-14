@@ -2,20 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../lib/api';
 import { toast } from 'sonner';
-import { useDropzone } from 'react-dropzone';
-import { Package, Plus, Edit, Trash2, Upload, AlertCircle, CheckCircle, Tag, ShoppingCart, Clock, DollarSign } from 'lucide-react';
+import { 
+  Package, Plus, Trash2, AlertCircle, CheckCircle, Tag, 
+  ShoppingCart, Clock, DollarSign, Search, Store, Check
+} from 'lucide-react';
 
 const SellerDashboard = () => {
   const { user } = useAuth();
-  const [products, setProducts] = useState([]);
+  const [myProducts, setMyProducts] = useState([]);
+  const [catalogProducts, setCatalogProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('products');
-  const [showProductForm, setShowProductForm] = useState(false);
-  const [editingProduct, setEditingProduct] = useState(null);
-  const [productForm, setProductForm] = useState({ title: '', description: '', price: '', category: '' });
-  const [uploadingImages, setUploadingImages] = useState({});
+  const [activeTab, setActiveTab] = useState('myProducts');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
   const [showVerificationForm, setShowVerificationForm] = useState(false);
   const [verificationForm, setVerificationForm] = useState({
     merchantInviteCode: '',
@@ -38,12 +39,22 @@ const SellerDashboard = () => {
 
   const fetchData = async () => {
     try {
-      const [productsRes, ordersRes] = await Promise.all([
+      const [myProductsRes, ordersRes] = await Promise.all([
         api.get('/products/my'),
         api.get('/orders/my')
       ]);
-      setProducts(productsRes.data.products || []);
+      setMyProducts(myProductsRes.data.products || []);
       setOrders(ordersRes.data.orders || []);
+      
+      // Fetch catalog if seller is verified
+      if (user?.verificationStatus === 'verified') {
+        try {
+          const catalogRes = await api.get('/catalog/products');
+          setCatalogProducts(catalogRes.data.products || []);
+        } catch (err) {
+          console.log('Catalog not available');
+        }
+      }
     } catch (error) {
       toast.error('Failed to load data');
     } finally {
@@ -51,80 +62,24 @@ const SellerDashboard = () => {
     }
   };
 
-  const handleCreateProduct = async (e) => {
-    e.preventDefault();
+  const handleAddToStore = async (productId) => {
     try {
-      await api.post('/products', {
-        ...productForm,
-        price: parseFloat(productForm.price),
-        category: productForm.category || null
-      });
-      toast.success('Product created successfully');
-      setShowProductForm(false);
-      setProductForm({ title: '', description: '', price: '', category: '' });
+      await api.post(`/seller/products/${productId}`);
+      toast.success('Product added to your store!');
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to create product');
+      toast.error(error.response?.data?.detail || 'Failed to add product');
     }
   };
 
-  const handleUpdateProduct = async (e) => {
-    e.preventDefault();
+  const handleRemoveFromStore = async (productId) => {
+    if (!window.confirm('Remove this product from your store?')) return;
     try {
-      await api.put(`/products/${editingProduct}`, {
-        ...productForm,
-        price: parseFloat(productForm.price),
-        category: productForm.category || null
-      });
-      toast.success('Product updated successfully');
-      setEditingProduct(null);
-      setProductForm({ title: '', description: '', price: '', category: '' });
+      await api.delete(`/seller/products/${productId}`);
+      toast.success('Product removed from your store');
       fetchData();
     } catch (error) {
-      toast.error('Failed to update product');
-    }
-  };
-
-  const handleDeleteProduct = async (productId) => {
-    if (!window.confirm('Are you sure you want to delete this product?')) return;
-    try {
-      await api.delete(`/products/${productId}`);
-      toast.success('Product deleted');
-      fetchData();
-    } catch (error) {
-      toast.error('Failed to delete product');
-    }
-  };
-
-  const handleImageUpload = async (productId, files) => {
-    setUploadingImages(prev => ({ ...prev, [productId]: true }));
-    try {
-      for (const file of files) {
-        const formData = new FormData();
-        formData.append('file', file);
-        await api.post(`/products/${productId}/upload-image`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-      }
-      toast.success('Images uploaded successfully');
-      fetchData();
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to upload images');
-    } finally {
-      setUploadingImages(prev => ({ ...prev, [productId]: false }));
-    }
-  };
-
-  const handleRemoveImage = async (productId, imageUrl) => {
-    if (!window.confirm('Are you sure you want to remove this image?')) return;
-    try {
-      await api.delete(`/products/${productId}/remove-image`, {
-        data: { imageUrl }
-      });
-      toast.success('Image removed successfully');
-      fetchData();
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to remove image');
+      toast.error(error.response?.data?.detail || 'Failed to remove product');
     }
   };
 
@@ -148,24 +103,13 @@ const SellerDashboard = () => {
     }
   };
 
-  const ImageDropzone = ({ productId }) => {
-    const { getRootProps, getInputProps } = useDropzone({
-      accept: { 'image/*': [] },
-      maxFiles: 10,
-      onDrop: (files) => handleImageUpload(productId, files)
-    });
-
-    return (
-      <div
-        {...getRootProps()}
-        className="border-2 border-dashed border-[rgba(212,175,55,0.3)] rounded-lg p-4 text-center cursor-pointer hover:border-[#D4AF37] transition-colors"
-      >
-        <input {...getInputProps()} />
-        <Upload className="w-6 h-6 mx-auto text-gray-400 mb-2" />
-        <p className="text-sm text-gray-400">Drop images or click to upload (Max 10)</p>
-      </div>
-    );
-  };
+  // Filter catalog products
+  const filteredCatalog = catalogProducts.filter(p => {
+    const matchesSearch = p.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          p.description?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = !selectedCategory || p.category === selectedCategory;
+    return matchesSearch && matchesCategory;
+  });
 
   if (loading) {
     return (
@@ -277,8 +221,8 @@ const SellerDashboard = () => {
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-6 mb-8">
         <div className="luxury-card">
-          <p className="text-gray-400 text-sm mb-1">Total Products</p>
-          <p className="text-3xl font-bold text-[#D4AF37]">{products.length}</p>
+          <p className="text-gray-400 text-sm mb-1">My Products</p>
+          <p className="text-3xl font-bold text-[#D4AF37]">{myProducts.length}</p>
         </div>
         <div className="luxury-card">
           <p className="text-gray-400 text-sm mb-1">Total Orders</p>
@@ -303,18 +247,30 @@ const SellerDashboard = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-8">
+      <div className="flex gap-2 mb-8 flex-wrap">
         <button
-          onClick={() => setActiveTab('products')}
+          onClick={() => setActiveTab('myProducts')}
           className={`px-6 py-3 rounded-lg font-medium transition-all flex items-center gap-2 ${
-            activeTab === 'products'
+            activeTab === 'myProducts'
               ? 'bg-[#D4AF37] text-[#0a0a0a]'
               : 'bg-[rgba(30,30,30,0.6)] text-gray-300 hover:bg-[rgba(30,30,30,0.8)]'
           }`}
-          data-testid="tab-products"
+          data-testid="tab-my-products"
+        >
+          <Store className="w-4 h-4" />
+          My Store ({myProducts.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('catalog')}
+          className={`px-6 py-3 rounded-lg font-medium transition-all flex items-center gap-2 ${
+            activeTab === 'catalog'
+              ? 'bg-[#D4AF37] text-[#0a0a0a]'
+              : 'bg-[rgba(30,30,30,0.6)] text-gray-300 hover:bg-[rgba(30,30,30,0.8)]'
+          }`}
+          data-testid="tab-catalog"
         >
           <Package className="w-4 h-4" />
-          Products ({products.length})
+          Browse Catalog
         </button>
         <button
           onClick={() => setActiveTab('orders')}
@@ -330,134 +286,211 @@ const SellerDashboard = () => {
         </button>
       </div>
 
-      {/* Products Section */}
-      {activeTab === 'products' && (
-      <div className="luxury-card mb-8">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white">My Products</h2>
-          {user.verificationStatus === 'verified' && (
-            <button
-              onClick={() => {
-                setShowProductForm(true);
-                setEditingProduct(null);
-                setProductForm({ title: '', description: '', price: '', category: '' });
-              }}
-              className="btn-gold"
-              data-testid="add-product-btn"
-            >
-              <Plus className="w-4 h-4 inline mr-2" />
-              Add Product
-            </button>
-          )}
-        </div>
+      {/* My Products Section */}
+      {activeTab === 'myProducts' && (
+        <div className="luxury-card">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white">My Store Products</h2>
+            {user.verificationStatus === 'verified' && (
+              <button
+                onClick={() => setActiveTab('catalog')}
+                className="btn-gold"
+                data-testid="browse-catalog-btn"
+              >
+                <Plus className="w-4 h-4 inline mr-2" />
+                Add from Catalog
+              </button>
+            )}
+          </div>
 
-        {user.verificationStatus !== 'verified' ? (
-          <p className="text-gray-400 text-center py-8">You need to be verified to add products</p>
-        ) : (
-          <div className="space-y-4">
-            {products.map((product) => (
-              <div key={product.id} className="p-4 bg-[rgba(30,30,30,0.6)] rounded-lg" data-testid="seller-product">
-                <div className="flex gap-4">
-                  <div className="flex-shrink-0">
+          {user.verificationStatus !== 'verified' ? (
+            <div className="text-center py-12">
+              <AlertCircle className="w-16 h-16 mx-auto text-yellow-500 mb-4" />
+              <p className="text-gray-400">You need to be verified to add products</p>
+              <p className="text-gray-500 text-sm mt-2">Complete verification to browse the product catalog</p>
+            </div>
+          ) : myProducts.length === 0 ? (
+            <div className="text-center py-12">
+              <Store className="w-16 h-16 mx-auto text-gray-600 mb-4" />
+              <p className="text-gray-400">Your store is empty</p>
+              <p className="text-gray-500 text-sm mt-2">Browse the catalog and add products to your store</p>
+              <button
+                onClick={() => setActiveTab('catalog')}
+                className="btn-gold mt-4"
+              >
+                <Plus className="w-4 h-4 inline mr-2" />
+                Browse Catalog
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {myProducts.map((product) => (
+                <div 
+                  key={product.id} 
+                  className="bg-[rgba(30,30,30,0.6)] rounded-lg overflow-hidden border border-green-500/30"
+                  data-testid="my-store-product"
+                >
+                  <div className="h-40 bg-[rgba(50,50,50,0.6)] relative">
                     {product.images && product.images.length > 0 ? (
                       <img
                         src={product.images[0]}
                         alt={product.title}
-                        className="w-24 h-24 object-cover rounded-lg"
+                        className="w-full h-full object-cover"
                       />
                     ) : (
-                      <div className="w-24 h-24 bg-[rgba(50,50,50,0.6)] rounded-lg flex items-center justify-center">
-                        <Package className="w-8 h-8 text-gray-500" />
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Package className="w-10 h-10 text-gray-500" />
                       </div>
                     )}
+                    <span className="absolute top-2 right-2 px-2 py-1 bg-green-500/80 text-white rounded text-xs flex items-center gap-1">
+                      <Check className="w-3 h-3" />
+                      In Store
+                    </span>
+                    {product.categoryName && (
+                      <span className="absolute top-2 left-2 px-2 py-1 bg-black/70 text-[#D4AF37] rounded text-xs">
+                        {product.categoryIcon}
+                      </span>
+                    )}
                   </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-white mb-1">{product.title}</h3>
-                    <p className="text-sm text-gray-400 mb-2">{product.description}</p>
-                    <p className="text-[#D4AF37] font-bold">${product.price.toFixed(2)}</p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Images: {product.images?.length || 0}/10
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-2">
+                  
+                  <div className="p-4">
+                    <h3 className="font-semibold text-white mb-1 truncate">{product.title}</h3>
+                    <p className="text-[#D4AF37] font-bold">${product.price?.toFixed(2)}</p>
+                    
                     <button
-                      onClick={() => {
-                        setEditingProduct(product.id);
-                        setProductForm({
-                          title: product.title,
-                          description: product.description,
-                          price: product.price.toString(),
-                          category: product.category || ''
-                        });
-                      }}
-                      className="p-2 hover:bg-[rgba(212,175,55,0.1)] rounded-lg transition-colors"
-                      data-testid="edit-product-btn"
+                      onClick={() => handleRemoveFromStore(product.id)}
+                      className="w-full mt-3 p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors flex items-center justify-center gap-2"
+                      data-testid="remove-from-store-btn"
                     >
-                      <Edit className="w-4 h-4 text-[#D4AF37]" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteProduct(product.id)}
-                      className="p-2 hover:bg-red-500/10 rounded-lg transition-colors"
-                      data-testid="delete-product-btn"
-                    >
-                      <Trash2 className="w-4 h-4 text-red-400" />
+                      <Trash2 className="w-4 h-4" />
+                      Remove from Store
                     </button>
                   </div>
                 </div>
-                
-                {/* Category Badge */}
-                {product.categoryName && (
-                  <div className="mt-2">
-                    <span className="inline-flex items-center gap-1 px-2 py-1 bg-[rgba(212,175,55,0.1)] text-[#D4AF37] rounded-full text-xs">
-                      <Tag className="w-3 h-3" />
-                      {product.categoryIcon} {product.categoryName}
-                    </span>
-                  </div>
-                )}
-                
-                {/* Product Images Gallery with Remove Buttons */}
-                {product.images && product.images.length > 0 && (
-                  <div className="mt-4">
-                    <p className="text-sm text-gray-400 mb-2">Product Images (click X to remove)</p>
-                    <div className="flex flex-wrap gap-2">
-                      {product.images.map((img, index) => (
-                        <div key={index} className="relative group">
-                          <img
-                            src={img}
-                            alt={`${product.title} - ${index + 1}`}
-                            className="w-20 h-20 object-cover rounded-lg border border-gray-700"
-                          />
-                          <button
-                            onClick={() => handleRemoveImage(product.id, img)}
-                            className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
-                            data-testid="remove-image-btn"
-                            title="Remove image"
-                          >
-                            ✕
-                          </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Catalog Section */}
+      {activeTab === 'catalog' && (
+        <div className="luxury-card">
+          <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white mb-6">Product Catalog</h2>
+          
+          {user.verificationStatus !== 'verified' ? (
+            <div className="text-center py-12">
+              <AlertCircle className="w-16 h-16 mx-auto text-yellow-500 mb-4" />
+              <p className="text-gray-400">You need to be verified to browse the catalog</p>
+            </div>
+          ) : (
+            <>
+              {/* Search and Filter */}
+              <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search products..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="luxury-input pl-10 w-full"
+                    data-testid="search-catalog"
+                  />
+                </div>
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="luxury-input"
+                  data-testid="filter-category"
+                >
+                  <option value="">All Categories</option>
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.icon} {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <p className="text-gray-400 mb-4">
+                Found {filteredCatalog.length} products • 
+                <span className="text-green-400"> {filteredCatalog.filter(p => p.isSelected).length} in your store</span>
+              </p>
+
+              {/* Catalog Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {filteredCatalog.map((product) => (
+                  <div 
+                    key={product.id} 
+                    className={`bg-[rgba(30,30,30,0.6)] rounded-lg overflow-hidden border ${
+                      product.isSelected 
+                        ? 'border-green-500/50' 
+                        : 'border-[rgba(212,175,55,0.1)] hover:border-[rgba(212,175,55,0.3)]'
+                    } transition-all`}
+                    data-testid="catalog-product"
+                  >
+                    <div className="h-36 bg-[rgba(50,50,50,0.6)] relative">
+                      {product.images && product.images.length > 0 ? (
+                        <img
+                          src={product.images[0]}
+                          alt={product.title}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Package className="w-8 h-8 text-gray-500" />
                         </div>
-                      ))}
+                      )}
+                      {product.isSelected && (
+                        <span className="absolute top-2 right-2 px-2 py-1 bg-green-500/80 text-white rounded text-xs flex items-center gap-1">
+                          <Check className="w-3 h-3" />
+                          Added
+                        </span>
+                      )}
+                      {product.categoryName && (
+                        <span className="absolute top-2 left-2 px-2 py-1 bg-black/70 text-[#D4AF37] rounded text-xs">
+                          {product.categoryIcon}
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className="p-3">
+                      <h3 className="font-semibold text-white text-sm mb-1 truncate">{product.title}</h3>
+                      <p className="text-xs text-gray-400 mb-2 line-clamp-2">{product.description}</p>
+                      <p className="text-[#D4AF37] font-bold">${product.price?.toFixed(2)}</p>
+                      
+                      {product.isSelected ? (
+                        <button
+                          onClick={() => handleRemoveFromStore(product.id)}
+                          className="w-full mt-2 p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors text-sm flex items-center justify-center gap-1"
+                          data-testid="remove-catalog-btn"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          Remove
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleAddToStore(product.id)}
+                          className="w-full mt-2 p-2 bg-[rgba(212,175,55,0.1)] hover:bg-[rgba(212,175,55,0.2)] text-[#D4AF37] rounded-lg transition-colors text-sm flex items-center justify-center gap-1"
+                          data-testid="add-to-store-btn"
+                        >
+                          <Plus className="w-3 h-3" />
+                          Add to Store
+                        </button>
+                      )}
                     </div>
                   </div>
-                )}
-                
-                <div className="mt-4">
-                  {uploadingImages[product.id] ? (
-                    <div className="text-center py-4"><div className="spinner mx-auto"></div></div>
-                  ) : (
-                    <ImageDropzone productId={product.id} />
-                  )}
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            </>
+          )}
+        </div>
       )}
 
       {/* Orders Section */}
       {activeTab === 'orders' && (
-        <div className="luxury-card mb-8">
+        <div className="luxury-card">
           <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white mb-6">My Orders</h2>
           
           {orders.length === 0 ? (
@@ -537,9 +570,9 @@ const SellerDashboard = () => {
                     </div>
                   </div>
 
-                  {/* Order Items (only seller's products) */}
+                  {/* Order Items */}
                   <div className="space-y-3 border-t border-[rgba(212,175,55,0.1)] pt-4">
-                    <p className="text-sm text-gray-400 mb-2">Your products in this order:</p>
+                    <p className="text-sm text-gray-400 mb-2">Products in this order:</p>
                     {order.orderItems?.map((item, idx) => (
                       <div key={idx} className="flex items-center gap-4 p-3 bg-[rgba(20,20,20,0.6)] rounded-lg">
                         {item.product?.images?.[0] ? (
@@ -565,7 +598,7 @@ const SellerDashboard = () => {
                     ))}
                   </div>
 
-                  {/* Order Total for Seller */}
+                  {/* Order Total */}
                   <div className="flex justify-between items-center mt-4 pt-4 border-t border-[rgba(212,175,55,0.1)]">
                     <span className="text-gray-400">Your earnings from this order:</span>
                     <span className="text-[#D4AF37] font-bold text-xl">
@@ -576,84 +609,6 @@ const SellerDashboard = () => {
               ))}
             </div>
           )}
-        </div>
-      )}
-
-      {/* Product Form Modal */}
-      {(showProductForm || editingProduct) && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="luxury-card max-w-md w-full">
-            <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white mb-4">
-              {editingProduct ? 'Edit Product' : 'Add New Product'}
-            </h2>
-            <form onSubmit={editingProduct ? handleUpdateProduct : handleCreateProduct} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Title</label>
-                <input
-                  type="text"
-                  required
-                  value={productForm.title}
-                  onChange={(e) => setProductForm({ ...productForm, title: e.target.value })}
-                  className="luxury-input"
-                  data-testid="product-title-input"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Description</label>
-                <textarea
-                  required
-                  value={productForm.description}
-                  onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
-                  className="luxury-input min-h-[100px]"
-                  data-testid="product-description-input"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Category</label>
-                <select
-                  value={productForm.category}
-                  onChange={(e) => setProductForm({ ...productForm, category: e.target.value })}
-                  className="luxury-input"
-                  data-testid="product-category-input"
-                >
-                  <option value="">Select a category</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.icon} {cat.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Price ($)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  required
-                  value={productForm.price}
-                  onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
-                  className="luxury-input"
-                  data-testid="product-price-input"
-                />
-              </div>
-              <div className="flex gap-2">
-                <button type="submit" className="btn-gold flex-1" data-testid="save-product-btn">
-                  {editingProduct ? 'Update' : 'Create'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowProductForm(false);
-                    setEditingProduct(null);
-                    setProductForm({ title: '', description: '', price: '', category: '' });
-                  }}
-                  className="btn-gold-outline flex-1"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
         </div>
       )}
     </div>
