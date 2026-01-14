@@ -957,9 +957,9 @@ async def get_categories():
 
 @api_router.get("/products")
 async def get_products(category: Optional[str] = None):
-    """Get all active products from admin catalog"""
+    """Get all products from admin catalog"""
     try:
-        query = supabase_admin.table('products').select('*').eq('is_active', True)
+        query = supabase_admin.table('products').select('*')
         
         if category:
             query = query.eq('category', category)
