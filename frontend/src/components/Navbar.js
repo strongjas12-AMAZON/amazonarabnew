@@ -94,7 +94,9 @@ const Navbar = () => {
                   {user.role === 'admin' ? <Settings className="w-4 h-4" /> : 
                    user.role === 'seller' ? <Package className="w-4 h-4" /> :
                    <User className="w-4 h-4" />}
-                  <span className="hidden sm:block">{user.name}</span>
+                  <span className="hidden sm:block">
+                    {user.role === 'seller' && user.storeName ? user.storeName : user.name}
+                  </span>
                 </Link>
 
                 {/* Logout */}

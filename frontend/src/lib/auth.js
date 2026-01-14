@@ -9,7 +9,9 @@ const authService = {
         name: data.name,
         email: data.email,
         password: data.password,
-        role: data.role
+        role: data.role,
+        // Pass storeName for sellers so backend validation succeeds
+        storeName: data.role === 'seller' ? data.storeName : undefined,
       });
 
       if (!response.data.success) {
@@ -179,7 +181,8 @@ const authService = {
             email: profile.email,
             name: profile.name,
             role: profile.role,
-            verificationStatus: profile.verificationStatus || profile.verification_status || 'unverified'
+            verificationStatus: profile.verificationStatus || profile.verification_status || 'unverified',
+            storeName: profile.storeName || profile.store_name
           };
         } catch (supabaseErr) {
           return null;

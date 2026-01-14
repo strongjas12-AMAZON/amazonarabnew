@@ -73,6 +73,7 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
     role: str = Field(..., pattern="^(buyer|seller)$")
+    storeName: Optional[str] = None  # Required for sellers, optional for buyers
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -107,6 +108,13 @@ class ReviewVerificationRequest(BaseModel):
     rejectionReason: Optional[str] = None
 
 
+class StoreNameChangeRequest(BaseModel):
+    newStoreName: str
+
+
+class StoreNameChangeAdminAction(BaseModel):
+    adminNote: Optional[str] = None
+
 # Helper functions
 def get_signed_document_url(file_path: str, expires_in: int = 3600) -> Optional[str]:
     """Generate signed URL for private document access (1 hour expiry)"""
@@ -134,7 +142,7 @@ def get_signed_document_url(file_path: str, expires_in: int = 3600) -> Optional[
 
 def format_user_response(user_data: dict) -> dict:
     """Convert database fields to camelCase for frontend"""
-    # Database uses snake_case: verification_status, created_at, ban_status, ban_reason, banned_by, banned_at
+    # Database uses snake_case: verification_status, created_at, ban_status, ban_reason, banned_by, banned_at, store_name
     return {
         'id': user_data.get('id'),
         'email': user_data.get('email'),
@@ -147,6 +155,8 @@ def format_user_response(user_data: dict) -> dict:
         'banReason': user_data.get('banReason') or user_data.get('ban_reason'),
         'bannedBy': user_data.get('bannedBy') or user_data.get('banned_by'),
         'bannedAt': user_data.get('bannedAt') or user_data.get('banned_at'),
+        # Store name (for sellers)
+        'storeName': user_data.get('storeName') or user_data.get('store_name'),
     }
 
 
@@ -878,6 +888,24 @@ async def setup_test_users():
 async def register(request: Request, req: RegisterRequest):
     """Register new user"""
     try:
+        # Validate store name for sellers
+        if req.role == 'seller':
+            if not req.storeName or not req.storeName.strip():
+                raise HTTPException(status_code=400, detail="Store name is required for sellers")
+            
+            store_name = req.storeName.strip()
+            
+            # Validate store name length
+            if len(store_name) < 2:
+                raise HTTPException(status_code=400, detail="Store name must be at least 2 characters")
+            if len(store_name) > 100:
+                raise HTTPException(status_code=400, detail="Store name must be less than 100 characters")
+            
+            # Check if store name already exists
+            existing_store = supabase_admin.table('users').select('id, email').eq('store_name', store_name).execute()
+            if existing_store.data:
+                raise HTTPException(status_code=400, detail="Store name already taken. Please choose a different name.")
+        
         # Use admin client to create user (bypasses email confirmation)
         try:
             auth_response = supabase_admin.auth.admin.create_user({
@@ -905,6 +933,10 @@ async def register(request: Request, req: RegisterRequest):
             'verification_status': 'unverified'  # Database column is verification_status (snake_case)
             # Note: created_at has DEFAULT NOW() in schema, so we don't need to set it explicitly
         }
+        
+        # Add store_name for sellers only
+        if req.role == 'seller' and req.storeName:
+            user_data['store_name'] = req.storeName.strip()
         
         supabase_admin.table('users').insert(user_data).execute()
         
@@ -1528,6 +1560,93 @@ async def review_verification(doc_id: str, request: ReviewVerificationRequest, c
         raise HTTPException(status_code=400, detail=str(e))
 
 
+# Store name change routes
+@api_router.post("/seller/store-name-change")
+async def request_store_name_change(request: StoreNameChangeRequest, current_user: dict = Depends(get_current_user)):
+    """Seller requests a store name change. Admin must approve."""
+    if current_user['role'] != 'seller':
+        raise HTTPException(status_code=403, detail="Only sellers can request store name changes")
+
+    new_name = (request.newStoreName or "").strip()
+    if not new_name:
+        raise HTTPException(status_code=400, detail="New store name is required")
+    if len(new_name) < 2:
+        raise HTTPException(status_code=400, detail="Store name must be at least 2 characters")
+    if len(new_name) > 100:
+        raise HTTPException(status_code=400, detail="Store name must be less than 100 characters")
+
+    current_store = current_user.get('storeName') or ''
+    if current_store and current_store.lower() == new_name.lower():
+        raise HTTPException(status_code=400, detail="New store name must be different from current store name")
+
+    try:
+        # Ensure requested name is not already used by another seller
+        existing = supabase_admin.table('users').select('id').eq('store_name', new_name).execute()
+        if existing.data:
+            raise HTTPException(status_code=400, detail="Store name already taken. Please choose a different name.")
+
+        # Prevent multiple pending requests per seller
+        pending = supabase_admin.table('store_name_change_requests').select('id') \
+            .eq('seller_id', current_user['id']).eq('status', 'pending').execute()
+        if pending.data:
+            raise HTTPException(status_code=400, detail="You already have a pending store name change request")
+
+        data = {
+            'seller_id': current_user['id'],
+            'old_store_name': current_store,
+            'new_store_name': new_name,
+            'status': 'pending',
+        }
+        result = supabase_admin.table('store_name_change_requests').insert(data).execute()
+        created = result.data[0] if result.data else data
+
+        return {
+            "success": True,
+            "request": {
+                "id": created.get('id'),
+                "oldStoreName": created.get('old_store_name'),
+                "newStoreName": created.get('new_store_name'),
+                "status": created.get('status'),
+                "adminNote": created.get('admin_note'),
+                "createdAt": created.get('created_at'),
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.get("/seller/store-name-change")
+async def get_store_name_change_request(current_user: dict = Depends(get_current_user)):
+    """Get latest store name change request for current seller."""
+    if current_user['role'] != 'seller':
+        raise HTTPException(status_code=403, detail="Only sellers can view store name change requests")
+
+    try:
+        result = supabase_admin.table('store_name_change_requests') \
+            .select('*').eq('seller_id', current_user['id']) \
+            .order('created_at', desc=True).limit(1).execute()
+
+        if not result.data:
+            return {"success": True, "request": None}
+
+        req = result.data[0]
+        return {
+            "success": True,
+            "request": {
+                "id": req.get('id'),
+                "oldStoreName": req.get('old_store_name'),
+                "newStoreName": req.get('new_store_name'),
+                "status": req.get('status'),
+                "adminNote": req.get('admin_note'),
+                "createdAt": req.get('created_at'),
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 # Admin Routes
 @api_router.get("/admin/users")
 async def get_all_users(current_user: dict = Depends(get_current_user)):
@@ -1582,6 +1701,135 @@ async def get_invite_codes(current_user: dict = Depends(get_current_user)):
         return {"success": True, "codes": [format_invite_code_response(c) for c in codes.data]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/admin/store-name-requests")
+async def get_store_name_requests(current_user: dict = Depends(get_current_user)):
+    """Get all store name change requests (admin only)."""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        result = supabase_admin.table('store_name_change_requests') \
+            .select("*, users:seller_id(name, email)") \
+            .order('created_at', desc=True).execute()
+
+        requests = []
+        for r in result.data or []:
+            seller = r.get('users') or {}
+            requests.append({
+                "id": r.get('id'),
+                "sellerId": r.get('seller_id'),
+                "sellerName": seller.get('name'),
+                "sellerEmail": seller.get('email'),
+                "oldStoreName": r.get('old_store_name'),
+                "newStoreName": r.get('new_store_name'),
+                "status": r.get('status'),
+                "adminNote": r.get('admin_note'),
+                "createdAt": r.get('created_at'),
+                "updatedAt": r.get('updated_at'),
+            })
+
+        return {"success": True, "requests": requests}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/admin/store-name-requests/{request_id}/approve")
+async def approve_store_name_request(request_id: str, action: StoreNameChangeAdminAction, current_user: dict = Depends(get_current_user)):
+    """Approve a store name change request and update seller's store_name."""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        res = supabase_admin.table('store_name_change_requests').select('*').eq('id', request_id).single().execute()
+        req = res.data
+        if not req:
+            raise HTTPException(status_code=404, detail="Request not found")
+
+        if req.get('status') != 'pending':
+            raise HTTPException(status_code=400, detail="Only pending requests can be approved")
+
+        new_name = req.get('new_store_name')
+        if not new_name:
+            raise HTTPException(status_code=400, detail="Request is missing new store name")
+
+        # Ensure new store name is still unique
+        existing = supabase_admin.table('users').select('id').eq('store_name', new_name).neq('id', req.get('seller_id')).execute()
+        if existing.data:
+            raise HTTPException(status_code=400, detail="Store name is already used by another seller")
+
+        # Update user store_name
+        supabase_admin.table('users').update({'store_name': new_name}).eq('id', req.get('seller_id')).execute()
+
+        # Mark this request as approved
+        update_data = {
+            'status': 'approved',
+            'admin_id': current_user['id'],
+            'admin_note': action.adminNote,
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        }
+        updated = supabase_admin.table('store_name_change_requests').update(update_data).eq('id', request_id).execute()
+        updated_req = updated.data[0] if updated.data else {**req, **update_data}
+
+        return {
+            "success": True,
+            "request": {
+                "id": updated_req.get('id'),
+                "sellerId": updated_req.get('seller_id'),
+                "oldStoreName": updated_req.get('old_store_name'),
+                "newStoreName": updated_req.get('new_store_name'),
+                "status": updated_req.get('status'),
+                "adminNote": updated_req.get('admin_note'),
+                "updatedAt": updated_req.get('updated_at'),
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.post("/admin/store-name-requests/{request_id}/reject")
+async def reject_store_name_request(request_id: str, action: StoreNameChangeAdminAction, current_user: dict = Depends(get_current_user)):
+    """Reject a store name change request."""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        res = supabase_admin.table('store_name_change_requests').select('*').eq('id', request_id).single().execute()
+        req = res.data
+        if not req:
+            raise HTTPException(status_code=404, detail="Request not found")
+
+        if req.get('status') != 'pending':
+            raise HTTPException(status_code=400, detail="Only pending requests can be rejected")
+
+        update_data = {
+            'status': 'rejected',
+            'admin_id': current_user['id'],
+            'admin_note': action.adminNote,
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        }
+        updated = supabase_admin.table('store_name_change_requests').update(update_data).eq('id', request_id).execute()
+        updated_req = updated.data[0] if updated.data else {**req, **update_data}
+
+        return {
+            "success": True,
+            "request": {
+                "id": updated_req.get('id'),
+                "sellerId": updated_req.get('seller_id'),
+                "oldStoreName": updated_req.get('old_store_name'),
+                "newStoreName": updated_req.get('new_store_name'),
+                "status": updated_req.get('status'),
+                "adminNote": updated_req.get('admin_note'),
+                "updatedAt": updated_req.get('updated_at'),
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @api_router.get("/me")
