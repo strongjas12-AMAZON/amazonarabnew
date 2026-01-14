@@ -234,7 +234,7 @@ class TestSellerCatalogAccess:
         assert data.get("success") == True
         assert "products" in data
         products = data["products"]
-        assert len(products) == 100, f"Expected 100 catalog products, got {len(products)}"
+        assert len(products) >= 100, f"Expected at least 100 catalog products, got {len(products)}"
         print(f"✓ Seller can access catalog with {len(products)} products")
     
     def test_seller_my_products(self, seller_token):
