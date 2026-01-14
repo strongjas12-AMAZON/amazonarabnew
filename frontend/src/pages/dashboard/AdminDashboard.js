@@ -7,12 +7,21 @@ import { Users, Package, ShoppingCart, Code, CheckCircle, XCircle, Eye, Clock, D
 const AdminDashboard = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
-  const [users, setUsers] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
+  const [usersPage, setUsersPage] = useState(1);
   const [orders, setOrders] = useState([]);
   const [products, setProducts] = useState([]);
   const [verificationDocs, setVerificationDocs] = useState([]);
   const [inviteCodes, setInviteCodes] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const USERS_PER_PAGE = 10;
+
+  // Calculate pagination for users (client-side)
+  const usersTotalPages = Math.max(1, Math.ceil(allUsers.length / USERS_PER_PAGE));
+  const startIndex = (usersPage - 1) * USERS_PER_PAGE;
+  const endIndex = startIndex + USERS_PER_PAGE;
+  const users = allUsers.slice(startIndex, endIndex);
 
   useEffect(() => {
     fetchData();
@@ -33,11 +42,12 @@ const AdminDashboard = () => {
 
     // Handle each result independently
     try {
-      // Users
+      // Users (fetch all, pagination handled on frontend)
       if (results[0].status === 'fulfilled' && !results[0].value.error) {
-        setUsers(results[0].value.data?.users || []);
+        const usersResponse = results[0].value.data;
+        setAllUsers(usersResponse?.users || []);
       } else {
-        setUsers([]);
+        setAllUsers([]);
       }
 
       // Orders
@@ -54,7 +64,6 @@ const AdminDashboard = () => {
         toast.error('Failed to load products. Check backend logs.');
         setProducts([]);
       }
-
       // Verification Documents
       if (results[3].status === 'fulfilled' && !results[3].value.error) {
         setVerificationDocs(results[3].value.data?.documents || []);
@@ -153,8 +162,12 @@ const AdminDashboard = () => {
   const paidOrders = orders.filter(o => o.paymentStatus === 'paid');
   const completedOrders = orders.filter(o => o.paymentStatus === 'completed');
 
+  const bannedUsers = allUsers.filter(
+    (u) => u.banStatus && u.banStatus !== 'active'
+  );
+
   const stats = [
-    { label: 'Total Users', value: users.length, icon: Users, color: 'text-blue-400' },
+    { label: 'Total Users', value: allUsers.length, icon: Users, color: 'text-blue-400' },
     { label: 'Total Products', value: products.length, icon: Package, color: 'text-purple-400' },
     { label: 'Pending Payments', value: pendingPaymentOrders.length, icon: Clock, color: 'text-yellow-400' },
     { label: 'Pending Verifications', value: verificationDocs.filter(d => d.status === 'pending').length, icon: CheckCircle, color: 'text-orange-400' },
@@ -186,7 +199,7 @@ const AdminDashboard = () => {
 
       {/* Tabs */}
       <div className="flex gap-2 mb-8 flex-wrap">
-        {['overview', 'orders', 'products', 'users', 'verifications', 'inviteCodes'].map((tab) => (
+        {['overview', 'orders', 'products', 'users', 'verifications', 'inviteCodes', 'bannedUsers'].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -484,15 +497,19 @@ const AdminDashboard = () => {
 
         {activeTab === 'users' && (
           <div>
-            <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white mb-6">All Users</h2>
+            <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white mb-6">
+              All Users
+            </h2>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-[rgba(212,175,55,0.2)]">
                     <th className="text-left p-3 text-gray-400 font-medium">Name</th>
                     <th className="text-left p-3 text-gray-400 font-medium">Email</th>
-                    <th className="text-left p-3 text-gray-400 font-medium">Role</th>
-                    <th className="text-left p-3 text-gray-400 font-medium">Status</th>
+                    <th className="text-left p-3 text-gray-400 font-medium hidden sm:table-cell">Role</th>
+                    <th className="text-left p-3 text-gray-400 font-medium hidden md:table-cell">Verification</th>
+                    <th className="text-left p-3 text-gray-400 font-medium">Ban</th>
+                    <th className="text-left p-3 text-gray-400 font-medium text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -500,7 +517,7 @@ const AdminDashboard = () => {
                     <tr key={u.id} className="border-b border-[rgba(212,175,55,0.1)]">
                       <td className="p-3 text-white">{u.name}</td>
                       <td className="p-3 text-gray-400">{u.email}</td>
-                      <td className="p-3">
+                      <td className="p-3 hidden sm:table-cell">
                         <span className={`status-badge ${
                           u.role === 'admin' ? 'bg-purple-500/20 text-purple-400' :
                           u.role === 'seller' ? 'bg-blue-500/20 text-blue-400' :
@@ -509,7 +526,7 @@ const AdminDashboard = () => {
                           {u.role}
                         </span>
                       </td>
-                      <td className="p-3">
+                      <td className="p-3 hidden md:table-cell">
                         <span className={`status-badge ${
                           u.verificationStatus === 'verified' ? 'status-verified' :
                           u.verificationStatus === 'pending' ? 'status-pending' :
@@ -519,11 +536,173 @@ const AdminDashboard = () => {
                           {u.verificationStatus}
                         </span>
                       </td>
+                      <td className="p-3">
+                        <span
+                          className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${
+                            u.banStatus === 'banned'
+                              ? 'bg-red-500/20 text-red-400'
+                              : u.banStatus === 'suspended'
+                              ? 'bg-orange-500/20 text-orange-400'
+                              : 'bg-green-500/20 text-green-400'
+                          }`}
+                          title={u.banReason || ''}
+                        >
+                          {u.banStatus || 'active'}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        {u.banStatus && u.banStatus !== 'active' ? (
+                          <div className="flex flex-wrap gap-2 justify-end">
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await api.post(`/admin/users/${u.id}/unban`);
+                                  toast.success('User unbanned successfully');
+                                  fetchData();
+                                } catch (error) {
+                                  toast.error(error.response?.data?.detail || 'Failed to unban user');
+                                }
+                              }}
+                              className="px-3 py-1 rounded-md text-xs bg-green-500/20 text-green-400 hover:bg-green-500/30 transition-colors whitespace-nowrap"
+                            >
+                              Unban
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex flex-wrap gap-2 justify-end">
+                            <button
+                              onClick={async () => {
+                                const reason = window.prompt('Enter reason for ban:');
+                                if (!reason) return;
+                                try {
+                                  await api.post(`/admin/users/${u.id}/ban`, {
+                                    status: 'banned',
+                                    reason,
+                                  });
+                                  toast.success('User banned successfully');
+                                  fetchData();
+                                } catch (error) {
+                                  toast.error(error.response?.data?.detail || 'Failed to ban user');
+                                }
+                              }}
+                              className="px-3 py-1 rounded-md text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors whitespace-nowrap"
+                            >
+                              Ban
+                            </button>
+                            <button
+                              onClick={async () => {
+                                const reason = window.prompt('Enter reason for suspension:');
+                                if (!reason) return;
+                                try {
+                                  await api.post(`/admin/users/${u.id}/ban`, {
+                                    status: 'suspended',
+                                    reason,
+                                  });
+                                  toast.success('User suspended successfully');
+                                  fetchData();
+                                } catch (error) {
+                                  toast.error(error.response?.data?.detail || 'Failed to suspend user');
+                                }
+                              }}
+                              className="px-3 py-1 rounded-md text-xs bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 transition-colors whitespace-nowrap"
+                            >
+                              Suspend
+                            </button>
+                          </div>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              {/* Pagination controls - show only page numbers (1, 2, 3, ...) */}
+              {allUsers.length > USERS_PER_PAGE && (
+                <div className="flex items-center justify-center mt-4 px-3">
+                  <div className="flex gap-2">
+                    {Array.from({ length: usersTotalPages }, (_, index) => {
+                      const pageNumber = index + 1;
+                      return (
+                        <button
+                          key={pageNumber}
+                          onClick={() => setUsersPage(pageNumber)}
+                          className={`px-3 py-1 rounded-md text-xs transition-colors ${
+                            usersPage === pageNumber
+                              ? 'bg-[#D4AF37] text-black'
+                              : 'bg-[rgba(30,30,30,0.8)] text-gray-300 hover:bg-[rgba(50,50,50,0.9)]'
+                          }`}
+                        >
+                          {pageNumber}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
+          </div>
+        )}
+
+        {activeTab === 'bannedUsers' && (
+          <div>
+            <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white mb-6">
+              Banned Users
+            </h2>
+
+            {bannedUsers.length === 0 ? (
+              <p className="text-gray-400 text-sm">No banned or suspended users.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-[rgba(212,175,55,0.2)]">
+                      <th className="text-left p-3 text-gray-400 font-medium">Name</th>
+                      <th className="text-left p-3 text-gray-400 font-medium">Email</th>
+                      <th className="text-left p-3 text-gray-400 font-medium hidden sm:table-cell">Role</th>
+                      <th className="text-left p-3 text-gray-400 font-medium">Ban Reason</th>
+                      <th className="text-left p-3 text-gray-400 font-medium text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bannedUsers.map((u) => (
+                      <tr key={u.id} className="border-b border-[rgba(212,175,55,0.1)]">
+                        <td className="p-3 text-white">{u.name}</td>
+                        <td className="p-3 text-gray-400">{u.email}</td>
+                        <td className="p-3 hidden sm:table-cell">
+                          <span className={`status-badge ${
+                            u.role === 'admin' ? 'bg-purple-500/20 text-purple-400' :
+                            u.role === 'seller' ? 'bg-blue-500/20 text-blue-400' :
+                            'bg-green-500/20 text-green-400'
+                          }`}>
+                            {u.role}
+                          </span>
+                        </td>
+                        <td className="p-3 text-gray-400 text-sm">
+                          {u.banReason || 'No reason provided'}
+                        </td>
+                        <td className="p-3">
+                          <div className="flex flex-wrap gap-2 justify-end">
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await api.post(`/admin/users/${u.id}/unban`);
+                                  toast.success('User unbanned successfully');
+                                  fetchData();
+                                } catch (error) {
+                                  toast.error(error.response?.data?.detail || 'Failed to unban user');
+                                }
+                              }}
+                              className="px-3 py-1 rounded-md text-xs bg-green-500/20 text-green-400 hover:bg-green-500/30 transition-colors whitespace-nowrap"
+                            >
+                              Unban
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
 
