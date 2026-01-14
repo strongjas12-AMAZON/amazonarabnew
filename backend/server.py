@@ -1015,8 +1015,6 @@ async def admin_create_product(request: CreateProductRequest, current_user: dict
             'category': request.category,
             'images': [],
             'seller_id': None,  # Admin products don't have a seller
-            'is_active': True,
-            'created_by_admin': current_user['id'],
             'created_at': datetime.now(timezone.utc).isoformat()
         }
         
