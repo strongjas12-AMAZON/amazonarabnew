@@ -134,14 +134,19 @@ def get_signed_document_url(file_path: str, expires_in: int = 3600) -> Optional[
 
 def format_user_response(user_data: dict) -> dict:
     """Convert database fields to camelCase for frontend"""
-    # Database uses camelCase: "verificationStatus", "createdAt"
+    # Database uses snake_case: verification_status, created_at, ban_status, ban_reason, banned_by, banned_at
     return {
         'id': user_data.get('id'),
         'email': user_data.get('email'),
         'name': user_data.get('name'),
         'role': user_data.get('role'),
         'verificationStatus': user_data.get('verificationStatus') or user_data.get('verification_status') or 'unverified',
-        'createdAt': user_data.get('createdAt') or user_data.get('created_at')
+        'createdAt': user_data.get('createdAt') or user_data.get('created_at'),
+        # Ban / suspension fields
+        'banStatus': user_data.get('banStatus') or user_data.get('ban_status') or 'active',
+        'banReason': user_data.get('banReason') or user_data.get('ban_reason'),
+        'bannedBy': user_data.get('bannedBy') or user_data.get('banned_by'),
+        'bannedAt': user_data.get('bannedAt') or user_data.get('banned_at'),
     }
 
 
@@ -662,20 +667,33 @@ async def send_verification_email(user_id: str, status: str, rejection_reason: s
 
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Get current user from JWT token"""
+    """Get current user from JWT token.
+
+    Also enforces ban / suspension:
+    - Users with ban_status = 'banned' or 'suspended' are rejected with 403.
+    """
     try:
         token = credentials.credentials
-        
+
         response = supabase.auth.get_user(token)
         if not response.user:
             raise HTTPException(status_code=401, detail="Invalid token")
-        
-        user_data = supabase_admin.table('users').select('*').eq('id', response.user.id).execute()
-        
-        if not user_data.data:
+
+        user_result = supabase_admin.table('users').select('*').eq('id', response.user.id).execute()
+
+        if not user_result.data:
             raise HTTPException(status_code=404, detail="User not found")
-        
-        return format_user_response(user_data.data[0])
+
+        db_user = user_result.data[0]
+        ban_status = db_user.get('ban_status') or db_user.get('banStatus') or 'active'
+        if ban_status in ('banned', 'suspended'):
+            # Optional: include generic message without exposing too many details
+            raise HTTPException(status_code=403, detail="Your account is not allowed to perform this action.")
+
+        return format_user_response(db_user)
+    except HTTPException:
+        # Re-raise HTTPExceptions as-is
+        raise
     except Exception as e:
         raise HTTPException(status_code=401, detail=str(e))
 
@@ -923,16 +941,29 @@ async def login(request: Request, req: LoginRequest):
         if not auth_response.user:
             raise HTTPException(status_code=401, detail="Invalid credentials")
         
-        user_data = supabase_admin.table('users').select('*').eq('id', auth_response.user.id).execute()
-        
-        if not user_data.data:
+        user_result = supabase_admin.table('users').select('*').eq('id', auth_response.user.id).execute()
+
+        if not user_result.data:
             raise HTTPException(status_code=404, detail="User not found")
-        
+
+        db_user = user_result.data[0]
+        ban_status = db_user.get('ban_status') or db_user.get('banStatus') or 'active'
+        if ban_status in ('banned', 'suspended'):
+            # Do not issue a session for banned / suspended users
+            if ban_status == 'banned':
+                detail = "Your account has been banned. Please contact support."
+            else:
+                detail = "Your account has been temporarily suspended. Please contact support."
+            raise HTTPException(status_code=403, detail=detail)
+
         return {
             "success": True,
-            "user": format_user_response(user_data.data[0]),
+            "user": format_user_response(db_user),
             "session": auth_response.session
         }
+    except HTTPException as exc:
+        # Re-raise HTTP-related errors (invalid credentials, banned, user not found)
+        raise exc
     except Exception as e:
         logging.error(f"Login error: {str(e)}")
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -944,6 +975,64 @@ async def logout(current_user: dict = Depends(get_current_user)):
     try:
         supabase.auth.sign_out()
         return {"success": True, "message": "Logged out successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class BanUserRequest(BaseModel):
+    status: str = Field(..., pattern="^(banned|suspended)$")
+    reason: str
+
+
+@api_router.post("/admin/users/{user_id}/ban")
+async def ban_user(user_id: str, request: BanUserRequest, current_user: dict = Depends(get_current_user)):
+    """Ban or suspend a user (admin only)."""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        # Ensure target user exists
+        user_result = supabase_admin.table('users').select('*').eq('id', user_id).execute()
+        if not user_result.data:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        update_data = {
+            'ban_status': request.status,
+            'ban_reason': request.reason,
+            'banned_by': current_user['id'],
+            'banned_at': datetime.now(timezone.utc).isoformat(),
+        }
+
+        updated = supabase_admin.table('users').update(update_data).eq('id', user_id).execute()
+        return {"success": True, "user": format_user_response(updated.data[0])}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.post("/admin/users/{user_id}/unban")
+async def unban_user(user_id: str, current_user: dict = Depends(get_current_user)):
+    """Remove ban / suspension from a user (admin only)."""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        user_result = supabase_admin.table('users').select('*').eq('id', user_id).execute()
+        if not user_result.data:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        update_data = {
+            'ban_status': 'active',
+            'ban_reason': None,
+            'banned_by': None,
+            'banned_at': None,
+        }
+
+        updated = supabase_admin.table('users').update(update_data).eq('id', user_id).execute()
+        return {"success": True, "user": format_user_response(updated.data[0])}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -997,6 +1086,9 @@ async def create_product(request: CreateProductRequest, current_user: dict = Dep
     if current_user['role'] != 'seller':
         raise HTTPException(status_code=403, detail="Only sellers can create products")
     
+    if current_user.get('banStatus') in ('banned', 'suspended'):
+        raise HTTPException(status_code=403, detail="Your account is restricted. You cannot create products.")
+    
     if current_user['verificationStatus'] != 'verified':
         raise HTTPException(status_code=403, detail="Seller must be verified")
     
@@ -1023,6 +1115,9 @@ async def update_product(product_id: str, request: UpdateProductRequest, current
     """Update product"""
     if current_user['role'] != 'seller':
         raise HTTPException(status_code=403, detail="Only sellers can update products")
+    
+    if current_user.get('banStatus') in ('banned', 'suspended'):
+        raise HTTPException(status_code=403, detail="Your account is restricted. You cannot manage products.")
     
     try:
         product = supabase_admin.table('products').select('*').eq('id', product_id).eq('seller_id', current_user['id']).execute()
@@ -1053,6 +1148,9 @@ async def delete_product(product_id: str, current_user: dict = Depends(get_curre
     """Delete product (seller can delete own, admin can delete any)"""
     if current_user['role'] not in ['seller', 'admin']:
         raise HTTPException(status_code=403, detail="Only sellers or admins can delete products")
+    
+    if current_user.get('banStatus') in ('banned', 'suspended') and current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Your account is restricted. You cannot manage products.")
     
     try:
         if current_user['role'] == 'admin':
@@ -1213,6 +1311,9 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
     """Create new order"""
     if current_user['role'] != 'buyer':
         raise HTTPException(status_code=403, detail="Only buyers can create orders")
+    
+    if current_user.get('banStatus') in ('banned', 'suspended'):
+        raise HTTPException(status_code=403, detail="Your account is restricted. You cannot place orders.")
     
     try:
         order_data = {
@@ -1430,13 +1531,19 @@ async def review_verification(doc_id: str, request: ReviewVerificationRequest, c
 # Admin Routes
 @api_router.get("/admin/users")
 async def get_all_users(current_user: dict = Depends(get_current_user)):
-    """Get all users (admin only)"""
+    """Get all users (admin only)."""
     if current_user['role'] != 'admin':
         raise HTTPException(status_code=403, detail="Admin access required")
-    
+
     try:
-        users = supabase_admin.table('users').select('*').execute()
-        return {"success": True, "users": [format_user_response(u) for u in users.data]}
+        # Fetch all users without pagination
+        result = supabase_admin.table('users').select('*').execute()
+        users_data = result.data or []
+
+        return {
+            "success": True,
+            "users": [format_user_response(u) for u in users_data],
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
