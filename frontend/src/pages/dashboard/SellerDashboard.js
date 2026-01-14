@@ -24,9 +24,11 @@ const SellerDashboard = () => {
   });
 
   useEffect(() => {
-    fetchData();
-    fetchCategories();
-  }, []);
+    if (user) {
+      fetchData();
+      fetchCategories();
+    }
+  }, [user]);
 
   const fetchCategories = async () => {
     try {
@@ -38,6 +40,7 @@ const SellerDashboard = () => {
   };
 
   const fetchData = async () => {
+    setLoading(true);
     try {
       const [myProductsRes, ordersRes] = await Promise.all([
         api.get('/products/my'),
@@ -53,6 +56,7 @@ const SellerDashboard = () => {
           setCatalogProducts(catalogRes.data.products || []);
         } catch (err) {
           console.log('Catalog not available');
+          setCatalogProducts([]);
         }
       }
     } catch (error) {
