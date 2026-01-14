@@ -1137,19 +1137,20 @@ async def get_catalog_products(category: Optional[str] = None, current_user: dic
         raise HTTPException(status_code=403, detail="Only sellers can browse the catalog")
     
     try:
-        query = supabase_admin.table('products').select('*').eq('is_active', True)
+        query = supabase_admin.table('products').select('*')
         
         if category:
             query = query.eq('category', category)
         
         products = query.order('created_at', desc=True).execute()
         
-        # Get seller's already selected products
+        # Get seller's already selected products (seller_products table may not exist yet)
+        selected_ids = set()
         try:
             seller_products = supabase_admin.table('seller_products').select('product_id').eq('seller_id', current_user['id']).eq('is_active', True).execute()
             selected_ids = set(sp['product_id'] for sp in seller_products.data) if seller_products.data else set()
         except:
-            selected_ids = set()  # Table might not exist yet
+            pass  # Table might not exist yet
         
         # Mark which products the seller has already selected
         catalog_products = []
