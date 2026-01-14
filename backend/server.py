@@ -956,22 +956,16 @@ async def get_categories():
 
 @api_router.get("/products")
 async def get_products(category: Optional[str] = None):
-    """Get all verified products, optionally filtered by category"""
+    """Get all active products from admin catalog"""
     try:
-        query = supabase_admin.table('products').select('*, users!seller_id(name, verification_status)')
+        query = supabase_admin.table('products').select('*').eq('is_active', True)
         
         if category:
             query = query.eq('category', category)
         
-        products = query.execute()
+        products = query.order('created_at', desc=True).execute()
         
-        verified_products = [
-            format_product_response(p) 
-            for p in products.data 
-            if p.get('users') and p['users'].get('verification_status') == 'verified'
-        ]
-        
-        return {"success": True, "products": verified_products}
+        return {"success": True, "products": [format_product_response(p) for p in products.data]}
     except Exception as e:
         logging.error(f"Get products error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
