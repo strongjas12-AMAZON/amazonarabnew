@@ -1359,15 +1359,15 @@ async def upload_product_image(
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user)
 ):
-    """Upload product image"""
-    if current_user['role'] != 'seller':
-        raise HTTPException(status_code=403, detail="Only sellers can upload images")
+    """Upload product image (admin only in new architecture)"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Only admins can upload product images")
     
     try:
-        product = supabase_admin.table('products').select('*').eq('id', product_id).eq('seller_id', current_user['id']).execute()
+        product = supabase_admin.table('products').select('*').eq('id', product_id).execute()
         
         if not product.data:
-            raise HTTPException(status_code=404, detail="Product not found or unauthorized")
+            raise HTTPException(status_code=404, detail="Product not found")
         
         current_images = product.data[0].get('images', [])
         if len(current_images) >= 10:
