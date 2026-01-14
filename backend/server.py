@@ -1268,9 +1268,88 @@ async def get_all_products_admin(current_user: dict = Depends(get_current_user))
         raise HTTPException(status_code=403, detail="Admin access required")
     
     try:
-        products = supabase_admin.table('products').select('*, users!seller_id(name, email, verification_status)').execute()
+        products = supabase_admin.table('products').select('*').order('created_at', desc=True).execute()
         return {"success": True, "products": [format_product_response(p) for p in products.data]}
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/admin/seed-catalog")
+async def seed_product_catalog(current_user: dict = Depends(get_current_user)):
+    """Seed the product catalog with ~100 products from product_catalog.py"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        from product_catalog import PRODUCT_CATALOG
+        
+        # Check if catalog already has products
+        existing = supabase_admin.table('products').select('id').limit(5).execute()
+        if existing.data and len(existing.data) >= 5:
+            return {"success": False, "message": f"Catalog already has {len(existing.data)}+ products. Delete existing products first to reseed."}
+        
+        admin_id = current_user['id']
+        seeded_count = 0
+        
+        for product in PRODUCT_CATALOG:
+            product_data = {
+                'id': str(uuid.uuid4()),
+                'title': product['title'],
+                'description': product['description'],
+                'price': product['price'],
+                'category': product['category'],
+                'images': product.get('images', []),
+                'seller_id': None,
+                'is_active': True,
+                'created_by_admin': admin_id,
+                'created_at': datetime.now(timezone.utc).isoformat()
+            }
+            
+            supabase_admin.table('products').insert(product_data).execute()
+            seeded_count += 1
+        
+        return {"success": True, "message": f"Successfully seeded {seeded_count} products", "count": seeded_count}
+    except ImportError:
+        raise HTTPException(status_code=500, detail="Product catalog file not found")
+    except Exception as e:
+        logging.error(f"Seed catalog error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.delete("/admin/clear-catalog")
+async def clear_product_catalog(current_user: dict = Depends(get_current_user)):
+    """Clear all products from catalog (admin only)"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        # Check for products with orders
+        all_products = supabase_admin.table('products').select('id').execute()
+        products_with_orders = []
+        
+        for product in all_products.data:
+            order_items = supabase_admin.table('order_items').select('id').eq('product_id', product['id']).limit(1).execute()
+            if order_items.data:
+                products_with_orders.append(product['id'])
+        
+        # Deactivate products with orders, delete others
+        deactivated = 0
+        deleted = 0
+        
+        for product in all_products.data:
+            if product['id'] in products_with_orders:
+                supabase_admin.table('products').update({'is_active': False}).eq('id', product['id']).execute()
+                deactivated += 1
+            else:
+                supabase_admin.table('products').delete().eq('id', product['id']).execute()
+                deleted += 1
+        
+        return {
+            "success": True, 
+            "message": f"Deleted {deleted} products, deactivated {deactivated} products with orders"
+        }
+    except Exception as e:
+        logging.error(f"Clear catalog error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
