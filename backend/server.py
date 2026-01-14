@@ -1175,11 +1175,11 @@ async def seller_add_product(product_id: str, current_user: dict = Depends(get_c
         raise HTTPException(status_code=403, detail="Seller must be verified to add products")
     
     try:
-        # Check product exists and is active
-        product = supabase_admin.table('products').select('*').eq('id', product_id).eq('is_active', True).execute()
+        # Check product exists
+        product = supabase_admin.table('products').select('*').eq('id', product_id).execute()
         
         if not product.data:
-            raise HTTPException(status_code=404, detail="Product not found or inactive")
+            raise HTTPException(status_code=404, detail="Product not found")
         
         # Check if already added
         try:
