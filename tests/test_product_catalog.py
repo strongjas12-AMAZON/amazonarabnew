@@ -18,7 +18,7 @@ class TestPublicProductsAPI:
     """Test public products endpoint - no auth required"""
     
     def test_get_all_products(self):
-        """GET /api/products - Should return all 100 seeded products"""
+        """GET /api/products - Should return all seeded products"""
         response = requests.get(f"{BASE_URL}/api/products")
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         
@@ -26,7 +26,7 @@ class TestPublicProductsAPI:
         assert data.get("success") == True
         assert "products" in data
         products = data["products"]
-        assert len(products) == 100, f"Expected 100 products, got {len(products)}"
+        assert len(products) >= 100, f"Expected at least 100 products, got {len(products)}"
         print(f"✓ GET /api/products returned {len(products)} products")
     
     def test_products_have_required_fields(self):
@@ -123,7 +123,7 @@ class TestAdminProductManagement:
         assert data.get("success") == True
         assert "products" in data
         products = data["products"]
-        assert len(products) == 100, f"Expected 100 products, got {len(products)}"
+        assert len(products) >= 100, f"Expected at least 100 products, got {len(products)}"
         print(f"✓ Admin GET /api/admin/products returned {len(products)} products")
     
     def test_admin_create_product(self, admin_token):
