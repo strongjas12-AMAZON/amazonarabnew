@@ -21,10 +21,14 @@ const SellerDashboard = () => {
     merchantInviteCode: '',
     documentType: 'business_document'
   });
+  const [storeRequest, setStoreRequest] = useState(null);
+  const [showStoreNameModal, setShowStoreNameModal] = useState(false);
+  const [newStoreName, setNewStoreName] = useState('');
 
   useEffect(() => {
     fetchData();
     fetchCategories();
+    fetchStoreNameRequest();
   }, []);
 
   const fetchCategories = async () => {
@@ -48,6 +52,15 @@ const SellerDashboard = () => {
       toast.error('Failed to load data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchStoreNameRequest = async () => {
+    try {
+      const res = await api.get('/seller/store-name-change');
+      setStoreRequest(res.data.request || null);
+    } catch (error) {
+      // silently ignore
     }
   };
 
@@ -177,11 +190,126 @@ const SellerDashboard = () => {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <div className="mb-8">
-        <h1 className="font-['Playfair_Display'] text-5xl font-bold text-gold-gradient mb-2" data-testid="seller-dashboard-title">
+        <h1 className="font-['Playfair_Display'] text-5xl font-bold text-gold-gradient mb-4" data-testid="seller-dashboard-title">
           Seller Dashboard
         </h1>
-        <p className="text-gray-400">Welcome back, {user.name}</p>
+        {user.storeName ? (
+          <>
+            {/* Store Name Card - Prominently Displayed */}
+            <div className="luxury-card mb-4 p-4 border-[#D4AF37]/30 flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-3">
+                  <p className="text-gray-300 text-lg font-medium">Store Name:</p>
+                  <p className="text-[#D4AF37] text-2xl font-bold flex items-center gap-2">
+                    {user.storeName}
+                    {storeRequest?.status === 'pending' && (
+                      <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-yellow-500/20 text-yellow-400 border border-yellow-500/40">
+                        Pending change
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setNewStoreName('');
+                    setShowStoreNameModal(true);
+                  }}
+                  className="px-3 py-1 rounded-md text-xs bg-[rgba(212,175,55,0.1)] text-[#D4AF37] hover:bg-[rgba(212,175,55,0.2)] transition-colors"
+                >
+                  Edit Store Name
+                </button>
+              </div>
+              <p className="text-xs text-gray-500">
+                Store name changes require admin approval
+              </p>
+              {storeRequest && (
+                <div className="text-xs mt-1">
+                  {storeRequest.status === 'pending' && (
+                    <p className="text-yellow-400">
+                      Change requested to "<span className="font-semibold">{storeRequest.newStoreName}</span>" (Pending admin approval)
+                    </p>
+                  )}
+                  {storeRequest.status === 'rejected' && (
+                    <p className="text-red-400">
+                      Last change request to "<span className="font-semibold">{storeRequest.newStoreName}</span>" was rejected
+                      {storeRequest.adminNote && `: ${storeRequest.adminNote}`}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+            <p className="text-gray-400 text-sm">
+              Welcome back, {user.name}
+            </p>
+          </>
+        ) : (
+          <p className="text-gray-400">Welcome back, {user.name}</p>
+        )}
       </div>
+
+      {/* Store Name Change Modal */}
+      {showStoreNameModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="luxury-card max-w-md w-full">
+            <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white mb-4">Request Store Name Change</h2>
+            <p className="text-sm text-gray-400 mb-4">
+              Current store name: <span className="text-[#D4AF37] font-semibold">{user.storeName}</span>
+            </p>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                try {
+                  const trimmed = newStoreName.trim();
+                  if (!trimmed) {
+                    toast.error('New store name is required');
+                    return;
+                  }
+                  const res = await api.post('/seller/store-name-change', {
+                    newStoreName: trimmed,
+                  });
+                  toast.success('Store name change request submitted');
+                  setStoreRequest(res.data.request);
+                  setShowStoreNameModal(false);
+                } catch (error) {
+                  toast.error(error.response?.data?.detail || 'Failed to request store name change');
+                }
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  New Store Name
+                </label>
+                <input
+                  type="text"
+                  value={newStoreName}
+                  onChange={(e) => setNewStoreName(e.target.value)}
+                  className="luxury-input"
+                  placeholder="Enter new store name"
+                  minLength={2}
+                  maxLength={100}
+                  required
+                />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowStoreNameModal(false)}
+                  className="btn-gold-outline"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-gold"
+                >
+                  Submit Request
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Verification Status */}
       {user.verificationStatus !== 'verified' && (

@@ -13,6 +13,7 @@ const AdminDashboard = () => {
   const [products, setProducts] = useState([]);
   const [verificationDocs, setVerificationDocs] = useState([]);
   const [inviteCodes, setInviteCodes] = useState([]);
+  const [storeNameRequests, setStoreNameRequests] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const USERS_PER_PAGE = 10;
@@ -37,7 +38,8 @@ const AdminDashboard = () => {
       api.get('/orders/my').catch(err => ({ error: err })),
       api.get('/admin/products').catch(err => ({ error: err })),
       api.get('/verification/documents').catch(err => ({ error: err })),
-      api.get('/admin/invite-codes').catch(err => ({ error: err }))
+      api.get('/admin/invite-codes').catch(err => ({ error: err })),
+      api.get('/admin/store-name-requests').catch(err => ({ error: err }))
     ]);
 
     // Handle each result independently
@@ -76,6 +78,13 @@ const AdminDashboard = () => {
         setInviteCodes(results[4].value.data?.codes || []);
       } else {
         setInviteCodes([]);
+      }
+
+      // Store name change requests
+      if (results[5].status === 'fulfilled' && !results[5].value.error) {
+        setStoreNameRequests(results[5].value.data?.requests || []);
+      } else {
+        setStoreNameRequests([]);
       }
     } catch (error) {
       // Silently handle errors - individual requests already handled above
@@ -199,7 +208,7 @@ const AdminDashboard = () => {
 
       {/* Tabs */}
       <div className="flex gap-2 mb-8 flex-wrap">
-        {['overview', 'orders', 'products', 'users', 'verifications', 'inviteCodes', 'bannedUsers'].map((tab) => (
+        {['overview', 'orders', 'products', 'users', 'verifications', 'inviteCodes', 'bannedUsers', 'storeRequests'].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -250,6 +259,101 @@ const AdminDashboard = () => {
           </div>
         )}
 
+        {activeTab === 'storeRequests' && (
+          <div>
+            <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white mb-6">
+              Store Name Change Requests
+            </h2>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-[rgba(212,175,55,0.2)]">
+                    <th className="text-left p-3 text-gray-400 font-medium">Seller</th>
+                    <th className="text-left p-3 text-gray-400 font-medium hidden sm:table-cell">Email</th>
+                    <th className="text-left p-3 text-gray-400 font-medium">Old Store</th>
+                    <th className="text-left p-3 text-gray-400 font-medium">New Store</th>
+                    <th className="text-left p-3 text-gray-400 font-medium">Status</th>
+                    <th className="text-left p-3 text-gray-400 font-medium text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {storeNameRequests.map((r) => (
+                    <tr key={r.id} className="border-b border-[rgba(212,175,55,0.1)]">
+                      <td className="p-3 text-white">{r.sellerName || 'Unknown'}</td>
+                      <td className="p-3 text-gray-400 hidden sm:table-cell">{r.sellerEmail || 'N/A'}</td>
+                      <td className="p-3 text-gray-300">{r.oldStoreName || '—'}</td>
+                      <td className="p-3 text-[#D4AF37] font-semibold">{r.newStoreName}</td>
+                      <td className="p-3">
+                        <span
+                          className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${
+                            r.status === 'approved'
+                              ? 'bg-green-500/20 text-green-400'
+                              : r.status === 'rejected'
+                              ? 'bg-red-500/20 text-red-400'
+                              : 'bg-yellow-500/20 text-yellow-400'
+                          }`}
+                        >
+                          {r.status}
+                        </span>
+                        {r.adminNote && r.status !== 'pending' && (
+                          <p className="text-xs text-gray-500 mt-1">{r.adminNote}</p>
+                        )}
+                      </td>
+                      <td className="p-3">
+                        {r.status === 'pending' ? (
+                          <div className="flex flex-wrap gap-2 justify-end">
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await api.post(`/admin/store-name-requests/${r.id}/approve`, {});
+                                  toast.success('Store name change approved');
+                                  fetchData();
+                                } catch (error) {
+                                  toast.error(error.response?.data?.detail || 'Failed to approve request');
+                                }
+                              }}
+                              className="px-3 py-1 rounded-md text-xs bg-green-500/20 text-green-400 hover:bg-green-500/30 transition-colors whitespace-nowrap"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={async () => {
+                                const note = window.prompt('Enter rejection reason (optional):') || undefined;
+                                try {
+                                  await api.post(`/admin/store-name-requests/${r.id}/reject`, {
+                                    adminNote: note,
+                                  });
+                                  toast.success('Store name change rejected');
+                                  fetchData();
+                                } catch (error) {
+                                  toast.error(error.response?.data?.detail || 'Failed to reject request');
+                                }
+                              }}
+                              className="px-3 py-1 rounded-md text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors whitespace-nowrap"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="text-right text-xs text-gray-500">
+                            {r.updatedAt && `Updated at ${new Date(r.updatedAt).toLocaleString()}`}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {storeNameRequests.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="p-4 text-center text-gray-500 text-sm">
+                        No store name change requests yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
         {activeTab === 'orders' && (
           <div>
             <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white mb-6">Order Management</h2>
@@ -468,7 +572,11 @@ const AdminDashboard = () => {
                           )}
                         </div>
                         <p className="text-xs text-gray-500 mt-1">
-                          Seller: {product.users?.name || 'Unknown'} ({product.users?.email || 'N/A'})
+                          {product.users?.storeName ? (
+                            <>Store: {product.users.storeName} ({product.users?.email || 'N/A'})</>
+                          ) : (
+                            <>Seller: {product.users?.name || 'Unknown'} ({product.users?.email || 'N/A'})</>
+                          )}
                           {product.users?.verificationStatus === 'verified' && (
                             <span className="ml-2 text-green-400">✓ Verified</span>
                           )}
@@ -508,7 +616,8 @@ const AdminDashboard = () => {
                     <th className="text-left p-3 text-gray-400 font-medium">Email</th>
                     <th className="text-left p-3 text-gray-400 font-medium hidden sm:table-cell">Role</th>
                     <th className="text-left p-3 text-gray-400 font-medium hidden md:table-cell">Verification</th>
-                    <th className="text-left p-3 text-gray-400 font-medium">Ban</th>
+                    <th className="text-left p-3 text-gray-400 font-medium hidden lg:table-cell">Store</th>
+                    <th className="text-left p-3 text-gray-400 font-medium">status</th>
                     <th className="text-left p-3 text-gray-400 font-medium text-right">Actions</th>
                   </tr>
                 </thead>
@@ -535,6 +644,13 @@ const AdminDashboard = () => {
                         }`}>
                           {u.verificationStatus}
                         </span>
+                      </td>
+                      <td className="p-3 hidden lg:table-cell">
+                        {u.role === 'seller' ? (
+                          <span className="text-gray-300">{u.storeName || '—'}</span>
+                        ) : (
+                          <span className="text-gray-500">—</span>
+                        )}
                       </td>
                       <td className="p-3">
                         <span

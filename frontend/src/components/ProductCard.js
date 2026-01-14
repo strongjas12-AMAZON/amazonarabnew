@@ -43,7 +43,9 @@ const ProductCard = ({ product, onAddToCart, canAddToCart = true }) => {
           <span className="text-2xl font-bold text-[#D4AF37]" data-testid="product-price">
             ${product.price.toFixed(2)}
           </span>
-          {product.users?.name && (
+          {product.users?.storeName ? (
+            <p className="text-gray-500 text-xs mt-1">Store: {product.users.storeName}</p>
+          ) : product.users?.name && (
             <p className="text-gray-500 text-xs mt-1">by {product.users.name}</p>
           )}
         </div>

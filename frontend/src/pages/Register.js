@@ -9,7 +9,8 @@ const Register = () => {
     email: '',
     password: '',
     confirmPassword: '',
-    role: 'buyer'
+    role: 'buyer',
+    storeName: ''
   });
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
@@ -34,12 +35,23 @@ const Register = () => {
 
     setLoading(true);
 
+    if (formData.role === 'seller' && !formData.storeName.trim()) {
+      toast.error('Store name is required for sellers');
+      return;
+    }
+
+    if (formData.role === 'seller' && formData.storeName.trim().length < 2) {
+      toast.error('Store name must be at least 2 characters');
+      return;
+    }
+
     try {
       await register({
         name: formData.name,
         email: formData.email,
         password: formData.password,
-        role: formData.role
+        role: formData.role,
+        storeName: formData.role === 'seller' ? formData.storeName.trim() : undefined
       });
 
       toast.success('Registration successful! Please verify your account.');
@@ -185,6 +197,30 @@ const Register = () => {
                 </p>
               )}
             </div>
+
+            {formData.role === 'seller' && (
+              <div>
+                <label htmlFor="storeName" className="block text-sm font-medium text-gray-300 mb-2">
+                  Store Name <span className="text-red-400">*</span>
+                </label>
+                <input
+                  id="storeName"
+                  name="storeName"
+                  type="text"
+                  required
+                  value={formData.storeName}
+                  onChange={handleChange}
+                  className="luxury-input"
+                  placeholder="My Awesome Store"
+                  data-testid="store-name-input"
+                  minLength={2}
+                  maxLength={100}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  This will be your unique store name visible to customers. Cannot be changed without admin approval.
+                </p>
+              </div>
+            )}
 
             <button
               type="submit"
