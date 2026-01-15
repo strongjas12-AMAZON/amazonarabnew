@@ -38,6 +38,20 @@ CREATE TABLE IF NOT EXISTS orders (
     "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Payout Requests table (seller withdrawals, manual payouts only)
+CREATE TABLE IF NOT EXISTS payout_requests (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    "sellerId" UUID REFERENCES users(id) ON DELETE CASCADE,
+    "requestedAmount" DECIMAL(10,2) NOT NULL,
+    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'paid')),
+    "requestDate" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    "adminId" UUID REFERENCES users(id),
+    "adminActionTimestamp" TIMESTAMP WITH TIME ZONE,
+    "adminNote" TEXT,
+    "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Order Items table
 CREATE TABLE IF NOT EXISTS order_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -87,6 +101,7 @@ ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE verification_documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE merchant_invite_codes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payout_requests ENABLE ROW LEVEL SECURITY;
 
 -- ============================================
 -- IMPORTANT: NO RECURSIVE POLICIES
@@ -201,6 +216,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON products TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON orders TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON order_items TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON verification_documents TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON payout_requests TO authenticated;
 GRANT SELECT ON merchant_invite_codes TO authenticated;
 
 -- Allow anon users to read products and codes

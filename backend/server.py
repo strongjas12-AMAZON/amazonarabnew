@@ -115,6 +115,15 @@ class StoreNameChangeRequest(BaseModel):
 class StoreNameChangeAdminAction(BaseModel):
     adminNote: Optional[str] = None
 
+
+class CreatePayoutRequest(BaseModel):
+    requestedAmount: float
+
+
+class UpdatePayoutStatusRequest(BaseModel):
+    status: str
+    adminNote: Optional[str] = None
+
 # Helper functions
 def get_signed_document_url(file_path: str, expires_in: int = 3600) -> Optional[str]:
     """Generate signed URL for private document access (1 hour expiry)"""
@@ -251,6 +260,22 @@ def format_invite_code_response(code_data: dict) -> dict:
         'usedByUserId': code_data.get('used_by_user_id'),
         'usedAt': code_data.get('used_at'),
         'createdAt': code_data.get('created_at')
+    }
+
+
+def format_payout_request_response(payout_data: dict) -> dict:
+    """Convert payout_requests row to camelCase for frontend"""
+    return {
+        "id": payout_data.get("id"),
+        "sellerId": payout_data.get("sellerId") or payout_data.get("seller_id"),
+        "requestedAmount": float(payout_data.get("requestedAmount") or payout_data.get("requested_amount", 0)),
+        "status": payout_data.get("status"),
+        "requestDate": payout_data.get("requestDate") or payout_data.get("request_date"),
+        "adminId": payout_data.get("adminId") or payout_data.get("admin_id"),
+        "adminActionTimestamp": payout_data.get("adminActionTimestamp") or payout_data.get("admin_action_timestamp"),
+        "adminNote": payout_data.get("adminNote") or payout_data.get("admin_note"),
+        "createdAt": payout_data.get("createdAt") or payout_data.get("created_at"),
+        "updatedAt": payout_data.get("updatedAt") or payout_data.get("updated_at"),
     }
 
 
@@ -1408,6 +1433,127 @@ async def get_my_orders(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@api_router.get("/seller/earnings")
+async def get_seller_earnings(current_user: dict = Depends(get_current_user)):
+    """Get seller earnings, balances, and payout summaries."""
+    if current_user["role"] != "seller":
+        raise HTTPException(status_code=403, detail="Only sellers can view earnings")
+
+    try:
+        # 1) Fetch all completed/paid orders with items & products for this seller
+        orders_result = (
+            supabase_admin.table("orders")
+            .select("*, order_items(*, products(*))")
+            .in_("payment_status", ["paid", "completed"])
+            .execute()
+        )
+
+        total_earnings = 0.0
+        for order in orders_result.data or []:
+            for item in order.get("order_items", []):
+                product = item.get("products") or {}
+                if product.get("seller_id") == current_user["id"]:
+                    total_earnings += float(item.get("price", 0)) * int(item.get("quantity", 0))
+
+        # 2) Fetch payout requests for this seller
+        payouts_result = (
+            supabase_admin.table("payout_requests")
+            .select("*")
+            .eq("sellerId", current_user["id"])
+            .execute()
+        )
+
+        total_withdrawn = 0.0
+        pending_withdrawals = 0.0
+        completed_withdrawals = 0.0
+
+        payout_history = []
+        for p in payouts_result.data or []:
+            amount = float(p.get("requestedAmount") or p.get("requested_amount", 0))
+            status = p.get("status")
+            if status in ("approved", "paid"):
+                total_withdrawn += amount
+                completed_withdrawals += amount if status == "paid" else 0.0
+            if status == "pending":
+                pending_withdrawals += amount
+            payout_history.append(format_payout_request_response(p))
+
+        available_balance = max(total_earnings - total_withdrawn, 0.0)
+
+        return {
+            "success": True,
+            "earnings": {
+                "totalEarnings": round(total_earnings, 2),
+                "availableBalance": round(available_balance, 2),
+                "pendingWithdrawals": round(pending_withdrawals, 2),
+                "completedWithdrawals": round(completed_withdrawals, 2),
+                "payoutRequests": payout_history,
+            },
+        }
+    except Exception as e:
+        logging.error(f"Get seller earnings error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/seller/payout-requests")
+async def create_payout_request(req: CreatePayoutRequest, current_user: dict = Depends(get_current_user)):
+    """Seller creates a payout request from available balance."""
+    if current_user["role"] != "seller":
+        raise HTTPException(status_code=403, detail="Only sellers can request payouts")
+
+    if req.requestedAmount <= 0:
+        raise HTTPException(status_code=400, detail="Requested amount must be greater than zero")
+
+    try:
+        # Reuse earnings calculation to determine available balance
+        earnings_response = await get_seller_earnings(current_user)
+        available_balance = earnings_response["earnings"]["availableBalance"]
+
+        if req.requestedAmount > available_balance:
+            raise HTTPException(status_code=400, detail="Requested amount exceeds available balance")
+
+        data = {
+            "sellerId": current_user["id"],
+            "requestedAmount": req.requestedAmount,
+            "status": "pending",
+            "requestDate": datetime.now(timezone.utc).isoformat(),
+            "createdAt": datetime.now(timezone.utc).isoformat(),
+            "updatedAt": datetime.now(timezone.utc).isoformat(),
+        }
+
+        result = supabase_admin.table("payout_requests").insert(data).execute()
+        created = result.data[0] if result.data else data
+
+        return {"success": True, "payoutRequest": format_payout_request_response(created)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Create payout request error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/seller/payout-requests")
+async def get_seller_payout_requests(current_user: dict = Depends(get_current_user)):
+    """Get all payout requests for the current seller."""
+    if current_user["role"] != "seller":
+        raise HTTPException(status_code=403, detail="Only sellers can view payout requests")
+
+    try:
+        result = (
+            supabase_admin.table("payout_requests")
+            .select("*")
+            .eq("sellerId", current_user["id"])
+            .order("requestDate", desc=True)
+            .execute()
+        )
+        return {
+            "success": True,
+            "payoutRequests": [format_payout_request_response(p) for p in result.data or []],
+        }
+    except Exception as e:
+        logging.error(f"Get seller payout requests error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @api_router.put("/orders/{order_id}/status")
 async def update_order_status(order_id: str, request: UpdateOrderStatusRequest, current_user: dict = Depends(get_current_user)):
     """Update order status (admin only)"""
@@ -1702,6 +1848,85 @@ async def get_invite_codes(current_user: dict = Depends(get_current_user)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@api_router.get("/admin/payout-requests")
+async def admin_get_payout_requests(current_user: dict = Depends(get_current_user)):
+    """Admin can view all payout requests from sellers."""
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    try:
+        result = (
+            supabase_admin.table("payout_requests")
+            .select("*, users:sellerId(name, email, store_name)")
+            .order("requestDate", desc=True)
+            .execute()
+        )
+
+        requests = []
+        for r in result.data or []:
+            seller = r.get("users") or {}
+            payload = format_payout_request_response(r)
+            payload["sellerName"] = seller.get("name")
+            payload["sellerEmail"] = seller.get("email")
+            payload["sellerStoreName"] = seller.get("store_name")
+            requests.append(payload)
+
+        return {"success": True, "requests": requests}
+    except Exception as e:
+        logging.error(f"Admin get payout requests error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/admin/payout-requests/{request_id}/status")
+async def admin_update_payout_status(
+    request_id: str,
+    req: UpdatePayoutStatusRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Admin approves, rejects, or marks payout request as paid (manual payment)."""
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    if req.status not in ("approved", "rejected", "paid"):
+        raise HTTPException(status_code=400, detail="Invalid payout status")
+
+    try:
+        # Ensure request exists
+        existing = (
+            supabase_admin.table("payout_requests")
+            .select("*")
+            .eq("id", request_id)
+            .single()
+            .execute()
+        )
+        payout = existing.data
+        if not payout:
+            raise HTTPException(status_code=404, detail="Payout request not found")
+
+        update_data = {
+            "status": req.status,
+            "adminId": current_user["id"],
+            "adminActionTimestamp": datetime.now(timezone.utc).isoformat(),
+            "updatedAt": datetime.now(timezone.utc).isoformat(),
+        }
+        if req.adminNote is not None:
+            update_data["adminNote"] = req.adminNote
+
+        result = (
+            supabase_admin.table("payout_requests")
+            .update(update_data)
+            .eq("id", request_id)
+            .execute()
+        )
+        updated = result.data[0] if result.data else {**payout, **update_data}
+
+        return {"success": True, "payoutRequest": format_payout_request_response(updated)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Admin update payout status error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.get("/admin/store-name-requests")
 async def get_store_name_requests(current_user: dict = Depends(get_current_user)):
