@@ -54,11 +54,12 @@ const Register = () => {
         storeName: formData.role === 'seller' ? formData.storeName.trim() : undefined
       });
 
-      toast.success('Registration successful! Please verify your account.');
-      
+      // Show different messages for buyers vs sellers
       if (formData.role === 'seller') {
+        toast.success('Registration successful! Please complete seller verification to start selling.');
         navigate('/dashboard/seller');
       } else {
+        toast.success('Registration successful! You can start shopping now.');
         navigate('/products');
       }
     } catch (error) {

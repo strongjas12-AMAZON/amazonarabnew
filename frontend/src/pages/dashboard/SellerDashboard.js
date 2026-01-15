@@ -3,12 +3,13 @@ import { useAuth } from '../../context/AuthContext';
 import api from '../../lib/api';
 import { toast } from 'sonner';
 import { useDropzone } from 'react-dropzone';
-import { Package, Plus, Edit, Trash2, Upload, AlertCircle, CheckCircle, Tag, ShoppingCart, Clock, DollarSign } from 'lucide-react';
+import { Package, Plus, Edit, Trash2, Upload, AlertCircle, CheckCircle, Tag, ShoppingCart, Clock, DollarSign, Wallet } from 'lucide-react';
 
 const SellerDashboard = () => {
   const { user } = useAuth();
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [earnings, setEarnings] = useState(null);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('products');
@@ -24,11 +25,14 @@ const SellerDashboard = () => {
   const [storeRequest, setStoreRequest] = useState(null);
   const [showStoreNameModal, setShowStoreNameModal] = useState(false);
   const [newStoreName, setNewStoreName] = useState('');
+  const [payoutAmount, setPayoutAmount] = useState('');
+  const [payoutSubmitting, setPayoutSubmitting] = useState(false);
 
   useEffect(() => {
     fetchData();
     fetchCategories();
     fetchStoreNameRequest();
+    fetchEarnings();
   }, []);
 
   const fetchCategories = async () => {
@@ -52,6 +56,16 @@ const SellerDashboard = () => {
       toast.error('Failed to load data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchEarnings = async () => {
+    try {
+      const res = await api.get('/seller/earnings');
+      setEarnings(res.data.earnings || null);
+    } catch (error) {
+      // silently ignore for now; stats section will just not show payouts
+      console.error('Failed to load earnings', error);
     }
   };
 
@@ -412,13 +426,13 @@ const SellerDashboard = () => {
           <p className="text-3xl font-bold text-[#D4AF37]">{orders.length}</p>
         </div>
         <div className="luxury-card">
-          <p className="text-gray-400 text-sm mb-1">Revenue</p>
+          <p className="text-gray-400 text-sm mb-1">Total Earnings</p>
           <p className="text-3xl font-bold text-green-400">
-            ${orders.filter(o => o.paymentStatus === 'paid' || o.paymentStatus === 'completed')
-              .reduce((sum, o) => {
-                const sellerTotal = o.orderItems?.reduce((itemSum, item) => itemSum + (item.price * item.quantity), 0) || 0;
-                return sum + sellerTotal;
-              }, 0).toFixed(2)}
+            {earnings ? `$${earnings.totalEarnings.toFixed(2)}` : '—'}
+          </p>
+          <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+            <Wallet className="w-3 h-3 text-[#D4AF37]" />
+            Available: <span className="text-[#D4AF37] font-semibold ml-1">{earnings ? `$${earnings.availableBalance.toFixed(2)}` : '—'}</span>
           </p>
         </div>
         <div className="luxury-card">
@@ -430,7 +444,7 @@ const SellerDashboard = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-8">
+      <div className="flex gap-2 mb-8 flex-wrap">
         <button
           onClick={() => setActiveTab('products')}
           className={`px-6 py-3 rounded-lg font-medium transition-all flex items-center gap-2 ${
@@ -454,6 +468,18 @@ const SellerDashboard = () => {
         >
           <ShoppingCart className="w-4 h-4" />
           Orders ({orders.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('payouts')}
+          className={`px-6 py-3 rounded-lg font-medium transition-all flex items-center gap-2 ${
+            activeTab === 'payouts'
+              ? 'bg-[#D4AF37] text-[#0a0a0a]'
+              : 'bg-[rgba(30,30,30,0.6)] text-gray-300 hover:bg-[rgba(30,30,30,0.8)]'
+          }`}
+          data-testid="tab-payouts"
+        >
+          <DollarSign className="w-4 h-4" />
+          Payouts
         </button>
       </div>
 
@@ -701,6 +727,153 @@ const SellerDashboard = () => {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Payouts Section */}
+      {activeTab === 'payouts' && (
+        <div className="luxury-card mb-8">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white">Payouts & Earnings</h2>
+          </div>
+
+          {!earnings ? (
+            <p className="text-gray-400 text-center py-8">Earnings data is not available yet.</p>
+          ) : (
+            <div className="space-y-8">
+              {/* Summary */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="p-4 bg-[rgba(30,30,30,0.8)] rounded-lg border border-[rgba(212,175,55,0.2)]">
+                  <p className="text-gray-400 text-sm mb-1">Total Earnings</p>
+                  <p className="text-2xl font-bold text-green-400">${earnings.totalEarnings.toFixed(2)}</p>
+                </div>
+                <div className="p-4 bg-[rgba(30,30,30,0.8)] rounded-lg border border-[rgba(212,175,55,0.2)]">
+                  <p className="text-gray-400 text-sm mb-1">Available Balance</p>
+                  <p className="text-2xl font-bold text-[#D4AF37]">${earnings.availableBalance.toFixed(2)}</p>
+                </div>
+                <div className="p-4 bg-[rgba(30,30,30,0.8)] rounded-lg border border-[rgba(212,175,55,0.2)]">
+                  <p className="text-gray-400 text-sm mb-1">Pending Withdrawals</p>
+                  <p className="text-2xl font-bold text-yellow-400">${earnings.pendingWithdrawals.toFixed(2)}</p>
+                </div>
+              </div>
+
+              {/* Payout Request Form */}
+              <div className="border-t border-[rgba(212,175,55,0.1)] pt-6">
+                <h3 className="text-lg font-semibold text-white mb-2">Request Payout</h3>
+                <p className="text-xs text-gray-500 mb-4">
+                  Payouts are processed manually by admin. You can request a payout up to your available balance.
+                </p>
+                <form
+                  className="flex flex-col sm:flex-row gap-3 items-start sm:items-end"
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!earnings) return;
+                    const amount = parseFloat(payoutAmount || '0');
+                    if (!amount || amount <= 0) {
+                      toast.error('Enter a valid amount');
+                      return;
+                    }
+                    if (amount > earnings.availableBalance) {
+                      toast.error('Amount exceeds available balance');
+                      return;
+                    }
+                    try {
+                      setPayoutSubmitting(true);
+                      await api.post('/seller/payout-requests', {
+                        requestedAmount: amount,
+                      });
+                      toast.success('Payout request submitted');
+                      setPayoutAmount('');
+                      await fetchEarnings();
+                    } catch (error) {
+                      toast.error(error.response?.data?.detail || 'Failed to submit payout request');
+                    } finally {
+                      setPayoutSubmitting(false);
+                    }
+                  }}
+                >
+                  <div className="flex-1 w-full">
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Amount to withdraw (USD)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={payoutAmount}
+                      onChange={(e) => setPayoutAmount(e.target.value)}
+                      className="luxury-input w-full"
+                      placeholder="Enter amount"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={payoutSubmitting || !earnings || earnings.availableBalance <= 0}
+                    className="btn-gold whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {payoutSubmitting ? 'Submitting...' : 'Request Payout'}
+                  </button>
+                </form>
+              </div>
+
+              {/* Payout History */}
+              <div className="border-t border-[rgba(212,175,55,0.1)] pt-6">
+                <h3 className="text-lg font-semibold text-white mb-4">Payout Requests History</h3>
+                {(!earnings.payoutRequests || earnings.payoutRequests.length === 0) ? (
+                  <p className="text-gray-400 text-sm">No payout requests yet.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-gray-400 border-b border-[rgba(212,175,55,0.1)]">
+                          <th className="py-2 pr-4">Date</th>
+                          <th className="py-2 pr-4">Amount</th>
+                          <th className="py-2 pr-4">Status</th>
+                          <th className="py-2 pr-4">Admin Note</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {earnings.payoutRequests.map((p) => (
+                          <tr key={p.id} className="border-b border-[rgba(212,175,55,0.05)]">
+                            <td className="py-2 pr-4 text-gray-300">
+                              {p.requestDate
+                                ? new Date(p.requestDate).toLocaleDateString('en-US', {
+                                    year: 'numeric',
+                                    month: 'short',
+                                    day: 'numeric',
+                                  })
+                                : '—'}
+                            </td>
+                            <td className="py-2 pr-4 text-[#D4AF37] font-semibold">
+                              ${p.requestedAmount?.toFixed(2)}
+                            </td>
+                            <td className="py-2 pr-4">
+                              <span
+                                className={`status-badge ${
+                                  p.status === 'pending'
+                                    ? 'status-pending'
+                                    : p.status === 'approved'
+                                    ? 'status-verified'
+                                    : p.status === 'paid'
+                                    ? 'status-verified'
+                                    : 'status-rejected'
+                                }`}
+                              >
+                                {p.status}
+                              </span>
+                            </td>
+                            <td className="py-2 pr-4 text-xs text-gray-400 max-w-xs truncate">
+                              {p.adminNote || '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

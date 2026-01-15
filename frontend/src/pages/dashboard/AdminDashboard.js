@@ -14,6 +14,7 @@ const AdminDashboard = () => {
   const [verificationDocs, setVerificationDocs] = useState([]);
   const [inviteCodes, setInviteCodes] = useState([]);
   const [storeNameRequests, setStoreNameRequests] = useState([]);
+  const [payoutRequests, setPayoutRequests] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const USERS_PER_PAGE = 10;
@@ -39,7 +40,8 @@ const AdminDashboard = () => {
       api.get('/admin/products').catch(err => ({ error: err })),
       api.get('/verification/documents').catch(err => ({ error: err })),
       api.get('/admin/invite-codes').catch(err => ({ error: err })),
-      api.get('/admin/store-name-requests').catch(err => ({ error: err }))
+      api.get('/admin/store-name-requests').catch(err => ({ error: err })),
+      api.get('/admin/payout-requests').catch(err => ({ error: err }))
     ]);
 
     // Handle each result independently
@@ -85,6 +87,13 @@ const AdminDashboard = () => {
         setStoreNameRequests(results[5].value.data?.requests || []);
       } else {
         setStoreNameRequests([]);
+      }
+
+      // Payout requests
+      if (results[6].status === 'fulfilled' && !results[6].value.error) {
+        setPayoutRequests(results[6].value.data?.requests || []);
+      } else {
+        setPayoutRequests([]);
       }
     } catch (error) {
       // Silently handle errors - individual requests already handled above
@@ -170,6 +179,7 @@ const AdminDashboard = () => {
   const pendingPaymentOrders = orders.filter(o => o.paymentStatus === 'pending_payment');
   const paidOrders = orders.filter(o => o.paymentStatus === 'paid');
   const completedOrders = orders.filter(o => o.paymentStatus === 'completed');
+  const pendingPayoutRequests = payoutRequests.filter(p => p.status === 'pending');
 
   const bannedUsers = allUsers.filter(
     (u) => u.banStatus && u.banStatus !== 'active'
@@ -178,7 +188,7 @@ const AdminDashboard = () => {
   const stats = [
     { label: 'Total Users', value: allUsers.length, icon: Users, color: 'text-blue-400' },
     { label: 'Total Products', value: products.length, icon: Package, color: 'text-purple-400' },
-    { label: 'Pending Payments', value: pendingPaymentOrders.length, icon: Clock, color: 'text-yellow-400' },
+    { label: 'Pending Payouts', value: pendingPayoutRequests.length, icon: DollarSign, color: 'text-yellow-400' },
     { label: 'Pending Verifications', value: verificationDocs.filter(d => d.status === 'pending').length, icon: CheckCircle, color: 'text-orange-400' },
   ];
 
@@ -208,7 +218,7 @@ const AdminDashboard = () => {
 
       {/* Tabs */}
       <div className="flex gap-2 mb-8 flex-wrap">
-        {['overview', 'orders', 'products', 'users', 'verifications', 'inviteCodes', 'bannedUsers', 'storeRequests'].map((tab) => (
+        {['overview', 'orders', 'products', 'users', 'verifications', 'inviteCodes', 'bannedUsers', 'storeRequests', 'payoutRequests'].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -232,16 +242,16 @@ const AdminDashboard = () => {
             <div className="space-y-4">
               <div className="p-4 bg-[rgba(30,30,30,0.6)] rounded-lg border border-yellow-500/30">
                 <div className="flex items-center gap-3 mb-2">
-                  <Clock className="w-6 h-6 text-yellow-400" />
-                  <h3 className="font-semibold text-white text-lg">Pending Payment Confirmations</h3>
+                  <DollarSign className="w-6 h-6 text-yellow-400" />
+                  <h3 className="font-semibold text-white text-lg">Pending Payout Requests</h3>
                 </div>
-                <p className="text-gray-400 mb-2">{pendingPaymentOrders.length} orders awaiting payment verification</p>
-                {pendingPaymentOrders.length > 0 && (
+                <p className="text-gray-400 mb-2">{pendingPayoutRequests.length} seller payout requests awaiting approval</p>
+                {pendingPayoutRequests.length > 0 && (
                   <button
-                    onClick={() => setActiveTab('orders')}
+                    onClick={() => setActiveTab('payoutRequests')}
                     className="text-[#D4AF37] hover:underline text-sm"
                   >
-                    View Pending Orders →
+                    View Pending Payouts →
                   </button>
                 )}
               </div>
@@ -255,6 +265,141 @@ const AdminDashboard = () => {
                   <li>• Pending Verifications: {verificationDocs.filter(d => d.status === 'pending').length}</li>
                 </ul>
               </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'payoutRequests' && (
+          <div>
+            <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white mb-6">
+              Payout Requests
+            </h2>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-[rgba(212,175,55,0.2)]">
+                    <th className="text-left p-3 text-gray-400 font-medium">Seller</th>
+                    <th className="text-left p-3 text-gray-400 font-medium hidden sm:table-cell">Email</th>
+                    <th className="text-left p-3 text-gray-400 font-medium">Store</th>
+                    <th className="text-left p-3 text-gray-400 font-medium">Amount</th>
+                    <th className="text-left p-3 text-gray-400 font-medium hidden md:table-cell">Request Date</th>
+                    <th className="text-left p-3 text-gray-400 font-medium">Status</th>
+                    <th className="text-left p-3 text-gray-400 font-medium text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payoutRequests.map((p) => (
+                    <tr key={p.id} className="border-b border-[rgba(212,175,55,0.1)]">
+                      <td className="p-3 text-white">{p.sellerName || 'Unknown'}</td>
+                      <td className="p-3 text-gray-400 hidden sm:table-cell">{p.sellerEmail || 'N/A'}</td>
+                      <td className="p-3 text-gray-300">{p.sellerStoreName || '—'}</td>
+                      <td className="p-3 text-[#D4AF37] font-semibold">${p.requestedAmount?.toFixed(2)}</td>
+                      <td className="p-3 text-gray-400 hidden md:table-cell text-sm">
+                        {p.requestDate
+                          ? new Date(p.requestDate).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                            })
+                          : '—'}
+                      </td>
+                      <td className="p-3">
+                        <span
+                          className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${
+                            p.status === 'approved' || p.status === 'paid'
+                              ? 'bg-green-500/20 text-green-400'
+                              : p.status === 'rejected'
+                              ? 'bg-red-500/20 text-red-400'
+                              : 'bg-yellow-500/20 text-yellow-400'
+                          }`}
+                        >
+                          {p.status}
+                        </span>
+                        {p.adminNote && p.status !== 'pending' && (
+                          <p className="text-xs text-gray-500 mt-1 max-w-xs truncate">{p.adminNote}</p>
+                        )}
+                      </td>
+                      <td className="p-3">
+                        {p.status === 'pending' ? (
+                          <div className="flex flex-col sm:flex-row flex-wrap gap-2 sm:justify-end items-stretch">
+                            <button
+                              onClick={async () => {
+                                const note = window.prompt('Enter admin note (optional):') || undefined;
+                                try {
+                                  await api.post(`/admin/payout-requests/${p.id}/status`, {
+                                    status: 'approved',
+                                    adminNote: note,
+                                  });
+                                  toast.success('Payout request approved');
+                                  fetchData();
+                                } catch (error) {
+                                  toast.error(error.response?.data?.detail || 'Failed to approve request');
+                                }
+                              }}
+                              className="px-3 py-1 rounded-md text-xs bg-green-500/20 text-green-400 hover:bg-green-500/30 transition-colors whitespace-nowrap w-full sm:w-auto text-center"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={async () => {
+                                const note = window.prompt('Enter rejection reason (required):');
+                                if (!note) {
+                                  toast.error('Rejection reason is required');
+                                  return;
+                                }
+                                try {
+                                  await api.post(`/admin/payout-requests/${p.id}/status`, {
+                                    status: 'rejected',
+                                    adminNote: note,
+                                  });
+                                  toast.success('Payout request rejected');
+                                  fetchData();
+                                } catch (error) {
+                                  toast.error(error.response?.data?.detail || 'Failed to reject request');
+                                }
+                              }}
+                              className="px-3 py-1 rounded-md text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors whitespace-nowrap w-full sm:w-auto text-center"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        ) : p.status === 'approved' ? (
+                          <div className="flex justify-end">
+                            <button
+                              onClick={async () => {
+                                if (!window.confirm('Mark this payout as paid? This confirms you have manually paid the seller.')) return;
+                                try {
+                                  await api.post(`/admin/payout-requests/${p.id}/status`, {
+                                    status: 'paid',
+                                  });
+                                  toast.success('Payout marked as paid');
+                                  fetchData();
+                                } catch (error) {
+                                  toast.error(error.response?.data?.detail || 'Failed to mark as paid');
+                                }
+                              }}
+                              className="px-3 py-1 rounded-md text-xs bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors whitespace-nowrap w-full sm:w-auto text-center"
+                            >
+                              Mark Paid
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="text-right text-xs text-gray-500">
+                            {p.adminActionTimestamp && `Processed: ${new Date(p.adminActionTimestamp).toLocaleDateString()}`}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {payoutRequests.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="p-4 text-center text-gray-500 text-sm">
+                        No payout requests yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
@@ -636,20 +781,36 @@ const AdminDashboard = () => {
                         </span>
                       </td>
                       <td className="p-3 hidden md:table-cell">
-                        <span className={`status-badge ${
-                          u.verificationStatus === 'verified' ? 'status-verified' :
-                          u.verificationStatus === 'pending' ? 'status-pending' :
-                          u.verificationStatus === 'rejected' ? 'status-rejected' :
-                          'bg-gray-500/20 text-gray-400'
-                        }`}>
-                          {u.verificationStatus}
-                        </span>
+                        {u.role === 'buyer' ? (
+                          <span className="status-badge bg-gray-500/20 text-gray-300">
+                            Not required
+                          </span>
+                        ) : (
+                          <span className={`status-badge ${
+                            u.verificationStatus === 'verified' ? 'status-verified' :
+                            u.verificationStatus === 'pending' ? 'status-pending' :
+                            u.verificationStatus === 'rejected' ? 'status-rejected' :
+                            'bg-gray-500/20 text-gray-400'
+                          }`}>
+                            {u.verificationStatus}
+                          </span>
+                        )}
                       </td>
                       <td className="p-3 hidden lg:table-cell">
                         {u.role === 'seller' ? (
-                          <span className="text-gray-300">{u.storeName || '—'}</span>
+                          <span
+                            className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${
+                              u.storeName
+                                ? 'bg-[rgba(212,175,55,0.15)] text-[#D4AF37]'
+                                : 'bg-gray-500/20 text-gray-300'
+                            }`}
+                          >
+                            {u.storeName || 'No store set'}
+                          </span>
                         ) : (
-                          <span className="text-gray-500">—</span>
+                          <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-500/20 text-gray-400">
+                            —
+                          </span>
                         )}
                       </td>
                       <td className="p-3">
