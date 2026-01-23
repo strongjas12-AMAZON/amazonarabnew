@@ -95,6 +95,7 @@ class UpdateProductRequest(BaseModel):
 class CreateOrderRequest(BaseModel):
     items: List[dict]
     totalAmount: float
+    useWallet: Optional[bool] = False
 
 class UpdateOrderStatusRequest(BaseModel):
     status: str
@@ -118,11 +119,26 @@ class StoreNameChangeAdminAction(BaseModel):
 
 class CreatePayoutRequest(BaseModel):
     requestedAmount: float
+    payoutWallet: Optional[str] = None
 
 
 class UpdatePayoutStatusRequest(BaseModel):
     status: str
     adminNote: Optional[str] = None
+
+class WalletRechargeRequest(BaseModel):
+    amount: float
+    paymentMethod: Optional[str] = 'USDT_TRON'
+    paymentWallet: Optional[str] = None
+
+class UpdateRechargeStatusRequest(BaseModel):
+    status: str
+    adminNote: Optional[str] = None
+
+class CreateOrderWithWalletRequest(BaseModel):
+    items: List[dict]
+    totalAmount: float
+    useWallet: bool = False
 
 # Helper functions
 def get_signed_document_url(file_path: str, expires_in: int = 3600) -> Optional[str]:
@@ -213,7 +229,7 @@ def format_order_response(order_data: dict) -> dict:
             'email': order_data['users'].get('email')
         }
     if 'order_items' in order_data:
-        result['order_items'] = []
+        result['orderItems'] = []
         for item in order_data['order_items']:
             formatted_item = {
                 'id': item.get('id'),
@@ -223,8 +239,8 @@ def format_order_response(order_data: dict) -> dict:
                 'price': item.get('price')
             }
             if 'products' in item and item['products']:
-                formatted_item['products'] = format_product_response(item['products'])
-            result['order_items'].append(formatted_item)
+                formatted_item['product'] = format_product_response(item['products'])
+            result['orderItems'].append(formatted_item)
     return result
 
 
@@ -270,6 +286,7 @@ def format_payout_request_response(payout_data: dict) -> dict:
         "sellerId": payout_data.get("sellerId") or payout_data.get("seller_id"),
         "requestedAmount": float(payout_data.get("requestedAmount") or payout_data.get("requested_amount", 0)),
         "status": payout_data.get("status"),
+        "payoutWallet": payout_data.get("payoutWallet") or payout_data.get("payout_wallet"),
         "requestDate": payout_data.get("requestDate") or payout_data.get("request_date"),
         "adminId": payout_data.get("adminId") or payout_data.get("admin_id"),
         "adminActionTimestamp": payout_data.get("adminActionTimestamp") or payout_data.get("admin_action_timestamp"),
@@ -277,6 +294,106 @@ def format_payout_request_response(payout_data: dict) -> dict:
         "createdAt": payout_data.get("createdAt") or payout_data.get("created_at"),
         "updatedAt": payout_data.get("updatedAt") or payout_data.get("updated_at"),
     }
+
+
+def format_wallet_transaction_response(transaction_data: dict) -> dict:
+    """Convert wallet_transactions row to camelCase for frontend"""
+    return {
+        "id": transaction_data.get("id"),
+        "userId": transaction_data.get("userId") or transaction_data.get("user_id"),
+        "userRole": transaction_data.get("userRole") or transaction_data.get("user_role"),
+        "type": transaction_data.get("type"),
+        "amount": float(transaction_data.get("amount", 0)),
+        "previousBalance": float(transaction_data.get("previousBalance") or transaction_data.get("previous_balance", 0)),
+        "newBalance": float(transaction_data.get("newBalance") or transaction_data.get("new_balance", 0)),
+        "orderId": transaction_data.get("orderId") or transaction_data.get("order_id"),
+        "rechargeRequestId": transaction_data.get("rechargeRequestId") or transaction_data.get("recharge_request_id"),
+        "payoutRequestId": transaction_data.get("payoutRequestId") or transaction_data.get("payout_request_id"),
+        "description": transaction_data.get("description"),
+        "createdAt": transaction_data.get("createdAt") or transaction_data.get("created_at"),
+    }
+
+
+def format_wallet_recharge_request_response(recharge_data: dict) -> dict:
+    """Convert wallet_recharge_requests row to camelCase for frontend"""
+    return {
+        "id": recharge_data.get("id"),
+        "buyerId": recharge_data.get("buyerId") or recharge_data.get("buyer_id"),
+        "amount": float(recharge_data.get("amount", 0)),
+        "status": recharge_data.get("status"),
+        "paymentMethod": recharge_data.get("paymentMethod") or recharge_data.get("payment_method"),
+        "paymentWallet": recharge_data.get("paymentWallet") or recharge_data.get("payment_wallet"),
+        "adminId": recharge_data.get("adminId") or recharge_data.get("admin_id"),
+        "adminActionTimestamp": recharge_data.get("adminActionTimestamp") or recharge_data.get("admin_action_timestamp"),
+        "adminNote": recharge_data.get("adminNote") or recharge_data.get("admin_note"),
+        "createdAt": recharge_data.get("createdAt") or recharge_data.get("created_at"),
+        "updatedAt": recharge_data.get("updatedAt") or recharge_data.get("updated_at"),
+    }
+
+
+async def get_or_create_buyer_wallet(user_id: str) -> dict:
+    """Get or create buyer wallet"""
+    wallet_result = supabase_admin.table('buyer_wallets').select('*').eq('userId', user_id).execute()
+    if wallet_result.data:
+        return wallet_result.data[0]
+    # Create new wallet
+    wallet_data = {
+        'id': str(uuid.uuid4()),
+        'userId': user_id,
+        'balance': 0.00,
+        'createdAt': datetime.now(timezone.utc).isoformat(),
+        'updatedAt': datetime.now(timezone.utc).isoformat()
+    }
+    result = supabase_admin.table('buyer_wallets').insert(wallet_data).execute()
+    return result.data[0] if result.data else wallet_data
+
+
+async def get_or_create_seller_wallet(user_id: str) -> dict:
+    """Get or create seller wallet"""
+    wallet_result = supabase_admin.table('seller_wallets').select('*').eq('userId', user_id).execute()
+    if wallet_result.data:
+        return wallet_result.data[0]
+    # Create new wallet
+    wallet_data = {
+        'id': str(uuid.uuid4()),
+        'userId': user_id,
+        'balance': 0.00,
+        'totalEarnings': 0.00,
+        'createdAt': datetime.now(timezone.utc).isoformat(),
+        'updatedAt': datetime.now(timezone.utc).isoformat()
+    }
+    result = supabase_admin.table('seller_wallets').insert(wallet_data).execute()
+    return result.data[0] if result.data else wallet_data
+
+
+async def create_wallet_transaction(
+    user_id: str,
+    user_role: str,
+    transaction_type: str,
+    amount: float,
+    previous_balance: float,
+    new_balance: float,
+    order_id: Optional[str] = None,
+    recharge_request_id: Optional[str] = None,
+    payout_request_id: Optional[str] = None,
+    description: Optional[str] = None
+):
+    """Create a wallet transaction record"""
+    transaction_data = {
+        'id': str(uuid.uuid4()),
+        'userId': user_id,
+        'userRole': user_role,
+        'type': transaction_type,
+        'amount': amount,
+        'previousBalance': previous_balance,
+        'newBalance': new_balance,
+        'orderId': order_id,
+        'rechargeRequestId': recharge_request_id,
+        'payoutRequestId': payout_request_id,
+        'description': description,
+        'createdAt': datetime.now(timezone.utc).isoformat()
+    }
+    supabase_admin.table('wallet_transactions').insert(transaction_data).execute()
 
 
 # Email notification functions
@@ -1373,14 +1490,48 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
         raise HTTPException(status_code=403, detail="Your account is restricted. You cannot place orders.")
     
     try:
+        payment_method = 'WALLET' if req.useWallet else 'USDT_TRON'
+        payment_status = 'paid' if req.useWallet else 'pending_payment'
+        confirmed_by_admin = req.useWallet  # Auto-confirm wallet payments
+        
+        # If using wallet, check balance and deduct
+        if req.useWallet:
+            wallet = await get_or_create_buyer_wallet(current_user['id'])
+            current_balance = float(wallet.get('balance', 0))
+            
+            if current_balance < req.totalAmount:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Insufficient wallet balance. Available: ${current_balance:.2f}, Required: ${req.totalAmount:.2f}"
+                )
+            
+            # Deduct from wallet
+            new_balance = current_balance - req.totalAmount
+            supabase_admin.table('buyer_wallets').update({
+                'balance': new_balance,
+                'updatedAt': datetime.now(timezone.utc).isoformat()
+            }).eq('userId', current_user['id']).execute()
+            
+            # Create transaction record
+            await create_wallet_transaction(
+                user_id=current_user['id'],
+                user_role='buyer',
+                transaction_type='purchase',
+                amount=-req.totalAmount,
+                previous_balance=current_balance,
+                new_balance=new_balance,
+                description=f"Order payment: ${req.totalAmount:.2f}"
+            )
+        
         order_data = {
             'id': str(uuid.uuid4()),
             'buyer_id': current_user['id'],
             'total_amount': req.totalAmount,
-            'payment_method': 'USDT_TRON',
-            'payment_wallet': ADMIN_CRYPTO_WALLET,
-            'payment_status': 'pending_payment',
-            'confirmed_by_admin': False,
+            'payment_method': payment_method,
+            'payment_wallet': 'WALLET_BALANCE' if req.useWallet else ADMIN_CRYPTO_WALLET,
+            'payment_status': payment_status,
+            'confirmed_by_admin': confirmed_by_admin,
+            'confirmed_at': datetime.now(timezone.utc).isoformat() if confirmed_by_admin else None,
             'created_at': datetime.now(timezone.utc).isoformat()
         }
         
@@ -1399,11 +1550,23 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
             supabase_admin.table('order_items').insert(item_data).execute()
             order_items_list.append(item_data)
         
+        # If wallet payment, update transaction with order_id
+        if req.useWallet:
+            # Update the transaction with order_id
+            transactions = supabase_admin.table('wallet_transactions').select('id').eq('userId', current_user['id']).order('createdAt', desc=True).limit(1).execute()
+            if transactions.data:
+                supabase_admin.table('wallet_transactions').update({
+                    'orderId': order_id
+                }).eq('id', transactions.data[0]['id']).execute()
+        
         # Send email notifications (non-blocking)
         asyncio.create_task(send_order_notifications(order_data, order_items_list, "order_placed"))
         
         return {"success": True, "order": format_order_response(order_result.data[0])}
+    except HTTPException:
+        raise
     except Exception as e:
+        logging.error(f"Create order error: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
 
@@ -1516,6 +1679,7 @@ async def create_payout_request(req: CreatePayoutRequest, current_user: dict = D
             "sellerId": current_user["id"],
             "requestedAmount": req.requestedAmount,
             "status": "pending",
+            "payoutWallet": req.payoutWallet,
             "requestDate": datetime.now(timezone.utc).isoformat(),
             "createdAt": datetime.now(timezone.utc).isoformat(),
             "updatedAt": datetime.now(timezone.utc).isoformat(),
@@ -1554,9 +1718,117 @@ async def get_seller_payout_requests(current_user: dict = Depends(get_current_us
         logging.error(f"Get seller payout requests error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# Wallet Routes - Buyer
+@api_router.get("/wallet/balance")
+async def get_wallet_balance(current_user: dict = Depends(get_current_user)):
+    """Get buyer wallet balance"""
+    if current_user['role'] != 'buyer':
+        raise HTTPException(status_code=403, detail="Only buyers can view wallet balance")
+    
+    try:
+        wallet = await get_or_create_buyer_wallet(current_user['id'])
+        return {
+            "success": True,
+            "balance": float(wallet.get('balance', 0)),
+            "wallet": {
+                "id": wallet.get('id'),
+                "userId": wallet.get('userId') or wallet.get('user_id'),
+                "balance": float(wallet.get('balance', 0)),
+                "createdAt": wallet.get('createdAt') or wallet.get('created_at'),
+                "updatedAt": wallet.get('updatedAt') or wallet.get('updated_at')
+            }
+        }
+    except Exception as e:
+        logging.error(f"Get wallet balance error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/wallet/recharge")
+async def request_wallet_recharge(req: WalletRechargeRequest, current_user: dict = Depends(get_current_user)):
+    """Request wallet recharge (requires admin approval)"""
+    if current_user['role'] != 'buyer':
+        raise HTTPException(status_code=403, detail="Only buyers can recharge wallet")
+    
+    if req.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than zero")
+    
+    try:
+        recharge_data = {
+            'id': str(uuid.uuid4()),
+            'buyerId': current_user['id'],
+            'amount': req.amount,
+            'status': 'pending',
+            'paymentMethod': req.paymentMethod or 'USDT_TRON',
+            'paymentWallet': req.paymentWallet or ADMIN_CRYPTO_WALLET,
+            'createdAt': datetime.now(timezone.utc).isoformat(),
+            'updatedAt': datetime.now(timezone.utc).isoformat()
+        }
+        
+        result = supabase_admin.table('wallet_recharge_requests').insert(recharge_data).execute()
+        
+        return {
+            "success": True,
+            "message": "Recharge request submitted. Awaiting admin approval.",
+            "rechargeRequest": format_wallet_recharge_request_response(result.data[0] if result.data else recharge_data)
+        }
+    except Exception as e:
+        logging.error(f"Request wallet recharge error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/wallet/transactions")
+async def get_wallet_transactions(current_user: dict = Depends(get_current_user)):
+    """Get wallet transaction history"""
+    if current_user['role'] not in ['buyer', 'seller']:
+        raise HTTPException(status_code=403, detail="Only buyers and sellers can view wallet transactions")
+    
+    try:
+        result = (
+            supabase_admin.table('wallet_transactions')
+            .select('*')
+            .eq('userId', current_user['id'])
+            .order('createdAt', desc=True)
+            .limit(100)
+            .execute()
+        )
+        
+        return {
+            "success": True,
+            "transactions": [format_wallet_transaction_response(t) for t in (result.data or [])]
+        }
+    except Exception as e:
+        logging.error(f"Get wallet transactions error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/wallet/recharge-requests")
+async def get_wallet_recharge_requests(current_user: dict = Depends(get_current_user)):
+    """Get buyer's recharge request history"""
+    if current_user['role'] != 'buyer':
+        raise HTTPException(status_code=403, detail="Only buyers can view recharge requests")
+    
+    try:
+        result = (
+            supabase_admin.table('wallet_recharge_requests')
+            .select('*')
+            .eq('buyerId', current_user['id'])
+            .order('createdAt', desc=True)
+            .execute()
+        )
+        
+        return {
+            "success": True,
+            "rechargeRequests": [format_wallet_recharge_request_response(r) for r in (result.data or [])]
+        }
+    except Exception as e:
+        logging.error(f"Get recharge requests error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @api_router.put("/orders/{order_id}/status")
 async def update_order_status(order_id: str, request: UpdateOrderStatusRequest, current_user: dict = Depends(get_current_user)):
-    """Update order status (admin only)"""
+    """Update order status (admin only). When order is completed, update seller wallets."""
     if current_user['role'] != 'admin':
         raise HTTPException(status_code=403, detail="Only admins can update order status")
     
@@ -1570,6 +1842,48 @@ async def update_order_status(order_id: str, request: UpdateOrderStatusRequest, 
             update_data['confirmed_at'] = datetime.now(timezone.utc).isoformat()
         
         result = supabase_admin.table('orders').update(update_data).eq('id', order_id).execute()
+        
+        # When order is completed, update seller wallets with earnings
+        if result.data and request.status == 'completed':
+            order_data = result.data[0]
+            # Fetch order items with products
+            order_items_result = supabase_admin.table('order_items').select('*, products(*)').eq('order_id', order_id).execute()
+            
+            # Group earnings by seller
+            seller_earnings = {}
+            for item in (order_items_result.data or []):
+                product = item.get('products', {})
+                seller_id = product.get('seller_id')
+                if seller_id:
+                    earnings = float(item.get('price', 0)) * int(item.get('quantity', 0))
+                    seller_earnings[seller_id] = seller_earnings.get(seller_id, 0) + earnings
+            
+            # Update each seller's wallet
+            for seller_id, earnings_amount in seller_earnings.items():
+                seller_wallet = await get_or_create_seller_wallet(seller_id)
+                current_balance = float(seller_wallet.get('balance', 0))
+                current_total_earnings = float(seller_wallet.get('totalEarnings') or seller_wallet.get('total_earnings', 0))
+                
+                new_balance = current_balance + earnings_amount
+                new_total_earnings = current_total_earnings + earnings_amount
+                
+                supabase_admin.table('seller_wallets').update({
+                    'balance': new_balance,
+                    'totalEarnings': new_total_earnings,
+                    'updatedAt': datetime.now(timezone.utc).isoformat()
+                }).eq('userId', seller_id).execute()
+                
+                # Create transaction record
+                await create_wallet_transaction(
+                    user_id=seller_id,
+                    user_role='seller',
+                    transaction_type='earning',
+                    amount=earnings_amount,
+                    previous_balance=current_balance,
+                    new_balance=new_balance,
+                    order_id=order_id,
+                    description=f"Earnings from order: ${earnings_amount:.2f}"
+                )
         
         # Send email notifications based on status change
         if result.data:
@@ -1927,6 +2241,174 @@ async def admin_update_payout_status(
     except Exception as e:
         logging.error(f"Admin update payout status error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# Admin Wallet Management Routes
+@api_router.get("/admin/wallets")
+async def admin_get_all_wallets(current_user: dict = Depends(get_current_user)):
+    """Admin can view all buyer and seller wallets"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        # Get all buyer wallets
+        buyer_wallets_result = supabase_admin.table('buyer_wallets').select('*, users:userId(name, email)').execute()
+        buyer_wallets = []
+        for wallet in (buyer_wallets_result.data or []):
+            user = wallet.get('users') or {}
+            buyer_wallets.append({
+                'id': wallet.get('id'),
+                'userId': wallet.get('userId') or wallet.get('user_id'),
+                'userName': user.get('name'),
+                'userEmail': user.get('email'),
+                'balance': float(wallet.get('balance', 0)),
+                'role': 'buyer',
+                'createdAt': wallet.get('createdAt') or wallet.get('created_at'),
+                'updatedAt': wallet.get('updatedAt') or wallet.get('updated_at')
+            })
+        
+        # Get all seller wallets
+        seller_wallets_result = supabase_admin.table('seller_wallets').select('*, users:userId(name, email, store_name)').execute()
+        seller_wallets = []
+        for wallet in (seller_wallets_result.data or []):
+            user = wallet.get('users') or {}
+            seller_wallets.append({
+                'id': wallet.get('id'),
+                'userId': wallet.get('userId') or wallet.get('user_id'),
+                'userName': user.get('name'),
+                'userEmail': user.get('email'),
+                'storeName': user.get('store_name'),
+                'balance': float(wallet.get('balance', 0)),
+                'totalEarnings': float(wallet.get('totalEarnings') or wallet.get('total_earnings', 0)),
+                'role': 'seller',
+                'createdAt': wallet.get('createdAt') or wallet.get('created_at'),
+                'updatedAt': wallet.get('updatedAt') or wallet.get('updated_at')
+            })
+        
+        return {
+            "success": True,
+            "buyerWallets": buyer_wallets,
+            "sellerWallets": seller_wallets
+        }
+    except Exception as e:
+        logging.error(f"Admin get wallets error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/admin/wallet-recharge-requests")
+async def admin_get_recharge_requests(current_user: dict = Depends(get_current_user)):
+    """Admin can view all wallet recharge requests"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        result = (
+            supabase_admin.table('wallet_recharge_requests')
+            .select('*, users:buyerId(name, email)')
+            .order('createdAt', desc=True)
+            .execute()
+        )
+        
+        requests = []
+        for r in (result.data or []):
+            buyer = r.get('users') or {}
+            payload = format_wallet_recharge_request_response(r)
+            payload['buyerName'] = buyer.get('name')
+            payload['buyerEmail'] = buyer.get('email')
+            requests.append(payload)
+        
+        return {"success": True, "requests": requests}
+    except Exception as e:
+        logging.error(f"Admin get recharge requests error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/admin/wallet-recharge-requests/{request_id}/status")
+async def admin_update_recharge_status(
+    request_id: str,
+    req: UpdateRechargeStatusRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Admin approves or rejects wallet recharge request"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    if req.status not in ('approved', 'rejected'):
+        raise HTTPException(status_code=400, detail="Invalid status. Must be 'approved' or 'rejected'")
+    
+    try:
+        # Get the recharge request
+        existing = (
+            supabase_admin.table('wallet_recharge_requests')
+            .select('*')
+            .eq('id', request_id)
+            .single()
+            .execute()
+        )
+        
+        recharge = existing.data
+        if not recharge:
+            raise HTTPException(status_code=404, detail="Recharge request not found")
+        
+        if recharge.get('status') != 'pending':
+            raise HTTPException(status_code=400, detail="Only pending requests can be updated")
+        
+        update_data = {
+            'status': req.status,
+            'adminId': current_user['id'],
+            'adminActionTimestamp': datetime.now(timezone.utc).isoformat(),
+            'updatedAt': datetime.now(timezone.utc).isoformat()
+        }
+        
+        if req.adminNote is not None:
+            update_data['adminNote'] = req.adminNote
+        
+        # Update the request
+        result = (
+            supabase_admin.table('wallet_recharge_requests')
+            .update(update_data)
+            .eq('id', request_id)
+            .execute()
+        )
+        
+        updated = result.data[0] if result.data else {**recharge, **update_data}
+        
+        # If approved, add balance to buyer wallet
+        if req.status == 'approved':
+            buyer_id = recharge.get('buyerId') or recharge.get('buyer_id')
+            amount = float(recharge.get('amount', 0))
+            
+            wallet = await get_or_create_buyer_wallet(buyer_id)
+            current_balance = float(wallet.get('balance', 0))
+            new_balance = current_balance + amount
+            
+            # Update wallet balance
+            supabase_admin.table('buyer_wallets').update({
+                'balance': new_balance,
+                'updatedAt': datetime.now(timezone.utc).isoformat()
+            }).eq('userId', buyer_id).execute()
+            
+            # Create transaction record
+            await create_wallet_transaction(
+                user_id=buyer_id,
+                user_role='buyer',
+                transaction_type='recharge',
+                amount=amount,
+                previous_balance=current_balance,
+                new_balance=new_balance,
+                recharge_request_id=request_id,
+                description=f"Wallet recharge: ${amount:.2f}"
+            )
+        
+        return {
+            "success": True,
+            "rechargeRequest": format_wallet_recharge_request_response(updated)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Admin update recharge status error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @api_router.get("/admin/store-name-requests")
 async def get_store_name_requests(current_user: dict = Depends(get_current_user)):

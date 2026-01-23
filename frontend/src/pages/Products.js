@@ -59,9 +59,56 @@ const Products = () => {
     toast.success(`${product.title} added to cart`);
   };
 
+  // Helper function to check if text matches search query (fuzzy matching for store names)
+  const matchesSearch = (product, query) => {
+    const lowerQuery = query.toLowerCase();
+    
+    // Exact substring match for product title and description
+    if (product.title.toLowerCase().includes(lowerQuery) ||
+        product.description?.toLowerCase().includes(lowerQuery)) {
+      return true;
+    }
+    
+    // For store name and seller name, use fuzzy matching if query length >= 3
+    const storeName = product.users?.storeName?.toLowerCase() || '';
+    const sellerName = product.users?.name?.toLowerCase() || '';
+    
+    if (lowerQuery.length >= 3) {
+      // Check if all characters in query appear in order in store/seller name
+      const fuzzyMatch = (text) => {
+        let queryIndex = 0;
+        for (let i = 0; i < text.length && queryIndex < lowerQuery.length; i++) {
+          if (text[i] === lowerQuery[queryIndex]) {
+            queryIndex++;
+          }
+        }
+        return queryIndex === lowerQuery.length;
+      };
+      
+      // Also check for partial word matches (words that start with the query)
+      const wordMatch = (text) => {
+        return text.split(/\s+/).some(word => word.startsWith(lowerQuery));
+      };
+      
+      if (storeName && (storeName.includes(lowerQuery) || fuzzyMatch(storeName) || wordMatch(storeName))) {
+        return true;
+      }
+      
+      if (sellerName && (sellerName.includes(lowerQuery) || fuzzyMatch(sellerName) || wordMatch(sellerName))) {
+        return true;
+      }
+    } else {
+      // For queries less than 3 characters, use exact substring match
+      if (storeName.includes(lowerQuery) || sellerName.includes(lowerQuery)) {
+        return true;
+      }
+    }
+    
+    return false;
+  };
+
   const filteredProducts = products.filter((product) =>
-    product.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    product.description?.toLowerCase().includes(searchQuery.toLowerCase())
+    matchesSearch(product, searchQuery)
   );
 
   return (
@@ -80,7 +127,7 @@ const Products = () => {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
           <input
             type="text"
-            placeholder="Search products..."
+            placeholder="Search products by name, description, or store name..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="luxury-input pl-12"
