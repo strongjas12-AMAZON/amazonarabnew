@@ -90,20 +90,20 @@ const Orders = () => {
                 </div>
               </div>
 
-              {order.order_items && order.order_items.length > 0 && (
+              {order.orderItems && order.orderItems.length > 0 && (
                 <div className="space-y-3 border-t border-[rgba(212,175,55,0.1)] pt-4">
-                  {order.order_items.map((item, idx) => (
+                  {order.orderItems.map((item, idx) => (
                     <div key={idx} className="flex justify-between items-center p-3 bg-[rgba(30,30,30,0.4)] rounded-lg">
                       <div className="flex items-center gap-4">
-                        {item.products?.images?.[0] && (
+                        {item.product?.images?.[0] && (
                           <img
-                            src={item.products.images[0]}
-                            alt={item.products.title}
+                            src={item.product.images[0]}
+                            alt={item.product.title}
                             className="w-16 h-16 object-cover rounded-lg"
                           />
                         )}
                         <div>
-                          <p className="text-white font-medium">{item.products?.title || 'Product'}</p>
+                          <p className="text-white font-medium">{item.product?.title || 'Product'}</p>
                           <p className="text-gray-400 text-sm">Quantity: {item.quantity}</p>
                           <p className="text-gray-500 text-xs">${item.price.toFixed(2)} each</p>
                         </div>

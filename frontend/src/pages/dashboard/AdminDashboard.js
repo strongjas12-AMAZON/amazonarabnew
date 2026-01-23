@@ -15,6 +15,7 @@ const AdminDashboard = () => {
   const [inviteCodes, setInviteCodes] = useState([]);
   const [storeNameRequests, setStoreNameRequests] = useState([]);
   const [payoutRequests, setPayoutRequests] = useState([]);
+  const [rechargeRequests, setRechargeRequests] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const USERS_PER_PAGE = 10;
@@ -41,7 +42,8 @@ const AdminDashboard = () => {
       api.get('/verification/documents').catch(err => ({ error: err })),
       api.get('/admin/invite-codes').catch(err => ({ error: err })),
       api.get('/admin/store-name-requests').catch(err => ({ error: err })),
-      api.get('/admin/payout-requests').catch(err => ({ error: err }))
+      api.get('/admin/payout-requests').catch(err => ({ error: err })),
+      api.get('/admin/wallet-recharge-requests').catch(err => ({ error: err }))
     ]);
 
     // Handle each result independently
@@ -94,6 +96,13 @@ const AdminDashboard = () => {
         setPayoutRequests(results[6].value.data?.requests || []);
       } else {
         setPayoutRequests([]);
+      }
+
+      // Recharge requests
+      if (results[7].status === 'fulfilled' && !results[7].value.error) {
+        setRechargeRequests(results[7].value.data?.requests || []);
+      } else {
+        setRechargeRequests([]);
       }
     } catch (error) {
       // Silently handle errors - individual requests already handled above
@@ -218,7 +227,7 @@ const AdminDashboard = () => {
 
       {/* Tabs */}
       <div className="flex gap-2 mb-8 flex-wrap">
-        {['overview', 'orders', 'products', 'users', 'verifications', 'inviteCodes', 'bannedUsers', 'storeRequests', 'payoutRequests'].map((tab) => (
+        {['overview', 'orders', 'products', 'users', 'verifications', 'inviteCodes', 'bannedUsers', 'storeRequests', 'payoutRequests', 'wallets'].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -282,6 +291,7 @@ const AdminDashboard = () => {
                     <th className="text-left p-3 text-gray-400 font-medium hidden sm:table-cell">Email</th>
                     <th className="text-left p-3 text-gray-400 font-medium">Store</th>
                     <th className="text-left p-3 text-gray-400 font-medium">Amount</th>
+                    <th className="text-left p-3 text-gray-400 font-medium hidden lg:table-cell">Wallet Address</th>
                     <th className="text-left p-3 text-gray-400 font-medium hidden md:table-cell">Request Date</th>
                     <th className="text-left p-3 text-gray-400 font-medium">Status</th>
                     <th className="text-left p-3 text-gray-400 font-medium text-right">Actions</th>
@@ -294,6 +304,29 @@ const AdminDashboard = () => {
                       <td className="p-3 text-gray-400 hidden sm:table-cell">{p.sellerEmail || 'N/A'}</td>
                       <td className="p-3 text-gray-300">{p.sellerStoreName || '—'}</td>
                       <td className="p-3 text-[#D4AF37] font-semibold">${p.requestedAmount?.toFixed(2)}</td>
+                      <td className="p-3 hidden lg:table-cell">
+                        {p.payoutWallet ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-300 font-mono text-xs truncate max-w-[150px]" title={p.payoutWallet}>
+                              {p.payoutWallet}
+                            </span>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(p.payoutWallet);
+                                toast.success('Wallet address copied!');
+                              }}
+                              className="text-[#D4AF37] hover:text-[#f0c860] transition-colors"
+                              title="Copy wallet address"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-gray-500 text-xs">Not provided</span>
+                        )}
+                      </td>
                       <td className="p-3 text-gray-400 hidden md:table-cell text-sm">
                         {p.requestDate
                           ? new Date(p.requestDate).toLocaleDateString('en-US', {
@@ -561,12 +594,12 @@ const AdminDashboard = () => {
                         </div>
 
                         {/* Order Items */}
-                        {order.order_items && order.order_items.length > 0 && (
+                        {order.orderItems && order.orderItems.length > 0 && (
                           <div className="mb-4 p-3 bg-[rgba(20,20,20,0.4)] rounded-lg">
                             <p className="text-sm text-gray-400 mb-2">Order Items:</p>
-                            {order.order_items.map((item, idx) => (
+                            {order.orderItems.map((item, idx) => (
                               <div key={idx} className="text-sm text-gray-300">
-                                • {item.products?.title || 'Product'} x {item.quantity} - ${(item.price * item.quantity).toFixed(2)}
+                                • {item.product?.title || 'Product'} x {item.quantity} - ${(item.price * item.quantity).toFixed(2)}
                               </div>
                             ))}
                           </div>
@@ -1086,6 +1119,113 @@ const AdminDashboard = () => {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'wallets' && (
+          <div>
+            <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white mb-6">Wallet Management</h2>
+            
+            {/* Wallet Recharge Requests */}
+            <div className="mb-8">
+              <h3 className="font-['Playfair_Display'] text-xl font-bold text-white mb-4">Recharge Requests</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-[rgba(212,175,55,0.2)]">
+                      <th className="text-left p-3 text-gray-400 font-medium">Buyer</th>
+                      <th className="text-left p-3 text-gray-400 font-medium hidden sm:table-cell">Email</th>
+                      <th className="text-left p-3 text-gray-400 font-medium">Amount</th>
+                      <th className="text-left p-3 text-gray-400 font-medium hidden md:table-cell">Request Date</th>
+                      <th className="text-left p-3 text-gray-400 font-medium">Status</th>
+                      <th className="text-left p-3 text-gray-400 font-medium text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rechargeRequests.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="p-4 text-center text-gray-500 text-sm">
+                          No recharge requests yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      rechargeRequests.map((req) => (
+                        <tr key={req.id} className="border-b border-[rgba(212,175,55,0.1)]">
+                          <td className="p-3 text-white">{req.buyerName || 'Unknown'}</td>
+                          <td className="p-3 text-gray-400 hidden sm:table-cell">{req.buyerEmail || 'N/A'}</td>
+                          <td className="p-3 text-[#D4AF37] font-semibold">${req.amount?.toFixed(2)}</td>
+                          <td className="p-3 text-gray-400 hidden md:table-cell text-sm">
+                            {req.createdAt ? new Date(req.createdAt).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric'
+                            }) : '—'}
+                          </td>
+                          <td className="p-3">
+                            <span className={`status-badge ${
+                              req.status === 'approved' ? 'status-verified' :
+                              req.status === 'rejected' ? 'status-rejected' :
+                              'status-pending'
+                            }`}>
+                              {req.status}
+                            </span>
+                            {req.adminNote && req.status !== 'pending' && (
+                              <p className="text-xs text-gray-500 mt-1 max-w-xs truncate">{req.adminNote}</p>
+                            )}
+                          </td>
+                          <td className="p-3">
+                            {req.status === 'pending' ? (
+                              <div className="flex gap-2 justify-end">
+                                <button
+                                  onClick={async () => {
+                                    const note = window.prompt('Enter admin note (optional):') || undefined;
+                                    try {
+                                      await api.post(`/admin/wallet-recharge-requests/${req.id}/status`, {
+                                        status: 'approved',
+                                        adminNote: note
+                                      });
+                                      toast.success('Recharge request approved');
+                                      fetchData();
+                                    } catch (error) {
+                                      toast.error(error.response?.data?.detail || 'Failed to approve');
+                                    }
+                                  }}
+                                  className="px-3 py-1 rounded-md text-xs bg-green-500/20 text-green-400 hover:bg-green-500/30"
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    const note = window.prompt('Enter rejection reason (optional):') || undefined;
+                                    try {
+                                      await api.post(`/admin/wallet-recharge-requests/${req.id}/status`, {
+                                        status: 'rejected',
+                                        adminNote: note
+                                      });
+                                      toast.success('Recharge request rejected');
+                                      fetchData();
+                                    } catch (error) {
+                                      toast.error(error.response?.data?.detail || 'Failed to reject');
+                                    }
+                                  }}
+                                  className="px-3 py-1 rounded-md text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-right text-xs text-gray-500">
+                                {req.adminActionTimestamp && `Processed: ${new Date(req.adminActionTimestamp).toLocaleDateString()}`}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}

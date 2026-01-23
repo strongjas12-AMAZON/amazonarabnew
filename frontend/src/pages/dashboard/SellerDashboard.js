@@ -22,10 +22,13 @@ const SellerDashboard = () => {
     merchantInviteCode: '',
     documentType: 'business_document'
   });
+
+  console.log("orders",orders);
   const [storeRequest, setStoreRequest] = useState(null);
   const [showStoreNameModal, setShowStoreNameModal] = useState(false);
   const [newStoreName, setNewStoreName] = useState('');
   const [payoutAmount, setPayoutAmount] = useState('');
+  const [payoutWallet, setPayoutWallet] = useState('');
   const [payoutSubmitting, setPayoutSubmitting] = useState(false);
 
   useEffect(() => {
@@ -766,7 +769,7 @@ const SellerDashboard = () => {
                   Payouts are processed manually by admin. You can request a payout up to your available balance.
                 </p>
                 <form
-                  className="flex flex-col sm:flex-row gap-3 items-start sm:items-end"
+                  className="space-y-4"
                   onSubmit={async (e) => {
                     e.preventDefault();
                     if (!earnings) return;
@@ -779,13 +782,19 @@ const SellerDashboard = () => {
                       toast.error('Amount exceeds available balance');
                       return;
                     }
+                    if (!payoutWallet || payoutWallet.trim() === '') {
+                      toast.error('Please enter your wallet address');
+                      return;
+                    }
                     try {
                       setPayoutSubmitting(true);
                       await api.post('/seller/payout-requests', {
                         requestedAmount: amount,
+                        payoutWallet: payoutWallet.trim(),
                       });
                       toast.success('Payout request submitted');
                       setPayoutAmount('');
+                      setPayoutWallet('');
                       await fetchEarnings();
                     } catch (error) {
                       toast.error(error.response?.data?.detail || 'Failed to submit payout request');
@@ -794,19 +803,35 @@ const SellerDashboard = () => {
                     }
                   }}
                 >
-                  <div className="flex-1 w-full">
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Amount to withdraw (USD)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={payoutAmount}
-                      onChange={(e) => setPayoutAmount(e.target.value)}
-                      className="luxury-input w-full"
-                      placeholder="Enter amount"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Amount to withdraw (USD)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={payoutAmount}
+                        onChange={(e) => setPayoutAmount(e.target.value)}
+                        className="luxury-input w-full"
+                        placeholder="Enter amount"
+                        required
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Your Wallet Address (TRC20)
+                      </label>
+                      <input
+                        type="text"
+                        value={payoutWallet}
+                        onChange={(e) => setPayoutWallet(e.target.value)}
+                        className="luxury-input w-full font-mono text-sm"
+                        placeholder="Enter your TRC20 wallet address"
+                        required
+                      />
+                    </div>
                   </div>
                   <button
                     type="submit"
