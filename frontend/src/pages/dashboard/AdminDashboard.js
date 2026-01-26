@@ -945,178 +945,6 @@ const AdminDashboard = () => {
         </div>
       )}
 
-        {activeTab === 'users' && (
-          <div>
-            <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white mb-6">
-              All Users
-            </h2>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-[rgba(212,175,55,0.2)]">
-                    <th className="text-left p-3 text-gray-400 font-medium">Name</th>
-                    <th className="text-left p-3 text-gray-400 font-medium">Email</th>
-                    <th className="text-left p-3 text-gray-400 font-medium hidden sm:table-cell">Role</th>
-                    <th className="text-left p-3 text-gray-400 font-medium hidden md:table-cell">Verification</th>
-                    <th className="text-left p-3 text-gray-400 font-medium hidden lg:table-cell">Store</th>
-                    <th className="text-left p-3 text-gray-400 font-medium">status</th>
-                    <th className="text-left p-3 text-gray-400 font-medium text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((u) => (
-                    <tr key={u.id} className="border-b border-[rgba(212,175,55,0.1)]">
-                      <td className="p-3 text-white">{u.name}</td>
-                      <td className="p-3 text-gray-400">{u.email}</td>
-                      <td className="p-3 hidden sm:table-cell">
-                        <span className={`status-badge ${
-                          u.role === 'admin' ? 'bg-purple-500/20 text-purple-400' :
-                          u.role === 'seller' ? 'bg-blue-500/20 text-blue-400' :
-                          'bg-green-500/20 text-green-400'
-                        }`}>
-                          {u.role}
-                        </span>
-                      </td>
-                      <td className="p-3 hidden md:table-cell">
-                        {u.role === 'buyer' ? (
-                          <span className="status-badge bg-gray-500/20 text-gray-300">
-                            Not required
-                          </span>
-                        ) : (
-                          <span className={`status-badge ${
-                            u.verificationStatus === 'verified' ? 'status-verified' :
-                            u.verificationStatus === 'pending' ? 'status-pending' :
-                            u.verificationStatus === 'rejected' ? 'status-rejected' :
-                            'bg-gray-500/20 text-gray-400'
-                          }`}>
-                            {u.verificationStatus}
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-3 hidden lg:table-cell">
-                        {u.role === 'seller' ? (
-                          <span
-                            className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${
-                              u.storeName
-                                ? 'bg-[rgba(212,175,55,0.15)] text-[#D4AF37]'
-                                : 'bg-gray-500/20 text-gray-300'
-                            }`}
-                          >
-                            {u.storeName || 'No store set'}
-                          </span>
-                        ) : (
-                          <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-500/20 text-gray-400">
-                            —
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-3">
-                        <span
-                          className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${
-                            u.banStatus === 'banned'
-                              ? 'bg-red-500/20 text-red-400'
-                              : u.banStatus === 'suspended'
-                              ? 'bg-orange-500/20 text-orange-400'
-                              : 'bg-green-500/20 text-green-400'
-                          }`}
-                          title={u.banReason || ''}
-                        >
-                          {u.banStatus || 'active'}
-                        </span>
-                      </td>
-                      <td className="p-3">
-                        {u.banStatus && u.banStatus !== 'active' ? (
-                          <div className="flex flex-wrap gap-2 justify-end">
-                            <button
-                              onClick={async () => {
-                                try {
-                                  await api.post(`/admin/users/${u.id}/unban`);
-                                  toast.success('User unbanned successfully');
-                                  fetchData();
-                                } catch (error) {
-                                  toast.error(error.response?.data?.detail || 'Failed to unban user');
-                                }
-                              }}
-                              className="px-3 py-1 rounded-md text-xs bg-green-500/20 text-green-400 hover:bg-green-500/30 transition-colors whitespace-nowrap"
-                            >
-                              Unban
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex flex-wrap gap-2 justify-end">
-                            <button
-                              onClick={async () => {
-                                const reason = window.prompt('Enter reason for ban:');
-                                if (!reason) return;
-                                try {
-                                  await api.post(`/admin/users/${u.id}/ban`, {
-                                    status: 'banned',
-                                    reason,
-                                  });
-                                  toast.success('User banned successfully');
-                                  fetchData();
-                                } catch (error) {
-                                  toast.error(error.response?.data?.detail || 'Failed to ban user');
-                                }
-                              }}
-                              className="px-3 py-1 rounded-md text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors whitespace-nowrap"
-                            >
-                              Ban
-                            </button>
-                            <button
-                              onClick={async () => {
-                                const reason = window.prompt('Enter reason for suspension:');
-                                if (!reason) return;
-                                try {
-                                  await api.post(`/admin/users/${u.id}/ban`, {
-                                    status: 'suspended',
-                                    reason,
-                                  });
-                                  toast.success('User suspended successfully');
-                                  fetchData();
-                                } catch (error) {
-                                  toast.error(error.response?.data?.detail || 'Failed to suspend user');
-                                }
-                              }}
-                              className="px-3 py-1 rounded-md text-xs bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 transition-colors whitespace-nowrap"
-                            >
-                              Suspend
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {/* Pagination controls - show only page numbers (1, 2, 3, ...) */}
-              {allUsers.length > USERS_PER_PAGE && (
-                <div className="flex items-center justify-center mt-4 px-3">
-                  <div className="flex gap-2">
-                    {Array.from({ length: usersTotalPages }, (_, index) => {
-                      const pageNumber = index + 1;
-                      return (
-                        <button
-                          key={pageNumber}
-                          onClick={() => setUsersPage(pageNumber)}
-                          className={`px-3 py-1 rounded-md text-xs transition-colors ${
-                            usersPage === pageNumber
-                              ? 'bg-[#D4AF37] text-black'
-                              : 'bg-[rgba(30,30,30,0.8)] text-gray-300 hover:bg-[rgba(50,50,50,0.9)]'
-                          }`}
-                        >
-                          {pageNumber}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      )}
-
       {/* Orders Tab */}
       {activeTab === 'orders' && (
         <div className="luxury-card">
@@ -1463,51 +1291,168 @@ const AdminDashboard = () => {
                     {doc.status}
                   </span>
                 </div>
-                  
-                  {/* Product Info */}
-                  <div className="p-4">
-                    <h3 className="font-semibold text-white mb-1 truncate">{product.title}</h3>
-                    <p className="text-sm text-gray-400 mb-2 line-clamp-2">{product.description}</p>
-                    <p className="text-[#D4AF37] font-bold text-lg">${product.price?.toFixed(2)}</p>
-                    
-                    {/* Actions */}
-                    <div className="flex gap-2 mt-3">
-                      <button
-                        onClick={() => {
-                          setEditingProduct(product.id);
-                          setProductForm({
-                            title: product.title,
-                            description: product.description,
-                            price: product.price?.toString() || '',
-                            category: product.category || '',
-                            images: product.images || []
-                          });
-                        }}
-                        className="flex-1 p-2 bg-[rgba(212,175,55,0.1)] hover:bg-[rgba(212,175,55,0.2)] text-[#D4AF37] rounded-lg transition-colors flex items-center justify-center gap-2"
-                        data-testid="edit-product-btn"
-                      >
-                        <Edit className="w-4 h-4" />
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDeleteProduct(product.id, product.title)}
-                        className="flex-1 p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors flex items-center justify-center gap-2"
-                        data-testid="delete-product-btn"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        Delete
-                      </button>
-                    </div>
+                
+                {doc.documentUrl && (
+                  <div className="mb-3">
+                    <a 
+                      href={doc.documentUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-[#D4AF37] hover:text-[#f0c850] text-sm flex items-center gap-2"
+                    >
+                      <Eye className="w-4 h-4" />
+                      View Document
+                    </a>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+                )}
+                
+                {doc.status === 'pending' && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleReviewVerification(doc.id, 'verified')}
+                      className="flex-1 p-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg transition-colors flex items-center justify-center gap-2"
+                      data-testid="approve-verification-btn"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => {
+                        const reason = window.prompt('Enter rejection reason:');
+                        if (reason) handleReviewVerification(doc.id, 'rejected', reason);
+                      }}
+                      className="flex-1 p-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-colors flex items-center justify-center gap-2"
+                      data-testid="reject-verification-btn"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      Reject
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        
+      </div>
+    )}
 
-      {/* Orders Tab */}
-      {activeTab === 'orders' && (
+    {/* Invite Codes Tab */}
+    {activeTab === 'inviteCodes' && (
+      <div className="luxury-card">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white">Merchant Invite Codes</h2>
+          <button
+            onClick={async () => {
+              try {
+                await api.post('/admin/invite-codes');
+                toast.success('New invite code generated!');
+                fetchData();
+              } catch (error) {
+                toast.error(error.response?.data?.detail || 'Failed to generate code');
+              }
+            }}
+            className="btn-gold"
+            data-testid="generate-invite-btn"
+          >
+            <Plus className="w-4 h-4 inline mr-2" />
+            Generate New Code
+          </button>
+        </div>
+
+        {inviteCodes.length === 0 ? (
+          <div className="text-center py-12">
+            <Code className="w-16 h-16 mx-auto text-gray-600 mb-4" />
+            <p className="text-gray-400">No invite codes yet</p>
+            <p className="text-gray-500 text-sm mt-2">Generate invite codes for new sellers</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-[rgba(212,175,55,0.2)]">
+                  <th className="text-left p-3 text-gray-400 font-medium">Code</th>
+                  <th className="text-left p-3 text-gray-400 font-medium hidden sm:table-cell">Created</th>
+                  <th className="text-left p-3 text-gray-400 font-medium hidden md:table-cell">Used By</th>
+                  <th className="text-left p-3 text-gray-400 font-medium">Status</th>
+                  <th className="text-left p-3 text-gray-400 font-medium text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {inviteCodes.map((code) => (
+                  <tr key={code.id} className="border-b border-[rgba(212,175,55,0.1)]">
+                    <td className="p-3">
+                      <span className="font-mono text-[#D4AF37] font-semibold">{code.code}</span>
+                    </td>
+                    <td className="p-3 text-gray-400 text-sm hidden sm:table-cell">
+                      {code.createdAt ? new Date(code.createdAt).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric'
+                      }) : '—'}
+                    </td>
+                    <td className="p-3 text-gray-400 text-sm hidden md:table-cell">
+                      {code.isUsed && code.usedByUserId ? (
+                        <div>
+                          <span className="text-white">{code.usedByName || 'User'}</span>
+                          {code.usedAt && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              {new Date(code.usedAt).toLocaleDateString('en-US', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric'
+                              })}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-gray-500">Not used</span>
+                      )}
+                    </td>
+                    <td className="p-3">
+                      <span className={`status-badge ${
+                        !code.isUsed ? 'status-verified' :
+                        code.isUsed ? 'bg-blue-500/20 text-blue-400' :
+                        'bg-gray-500/20 text-gray-400'
+                      }`}>
+                        {code.isUsed ? 'Used' : 'Active'}
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      <div className="flex gap-2 justify-end">
+                        {!code.isUsed && (
+                          <button
+                            onClick={async () => {
+                              if (!window.confirm('Deactivate this invite code?')) return;
+                              try {
+                                await api.delete(`/admin/invite-codes/${code.id}`);
+                                toast.success('Invite code deactivated');
+                                fetchData();
+                              } catch (error) {
+                                toast.error(error.response?.data?.detail || 'Failed to deactivate');
+                              }
+                            }}
+                            className="px-3 py-1 rounded-md text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+                            data-testid="deactivate-code-btn"
+                          >
+                            Deactivate
+                          </button>
+                        )}
+                        {code.isUsed && (
+                          <span className="text-xs text-gray-500">Already used</span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    )}
+
+    {/* Orders Tab */}
+      {/* {activeTab === 'orders' && (
         <div className="luxury-card">
           <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white mb-6">All Orders</h2>
           {orders.length === 0 ? (
@@ -1538,7 +1483,7 @@ const AdminDashboard = () => {
                     </div>
                   </div>
                   
-                  {/* Order Items */}
+               
                   <div className="space-y-2 mb-4">
                     {order.order_items?.map((item, idx) => (
                       <div key={idx} className="flex items-center gap-3 p-2 bg-[rgba(20,20,20,0.6)] rounded">
@@ -1557,7 +1502,7 @@ const AdminDashboard = () => {
                     ))}
                   </div>
 
-                  {/* Actions */}
+               
                   <div className="flex gap-2">
                     {order.paymentStatus === 'pending_payment' && (
                       <button
@@ -1591,56 +1536,10 @@ const AdminDashboard = () => {
             </div>
           )}
         </div>
-      )}
-
-      {/* Users Tab */}
-      {activeTab === 'users' && (
-        <div className="luxury-card">
-          <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white mb-6">All Users</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-[rgba(212,175,55,0.2)]">
-                  <th className="text-left p-3 text-gray-400 font-medium">Name</th>
-                  <th className="text-left p-3 text-gray-400 font-medium">Email</th>
-                  <th className="text-left p-3 text-gray-400 font-medium">Role</th>
-                  <th className="text-left p-3 text-gray-400 font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((u) => (
-                  <tr key={u.id} className="border-b border-[rgba(212,175,55,0.1)]">
-                    <td className="p-3 text-white">{u.name}</td>
-                    <td className="p-3 text-gray-400">{u.email}</td>
-                    <td className="p-3">
-                      <span className={`status-badge ${
-                        u.role === 'admin' ? 'bg-purple-500/20 text-purple-400' :
-                        u.role === 'seller' ? 'bg-blue-500/20 text-blue-400' :
-                        'bg-green-500/20 text-green-400'
-                      }`}>
-                        {u.role}
-                      </span>
-                    </td>
-                    <td className="p-3">
-                      <span className={`status-badge ${
-                        u.verificationStatus === 'verified' ? 'status-verified' :
-                        u.verificationStatus === 'pending' ? 'status-pending' :
-                        u.verificationStatus === 'rejected' ? 'status-rejected' :
-                        'bg-gray-500/20 text-gray-400'
-                      }`}>
-                        {u.verificationStatus}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      )} */}
 
       {activeTab === 'wallets' && (
-        <div className="luxury-card">(
+        <div className="luxury-card">
           <div>
             <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white mb-6">Wallet Management</h2>
             
@@ -1745,10 +1644,10 @@ const AdminDashboard = () => {
               </div>
             </div>
           </div>
-        )}
+        </div>
       )}
     </div>
-  );
+ );
 };
 
 export default AdminDashboard;
