@@ -1,182 +1,144 @@
-# Amazon Arab - Multi-Vendor Marketplace PRD
+# Arab Shopping Marketplace - Product Requirements Document
 
 ## Project Overview
-A premium multi-vendor marketplace with dark UI and gold accents, featuring crypto payments (USDT TRC20) and email notifications.
+A luxury multi-vendor marketplace for the Arab market, featuring an admin-controlled product catalog system where sellers can browse and add products to their stores from a centrally managed catalog.
 
 ## Tech Stack
-- **Frontend**: React + TailwindCSS + shadcn/ui
+- **Frontend**: React, React Router, TailwindCSS
 - **Backend**: FastAPI (Python)
 - **Database**: Supabase (PostgreSQL with RLS)
-- **Storage**: Supabase Storage (documents bucket - private, products bucket - public)
-- **Authentication**: Supabase Auth (client-side) - roles stored in public.users table
-- **Email**: Resend (transactional emails)
+- **Authentication**: Supabase client-side authentication
+- **Storage**: Supabase Storage for product images
+- **Email**: Resend for transactional emails
 
-## User Roles
-1. **Admin** - Manages users, verifications, orders, invite codes
-2. **Seller** - Creates products, views orders (requires verification + invite code)
-3. **Buyer** - Browses products, places orders, pays with crypto
+## Core Architecture
 
-## Core Features
+### Admin-Controlled Product Catalog (NEW - Implemented 2026-01-14)
+1. **Admin-Only Product Management**: Only the admin can create, edit, and manage the central product catalog
+2. **Central Catalog**: All products are managed centrally by admin with unique photos and descriptions
+3. **Seller Product Selection**: Sellers browse the admin catalog and select products to add to their store
+4. **Data Consistency**: Product details remain the same across all seller stores
 
-### ✅ Fully Implemented & Tested
-- [x] User registration (buyer/seller roles)
-- [x] User authentication (login/logout)
-- [x] Admin dashboard with stats (users, orders, verifications, invite codes)
-- [x] Admin: View/manage all users
-- [x] Admin: Create/view merchant invite codes
-- [x] Admin: Review and approve/reject verifications
-- [x] Admin: View orders and confirm payments
-- [x] Admin: Mark orders as completed
-- [x] Admin: Manage all products (view and remove any product)
-- [x] Seller: Dashboard with verification status
-- [x] Seller: Upload verification documents with invite code
-- [x] Seller: Create products after verification
-- [x] Seller: View orders containing their products
-- [x] Seller: Product image upload capability
-- [x] Seller: Remove product images
-- [x] Buyer: Browse products page with search
-- [x] Buyer: Add products to cart
-- [x] Buyer: Checkout with crypto payment (USDT TRC20)
-- [x] Buyer: View order history with payment status
-- [x] Products listing with "Verified Seller" badges
-- [x] **Product Categories** (10 predefined):
-  - Electronics & Gadgets, Fashion & Clothing, Home & Living
-  - Beauty & Health, Food & Beverages, Jewelry & Watches
-  - Books & Stationery, Sports & Outdoors, Baby & Kids, Automotive
-- [x] Category filter on Products page
-- [x] Category selection when creating/editing products
-- [x] Contact Us page
-- [x] Dark premium UI with gold accents
-- [x] Logo "A" branding as "Amazon Arab"
-- [x] Database schema with RLS security policies
-- [x] Rate limiting on sensitive endpoints
-- [x] **Email Notifications (Resend)**:
-  - Order placed confirmation to buyer (with crypto wallet)
-  - Payment confirmed notification to buyer
-  - New order notification to seller
-  - New order notification to admin
-  - Order completed notification to buyer
-  - Order fulfilled notification to seller
-  - Verification approved email to seller
-  - Verification rejected email to seller (with reason)
+### Key Endpoints
+- `GET /api/products` - Public product listing
+- `GET /api/admin/products` - Admin product management
+- `POST /api/admin/products` - Admin creates product
+- `PUT /api/admin/products/{id}` - Admin updates product
+- `DELETE /api/admin/products/{id}` - Admin deletes product
+- `POST /api/admin/seed-catalog` - Seed 100 products to catalog
+- `DELETE /api/admin/clear-catalog` - Clear all products
+- `GET /api/catalog/products` - Seller browses catalog
+- `POST /api/seller/products/{id}` - Seller adds product to store (REQUIRES MANUAL DB SETUP)
+- `DELETE /api/seller/products/{id}` - Seller removes from store (REQUIRES MANUAL DB SETUP)
 
-## Complete User Flows (All Tested ✅)
+## Completed Features
 
-### Flow 1: Seller Verification
-1. Seller registers → Status: "unverified"
-2. Seller goes to dashboard → Sees verification required
-3. Seller enters invite code + uploads document
-4. Status changes to "pending"
-5. Admin approves → Status: "verified"
+### Authentication System ✅
+- Supabase client-side authentication
+- Role-based access (admin, seller, buyer)
+- Protected routes with role verification
+- Session management with token refresh
 
-### Flow 2: Product Creation
-1. Verified seller logs in
-2. Goes to Seller Dashboard
-3. Clicks "Add Product"
-4. Fills title, description, price
-5. Product appears on Products page with "Verified Seller" badge
+### Admin Dashboard ✅
+- Overview tab with stats (products, orders, users, revenue)
+- Products tab with search, filter, and CRUD operations
+- Seed 100 Products button (pre-populates catalog)
+- Clear All button (removes products without orders)
+- Orders tab with payment confirmation
+- Users management
+- Verification document review
+- Invite code generation
 
-### Flow 3: Buyer Checkout
-1. Buyer browses Products page
-2. Adds items to cart
-3. Proceeds to checkout
-4. Sees crypto wallet address + QR code
-5. Confirms payment checkbox
-6. Places order → Status: "pending_payment"
+### Seller Dashboard ✅
+- My Store tab (shows selected products)
+- Browse Catalog tab (100+ products with Add to Store)
+- Orders tab (shows seller's orders)
+- Verification status display
+- Revenue tracking
 
-### Flow 4: Admin Order Management
-1. Admin views Orders tab
-2. Sees pending payments
-3. Clicks "Confirm Payment" after verifying transaction
-4. Order status → "paid"
-5. Can mark as "completed" when fulfilled
+### Product Catalog ✅
+- 100 pre-seeded products across 7 categories:
+  - Electronics (20)
+  - Fashion (20)
+  - Jewelry (15)
+  - Beauty (15)
+  - Home (15)
+  - Sports (10)
+  - Books (5)
+- Each product has unique Unsplash images, descriptions, and prices
+- Category filtering
+- Search functionality
 
-## Database Schema (Supabase)
-Tables use snake_case columns:
-- `users`: id, email, name, role, verification_status, created_at
-- `products`: id, title, description, price, images, seller_id, created_at
-- `orders`: id, buyer_id, total_amount, payment_method, payment_wallet, payment_status, confirmed_by_admin, confirmed_at, created_at
-- `order_items`: id, order_id, product_id, quantity, price
-- `verification_documents`: id, user_id, document_type, document_url, status, merchant_invite_code, rejection_reason, reviewed_at, created_at
-- `merchant_invite_codes`: id, code, is_used, created_by_admin, used_by_user_id, used_at, created_at
+### Public Products Page ✅
+- All products displayed with images
+- Category filtering
+- Search functionality
+- Add to cart capability
 
-## API Endpoints
-- `POST /api/auth/register` - User registration
-- `POST /api/auth/login` - User login
-- `POST /api/auth/logout` - User logout
-- `GET /api/products` - List all products
-- `GET /api/products/my` - Seller's products
-- `POST /api/products` - Create product (verified sellers)
-- `PUT /api/products/{id}` - Update product
-- `DELETE /api/products/{id}` - Delete product
-- `POST /api/products/{id}/upload-image` - Upload product image
-- `POST /api/orders` - Create order
-- `GET /api/orders/my` - User's orders
-- `PUT /api/orders/{id}/status` - Update order status (admin)
-- `POST /api/verification/upload` - Upload verification document
-- `GET /api/verification/documents` - Get verification documents
-- `PUT /api/verification/documents/{id}/review` - Review document (admin)
-- `GET /api/admin/users` - Get all users (admin)
-- `POST /api/admin/invite-codes` - Create invite code (admin)
-- `GET /api/admin/invite-codes` - Get all invite codes (admin)
-- `GET /api/me` - Get current user info
-- `POST /api/setup-admin` - One-time admin setup
+## Known Limitations / Manual Setup Required
+
+### seller_products Table
+The `seller_products` junction table does NOT exist in Supabase. To enable seller "Add to Store" functionality, create this table manually in Supabase:
+
+```sql
+CREATE TABLE seller_products (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    seller_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    product_id UUID REFERENCES products(id) ON DELETE CASCADE,
+    added_at TIMESTAMPTZ DEFAULT NOW(),
+    is_active BOOLEAN DEFAULT true,
+    UNIQUE(seller_id, product_id)
+);
+
+CREATE INDEX idx_seller_products_seller_id ON seller_products(seller_id);
+CREATE INDEX idx_seller_products_product_id ON seller_products(product_id);
+```
 
 ## Test Credentials
 - **Admin**: support@arabshopping.org / Hadi1247@
-- **Seller**: testseller_new@test.com / TestPass123! (verified)
-- **Buyer**: testbuyer_new@test.com / TestPass123!
-- **Crypto Wallet**: TY8Z91NMCjREyZVj9NjDsF8hVjyqfxFFRU (USDT TRC20)
+- **Verified Seller**: testseller_new@test.com / TestPass123!
+- **Test Buyer**: testbuyer_new@test.com / TestPass123!
 
-## Changelog
+## Frontend Build Notes
+Required installation process to fix dependency conflicts:
+```bash
+npm install --legacy-peer-deps
+npm dedupe
+npm run build
+```
 
-### 2026-01-08
-- ✅ **COMPLETED: Frontend Authentication Refactor to Supabase Client-Side Auth**
-  - Removed custom backend auth endpoints (`/api/auth/login`, `/api/auth/register`)
-  - Now using `supabase.auth.signInWithPassword()` directly in frontend
-  - Now using `supabase.auth.signUp()` directly in frontend
-  - User roles fetched from `public.users` table after Supabase auth login
-  - Session persisted via Supabase localStorage
-- ✅ Fixed ProtectedRoute component:
-  - Now properly redirects users to their appropriate dashboard based on role
-  - No more infinite loading spinner when accessing unauthorized dashboards
-- ✅ Improved error handling:
-  - Invalid login credentials now show user-friendly "Invalid email or password" message
-- ✅ Updated `api.js` to use Supabase session token instead of custom auth token
-- ✅ **COMPLETED: Seller Dashboard "View Orders" Feature**
-  - Added Products/Orders tabs to Seller Dashboard
-  - Added Revenue stat card showing earnings from paid/completed orders
-  - Orders tab shows order status summary (Pending/Paid/Completed counts)
-  - Orders list displays order details with seller's products only
-  - Shows order items with images, quantities, and earnings per order
-  - Empty state when no orders exist
-- ✅ Testing: 100% pass rate on all features (iteration_5, iteration_6)
+## Upcoming Tasks (P2-P3)
+1. Product Reviews and Ratings
+2. Seller Analytics Dashboard
+3. Subcategories for products
+4. Order Tracking/Shipping Integration
+5. Email Notifications for Sellers
 
-### 2026-01-07
-- ✅ Fixed Supabase auth trigger issue (dropped conflicting trigger)
-- ✅ Completed seller verification flow with document upload
-- ✅ Tested product creation by verified seller
-- ✅ Tested complete buyer checkout flow
-- ✅ Tested admin order confirmation flow
-- ✅ All 5 user flows fully functional and tested
-- ✅ **Added Email Notifications via Resend**:
-  - Buyer receives order confirmation with crypto wallet details
-  - Buyer receives payment confirmation when admin confirms
-  - Seller receives notification when their product is ordered
-  - Admin receives notification for all new orders
-- ✅ Testing: 100% of core flows passing
+## File Structure
+```
+/app/
+├── backend/
+│   ├── server.py           # Main FastAPI app with all endpoints
+│   ├── product_catalog.py  # 100 product definitions for seeding
+│   ├── requirements.txt
+│   └── .env
+├── frontend/
+│   ├── src/
+│   │   ├── pages/dashboard/
+│   │   │   ├── AdminDashboard.js   # Admin product CRUD
+│   │   │   ├── SellerDashboard.js  # Catalog browser
+│   │   │   └── BuyerDashboard.js
+│   │   ├── context/AuthContext.js
+│   │   └── lib/
+│   │       ├── api.js
+│   │       ├── auth.js
+│   │       └── supabase.js
+│   └── package.json
+├── tests/
+│   └── test_product_catalog.py  # 16 API tests
+└── memory/
+    └── PRD.md
+```
 
-### 2026-01-06
-- Fixed database schema (switched to snake_case columns)
-- Updated backend to convert snake_case to camelCase for frontend
-- Fixed admin setup endpoint to handle existing auth users
-- Added RLS policies for merchant_invite_codes
-
-## Future Enhancements (P2)
-- Product image uploads via Supabase Storage (currently using URLs)
-- Seller analytics dashboard with charts
-- Product search and filtering improvements
-- Reviews and ratings system
-- Multi-image product galleries with carousel
-- Order tracking/shipping integration
-- Subcategories for products
+## Last Updated
+2026-01-14 - Admin-controlled product catalog system implemented and tested

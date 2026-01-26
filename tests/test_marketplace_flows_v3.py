@@ -13,7 +13,7 @@ import requests
 import os
 import time
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://supabase-auth-17.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://catalog-refactor.preview.emergentagent.com')
 
 # Test credentials
 ADMIN_EMAIL = "support@arabshopping.org"
