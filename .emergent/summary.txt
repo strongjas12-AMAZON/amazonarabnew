@@ -1,181 +1,180 @@
 <analysis>**original_problem_statement:**
-The user initially requested a complete multi-vendor marketplace inspired by , built with Next.js and Supabase. However, the initial implementation was done using React + FastAPI + Supabase.
-
-The project then pivoted to fixing critical bugs, setting up the database, and implementing core features like user roles, product management, order processing, and email notifications.
-
-Most recently, the user provided a new, detailed set of requirements to **refactor the entire frontend authentication system**. The goal is to remove the custom FastAPI backend authentication () and use the Supabase client-side library (, etc.) directly from the React application. This is a critical change to the application's architecture.
+The user's primary goal has shifted to a major architectural refactor of the product management system.
 
 **PRODUCT REQUIREMENTS:**
-1.  **Authentication Source:** Use Supabase Auth directly in the frontend. Remove all custom backend auth calls.
-2.  **Role Handling:** Fetch user roles (, , ) from the  table after a successful Supabase login, as the Supabase auth user does not contain this information.
-3.  **Login Page:** The Login page must use , fetch the user's role from the  table, and redirect to the correct dashboard (, , ).
-4.  **Protected Routes:** The  component must check for an active Supabase auth session and then fetch the user's role to authorize access.
-5.  **Dashboard Data:** All dashboards must fetch profile data (name, email, role) from the  table, not from the Supabase auth user object.
+1.  **Admin-Only Product Management**: Only the admin should be able to create, edit, and manage a central product catalog. This includes product name, photos, descriptions, and price.
+2.  **Unique Product Details**: Each product in the catalog must have a unique photo and description. No duplication is allowed.
+3.  **Seller Product Selection**: Sellers should not be able to create or edit products. Their only permission is to view the admin-approved catalog and select products to add to their personal store listings.
+4.  **Data Seeding**: The admin catalog should be populated with approximately 100 products, complete with unique images, descriptions, and prices.
+5.  **Quality Control**: The system must enforce data consistency, ensuring that product details remain the same across all seller stores that list them.
+
+This new requirement overrides the previous multi-vendor model where sellers could create their own products.
 
 **User's preferred language**: English
 
 **what currently exists?**
-A full-stack React + FastAPI application with a Supabase database. All core features were completed and functional *before* the auth refactor began. This includes:
--   User registration (Buyer/Seller), login, and role-based dashboards.
--   Admin dashboard for managing users, products, orders, and verifications.
--   Seller dashboard for managing products.
--   Buyer dashboard for viewing order history.
--   A complete crypto checkout flow.
--   Automated email notifications via Resend for orders and verifications.
--   Product categories and image management.
+A full-stack React + FastAPI application with a Supabase database. The application is in a partially broken state due to an incomplete architectural refactor.
 
-The agent had started the major authentication refactor as requested by the user. Several key frontend files have been modified but the work is incomplete.
+-   **Authentication**: A fully functional, Supabase client-side authentication system is in place. Login, registration, role-based redirects, and protected routes are working correctly for all user roles (admin, seller, buyer).
+-   **Seller Dashboard**: A View Orders feature was recently added and is functional, though it currently shows no orders as no products are listed.
+-   **Build Process**: The frontend build process was fixed. It requires  followed by 
+up to date in 639ms to resolve dependency conflicts related to  and .
+-   **New Files Created**: The previous agent created two new files in preparation for the new product catalog system, but did not implement them:
+    -   
+    -   
 
 **Last working item**:
--   **Last item agent was working**: The agent was performing a major refactor of the frontend authentication system. It was in the process of removing the custom FastAPI-based authentication and replacing it with direct Supabase client-side authentication. The agent had already overwritten , , , and . The next step was to update the  page to align with the new auth logic.
--   **Status**: IN PROGRESS
+-   **Last item agent was working**: The agent had just started the major architectural refactor for the admin-controlled product catalog. It created two files,  and , to handle the database schema change and data seeding. However, the agent then entered a paused state and was unable to proceed with the implementation, despite multiple continue prompts from the user.
+-   **Status**: BLOCKED
 -   **Agent Testing Done**: N
 -   **Which testing method agent to use?**: both
 -   **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
--   **Issue 1: Incomplete Frontend Authentication Refactor (P0)**
+-   **Issue 1: Agent is Blocked/Paused (P0)**
 
 **Issues Detail**:
--   **Issue 1: Incomplete Frontend Authentication Refactor (P0)**
-    -   **Attempted fixes**: The agent correctly identified the need to switch from custom backend auth to Supabase client-side auth. It rewrote several key files: , , , and .
+-   **Issue 1: Agent is Blocked/Paused (P0)**
+    -   **Attempted fixes**: The user tried sending multiple commands (, , , etc.) to un-pause the agent, but none were successful. The agent is stuck after creating two files and cannot proceed with the task.
     -   **Next debug checklist**:
-        1.  **Update Register Page**: Modify  to use the new  method which should call .
-        2.  **Update Dashboards**: Verify that all dashboard pages (, , ) correctly fetch user and profile data using the new  and query the  table, not the old context state.
-        3.  **Update **: Ensure all routes in  are correctly wrapped with the updated  component and that dashboard routes (, etc.) are correctly defined.
-        4.  **Backend Cleanup (Optional but recommended)**: The backend authentication routes in  (, ) are now obsolete and should be removed to avoid confusion.
-        5.  **Comprehensive Testing**: Once the refactor is complete, perform full end-to-end testing with the testing agent, covering registration, login, and dashboard access for all three roles (admin, seller, buyer).
-    -   **Why fix this issue and what will be achieved with the fix?**: This is the user's latest and most critical request. Completing it will align the application with standard Supabase practices, simplify the auth flow, and make the application functional again. Currently, the application is in a broken state due to the half-finished refactor.
-    -   **Status**: IN PROGRESS
-    -   **Is recurring issue?**: N
+        1.  Ignore the paused state and take over the task.
+        2.  Review the contents of the newly created files:  and .
+        3.  Proceed with the implementation plan for the new product catalog system (see Task 1 below).
+    -   **Why fix this issue and what will be achieved with the fix?**: This is an absolute blocker. Resolving it will allow the agent to resume work on the user's primary and most critical requirement.
+    -   **Status**: BLOCKED
+    -   **Is recurring issue?**: Y
     -   **Should Test frontend/backend/both after fix?**: both
-    -   **Blocked on other issue**: None.
+    -   **Blocked on other issue**: None. This is the blocking issue.
 
 **In progress Task List**:
--   **Task 1: Complete Frontend Authentication Refactor (P0)**
-    -   **Where to resume**: The agent has already modified the core auth files. The immediate next step is to update  to use the new Supabase-native signup flow.
-    -   **What will be achieved with this?**: The application's authentication will be fully managed by the Supabase client library, fulfilling the user's direct request.
+-   **Task 1: Implement Admin-Controlled Product Catalog (P0)**
+
+**Task Detail**:
+-   **Task 1: Implement Admin-Controlled Product Catalog (P0)**
+    -   **Where to resume**: The agent has created  and . The next steps are:
+        1.  **Execute DB Migration**: Apply the new schema from  to the Supabase database. This will likely create a  junction table and modify the existing  table.
+        2.  **Seed Products**: Execute the  script to populate the  table with ~100 items.
+        3.  **Refactor Backend**: Overhaul .
+            -   Remove the old endpoint for sellers to create products.
+            -   Create new endpoints for admins to perform full CRUD on the central  table.
+            -   Create new endpoints for sellers to view the product catalog and add/remove products from their  list.
+        4.  **Refactor Frontend**:
+            -   **Admin Dashboard**: Update the product management UI to support full CRUD operations.
+            -   **Seller Dashboard**: Replace the Add Product form with a new UI that allows sellers to browse the admin catalog and add/remove products to their store.
+    -   **What will be achieved with this?**: This will fulfill the user's latest and most critical architectural requirement, transforming the marketplace into a centrally managed catalog system.
     -   **Status**: IN PROGRESS
     -   **Should Test frontend/backend/both after fix?**: both
-    -   **Blocked on something**: None
+    -   **Blocked on something**: **Issue 1: Agent is Blocked/Paused**
 
 **Upcoming and Future Tasks**
--   **Upcoming Tasks**:
-    -   **Seller Dashboard View Orders (P1)**: The UI is a placeholder and needs to be connected to an API to show the seller's orders.
-    -   **Product Image Uploads (P2)**: The product creation flow lacks a file upload mechanism for product images. This needs to be implemented using Supabase Storage.
-    -   **Product Reviews and Ratings (P2)**: Implement a system for buyers to leave reviews on products.
 -   **Future Tasks**:
+    -   **Product Reviews and Ratings (P2)**: Implement a system for buyers to leave reviews on products.
     -   **Seller Analytics Dashboard (P2)**: A dashboard for sellers to view sales data and product performance.
     -   **Subcategories (P3)**: Implement nested categories for more granular product organization.
+    -   **Order Tracking/Shipping Integration (P3)**
+    -   **Email Notifications for Sellers (P3)**: Notify sellers when a new order containing their products is placed.
 
 **Completed work in this session**
--   **Database Initialization**: Successfully guided the user through a complex, multi-step process to initialize the Supabase database schema after multiple failures.
--   **Critical Bug Fixes**:
-    -   Resolved a critical bug preventing user registration by identifying and removing a faulty database trigger on .
-    -   Fixed an RLS policy issue that prevented admins from creating merchant invite codes.
-    -   Added a user-friendly error message when an admin tries to delete a product that has existing orders.
--   **Feature Implementation**:
-    -   **Email Notifications**: Integrated Resend to send emails for new orders, payment confirmations, order completion, and seller verification (approval/rejection).
-    -   **Product Categories**: Implemented a predefined category system, including backend logic, a new API endpoint, and frontend UI for filtering and selection.
-    -   **Admin Product Management**: Added a Products tab to the Admin Dashboard, allowing admins to view and delete any product.
-    -   **Seller Image Management**: Added functionality for sellers to remove product images from their listings.
--   **End-to-End Testing**: Verified all core user flows (Admin, Seller, Buyer) were fully functional before starting the auth refactor.
+-   **Auth System Refactor**: Successfully completed the migration from a custom backend JWT flow to a direct Supabase client-side authentication system. This included fixing bugs in  and login error handling.
+-   **Seller View Orders Feature**: Implemented and tested the View Orders tab on the Seller Dashboard, connecting it to the  backend endpoint.
+-   **Production Build Fix**: Diagnosed and resolved a critical  failure (). The solution involves running 
+up to date in 657ms after .
+-   **Product List Generation**: Provided the user with a formatted list of 9 sample products with stock photos and descriptions, as requested.
 
 **Earlier issues found/mentioned but not fixed**
 -   **Issue 1: Core Tech Stack Mismatch**
-    -   **Debug checklist**: The user requested a **Next.js** application, but the agent built a **React + FastAPI** application. The user has agreed to continue with the current stack, so this is no longer a blocker but remains a deviation from the original spec.
-    -   **Why to solve this issue and what will be achieved with this?**: N/A - User has approved the current stack.
-    -   **Should Test frontend/backend/both after fix**: N/A
-    -   **Is recurring issue?**: Y
+    -   The user originally requested a **Next.js** application, but a **React + FastAPI** app was built. The user has accepted this and agreed to move forward with the current stack. This is a known deviation, not an active issue to be fixed.
 
 **Known issue recurrence from previous fork**
 -   N/A
 
 **Code Architecture**
-
+npm dedupe
 
 **Key Technical Concepts**
--   **Frontend**: React, React Router, TailwindCSS. **Auth is being refactored to use Supabase Client JS Library directly.**
--   **Backend**: FastAPI, Pydantic. **Backend auth endpoints are being deprecated.**
--   **Database**: Supabase (PostgreSQL) with Row-Level Security (RLS).
--   **Authentication**: **IN TRANSITION.** Moving from a custom backend JWT flow to a standard Supabase client-side session management flow.
--   **Email**: Resend API for transactional emails.
+-   **Frontend**: React, React Router, TailwindCSS, Supabase Client JS.
+-   **Backend**: FastAPI, Pydantic.
+-   **Database**: Supabase (PostgreSQL) with RLS.
+-   **Authentication**: Supabase client-side session management.
+-   **Product Architecture (In Transition)**: Moving from a seller-centric product creation model to an admin-controlled central catalog model.
 
 **key DB schema**
 -   **users**: 
--   **products**: 
+-   **products**:  (Will become the central admin catalog)
+-   **seller_products (PROPOSED)**: Junction table  to link sellers to products from the catalog.
 -   **orders**: 
--   **order_items**: 
--   **verification_documents**: 
--   **merchant_invite_codes**: 
 
 **changes in tech stack**
--   The core change in progress is the **authentication model**, moving from a backend-managed JWT system to a frontend-managed Supabase session.
+-   No change in the tech stack itself, but a fundamental change in the application's data model and business logic for product management is in progress.
 
 **All files of reference**
--   : **Needs to be updated** to complete the auth refactor.
--   : Modified for the new auth flow.
--   : Modified for the new auth flow.
--   : Modified for the new auth flow.
--   : Modified for the new auth flow.
--   : Contains the entire backend logic. The  routes are now effectively deprecated.
+-   : **NEW**. Contains the schema changes for the new product catalog system.
+-   : **NEW**. Intended to seed the database with ~100 products.
+-   : Needs a major overhaul of all product-related endpoints.
+-   : The product management UI needs to be updated for full CRUD.
+-   : The Add Product form must be replaced with a catalog browser/selector UI.
+-   : Contains dependency overrides and requires a specific installation process.
 
 **Areas that need refactoring**:
--   The monolithic  could be modularized.
--   The obsolete auth routes in  should be removed after the frontend refactor is complete and verified.
+-   The entire product management and listing flow in both the backend () and frontend (, ) must be refactored to align with the new admin-controlled catalog model.
 
 **key api endpoints**
--    (GET, POST, PUT, DELETE)
--    (GET, POST, PUT)
--    (POST, PUT)
--    (POST)
--   **DEPRECATED**: , 
+-   **EXISTING (To be modified/removed)**:
+    -    (Currently for sellers, should be admin-only)
+-   **PROPOSED (To be created)**:
+    -   , ,  (Admin CRUD)
+    -    (For sellers to browse the catalog)
+    -    (For sellers to add a catalog product to their store)
+    -    (For sellers to remove a product from their store)
 
 **Critical Info for New Agent**
--   **Auth Refactor is In Progress and is a Blocker**: Your top priority is to complete the frontend authentication refactor. The application is currently in a broken, half-refactored state. Do not attempt other features until login, registration, and protected routes are working with the new Supabase-direct auth flow.
--   **Resume by Fixing **: Start by modifying the registration page to use  via the new  service.
--   **Verify All Roles**: After fixing registration and login, you must test the entire flow for all three user roles (Admin, Seller, Buyer) to ensure they are redirected to the correct dashboards and that dashboard data loads correctly.
--   **Backend Auth is Obsolete**: Do not use or try to fix the  endpoints in . They are being replaced by direct frontend calls to the Supabase client library.
+-   **YOU ARE RESUMING A BLOCKED TASK**: The previous agent was stuck in a paused state. Your first action is to pick up the  task.
+-   **CRITICAL BUILD STEP**: The frontend build will fail unless you run 
+up to date in 644ms after . This is mandatory to fix nested dependency issues.
+-   **NEW ARCHITECTURE**: The user has mandated a major architectural change. Sellers **cannot** create products anymore. All products are managed by the admin in a central catalog, and sellers simply select from it. You must implement this logic. Start by applying the SQL migration in .
+-   **SEED 100 PRODUCTS**: The user wants the catalog populated with ~100 products. A script  was started for this purpose. You need to complete and run it.
 
 **documents and test reports created in this job**
 -   
 -   
 -   
 -   
+-   
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User**: Asks to add the option for sellers to remove product photos. (Completed)
-2.  **User**: Asks to add product categories. (Completed)
-3.  **User**: Asks for admins to be able to remove products from the listing. (Completed)
-4.  **User**: Reports an error when deleting a product with existing orders. (Fixed by adding a user-friendly error message)
-5.  **User**: Asks to remove test products. (Agent explained why one cannot be removed, user agreed to keep it).
-6.  **User**: Asks how to download the code to upload to a VPS. (Agent provided instructions).
-7.  **User**: Provides GitHub repository name. (Agent acknowledged and guided).
-8.  **User**: **(CRITICAL PIVOT)** Pastes a long, detailed new set of requirements to refactor the entire frontend authentication to use Supabase client-side auth directly.
-9.  **Agent**: Acknowledges and immediately starts working on the auth refactor.
-10. **Agent**: Updates , , , and , and is about to start on .
+1.  **User**: Asks if the app is ready for VPS deployment. (Agent confirmed and provided a checklist).
+2.  **User**: Provides a new set of rules for a production audit and build fix.
+3.  **User**: Reports the exact build error they are facing on their VPS: .
+4.  **Agent**: After many attempts, finds the solution: running 
+up to date in 401ms after installation. Provides the final  and instructions.
+5.  **User**: Asks for test seller credentials. (Agent provided them).
+6.  **User**: Asks the agent to create a product list with photos. (Agent generated a list of 9 sample products).
+7.  **User**: **(CRITICAL PIVOT)** Provides a new, detailed set of requirements for an admin-only product catalog system. Sellers can only select products, not create them. Asks for ~100 products to be created.
+8.  **Agent**: Acknowledges the major change and begins implementation by creating  and .
+9.  **Agent**: Gets stuck in a Agent process paused loop.
+10. **User**: Tries multiple times to un-pause the agent with commands like , , , etc., without success.
 
 **Project Health Check:**
--   **Broken**: The application is non-functional due to the incomplete authentication refactor. The frontend auth logic is out of sync with the backend and its own pages.
+-   **Broken**: The core product management feature is in the middle of a major, incomplete architectural refactor. The previous agent was blocked, leaving the task unfinished.
 
 **3rd Party Integrations**
 -   **Supabase**: Provides Authentication, Database (PostgreSQL), and Storage.
--   **Resend**: Used for sending transactional emails (order/verification notifications).
+-   **Resend**: Used for sending transactional emails.
 
 **Testing status**
--   **Testing agent used after significant changes**: YES (before the auth refactor)
+-   **Testing agent used after significant changes**: YES (for the auth refactor and seller view orders feature).
 -   **Troubleshoot agent used after agent stuck in loop**: NO
 -   **Test files created**: []
--   **Known regressions**: The entire authentication and authorization system is currently broken due to the incomplete refactor.
+-   **Known regressions**: The entire product creation and listing flow is currently non-functional as it's being refactored.
 
 **Credentials to test flow:**
 -   **Admin**:  / 
--   Test users were created during the session (e.g., , ) with password .
+-   **Verified Test Seller**:  / 
+-   **Test Buyer**:  / 
 
 **What agent forgot to execute**
-The agent was in the middle of a critical, user-directed task. It did not forget, but it has not yet completed the auth refactor. The following pieces are still pending:
--   Updating .
--   Verifying dashboard pages work with the new auth context.
--   Running a build (yarn run v1.22.22
-info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command.) to check for errors.
--   Performing a full end-to-end test of the new authentication flow.</analysis>
+The agent did not forget but was **blocked** and unable to execute the main steps of the current task. The following are pending execution:
+-   Applying the database migration from .
+-   Refactoring the backend API in  for the new product catalog system.
+-   Refactoring the Admin and Seller dashboard frontend components.
+-   Completing and running the product seeding script .</analysis>
