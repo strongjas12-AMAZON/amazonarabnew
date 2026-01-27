@@ -3692,9 +3692,9 @@ async def get_store_detail(store_id: str, current_user: dict = Depends(get_curre
 
 
 @api_router.get("/stores/{store_id}/products")
-async def get_store_products(store_id: str, limit: int = 50, offset: int = 0):
+async def get_store_products(store_id: str, limit: int = 50, offset: int = 0, current_user: dict = Depends(get_current_user)):
     """
-    Public: Get products from a specific store (BUYERS SEE ONLY THESE)
+    Protected: Get products from a specific store (login required)
     CRITICAL: This joins store_products with product_catalog
     Buyers can ONLY see what's in store_products, NOT the full catalog
     """
