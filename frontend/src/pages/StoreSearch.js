@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Store, ChevronRight, ShoppingBag } from 'lucide-react';
 import { toast } from 'sonner';
-
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+import api from '../lib/api';
 
 export default function StoreSearch() {
   const navigate = useNavigate();
@@ -21,11 +20,11 @@ export default function StoreSearch() {
     try {
       setSearching(true);
       const url = query 
-        ? `${BACKEND_URL}/api/stores/search?query=${encodeURIComponent(query)}&limit=50`
-        : `${BACKEND_URL}/api/stores/search?limit=50`;
+        ? `/stores/search?query=${encodeURIComponent(query)}&limit=50`
+        : `/stores/search?limit=50`;
       
-      const response = await fetch(url);
-      const data = await response.json();
+      const response = await api.get(url);
+      const data = response.data;
 
       if (data.success) {
         setStores(data.stores || []);
