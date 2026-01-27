@@ -435,6 +435,18 @@ const SellerDashboard = () => {
           Orders ({orders.length})
         </button>
         <button
+          onClick={() => setActiveTab('orderCenter')}
+          className={`px-6 py-3 rounded-lg font-medium transition-all flex items-center gap-2 ${
+            activeTab === 'orderCenter'
+              ? 'bg-[#D4AF37] text-[#0a0a0a]'
+              : 'bg-[rgba(30,30,30,0.6)] text-gray-300 hover:bg-[rgba(30,30,30,0.8)]'
+          }`}
+          data-testid="tab-order-center"
+        >
+          <ClipboardList className="w-4 h-4" />
+          Order Center
+        </button>
+        <button
           onClick={() => setActiveTab('payouts')}
           className={`px-6 py-3 rounded-lg font-medium transition-all flex items-center gap-2 ${
             activeTab === 'payouts'
