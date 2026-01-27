@@ -189,6 +189,12 @@ def format_product_response(product_data: dict) -> dict:
     """Convert snake_case DB fields to camelCase for frontend"""
     category_id = product_data.get('category')
     category_info = next((c for c in PRODUCT_CATEGORIES if c['id'] == category_id), None)
+    store_name = product_data.get('storeName') or product_data.get('store_name')
+    is_seller_product = product_data.get('isSellerProduct') or product_data.get('is_seller_product')
+    if is_seller_product is None:
+        is_seller_product = product_data.get('seller_id') is not None
+    seller_name = product_data.get('seller_name')
+    seller_verification = product_data.get('seller_verification_status') or product_data.get('sellerVerificationStatus')
     
     result = {
         'id': product_data.get('id'),
@@ -201,12 +207,23 @@ def format_product_response(product_data: dict) -> dict:
         'categoryName': category_info['name'] if category_info else None,
         'categoryIcon': category_info['icon'] if category_info else None,
         'isActive': product_data.get('is_active', True),  # Default to True if column doesn't exist
-        'createdAt': product_data.get('created_at')
+        'createdAt': product_data.get('created_at'),
+        'isSellerProduct': bool(is_seller_product)
     }
+    if store_name:
+        result['storeName'] = store_name
     if 'users' in product_data and product_data['users']:
         result['users'] = {
             'name': product_data['users'].get('name'),
             'verificationStatus': product_data['users'].get('verificationStatus') or product_data['users'].get('verification_status') or 'unverified'
+        }
+        if store_name:
+            result['users']['storeName'] = store_name
+    elif store_name or seller_name or seller_verification:
+        result['users'] = {
+            'name': seller_name,
+            'storeName': store_name,
+            'verificationStatus': seller_verification or 'unverified'
         }
     return result
 
@@ -1220,18 +1237,54 @@ async def get_categories():
 
 
 @api_router.get("/products")
-async def get_products(category: Optional[str] = None):
-    """Get all products from admin catalog"""
+async def get_products(category: Optional[str] = None, search: Optional[str] = None):
+    """Get marketplace products that sellers have added (buyer-facing)."""
     try:
-        query = supabase_admin.table('products').select('*')
-        
-        if category:
-            query = query.eq('category', category)
-        
-        products = query.order('created_at', desc=True).execute()
-        
-        # Return all products for public viewing (catalog model)
-        return {"success": True, "products": [format_product_response(p) for p in products.data]}
+        search_term = (search or "").strip()
+        query = supabase_admin.table('seller_products') \
+            .select('*, products(*), users:users!seller_id(id, name, store_name, verification_status)') \
+            .eq('is_active', True)
+
+        # Apply backend filter when possible (column exists)
+        if search_term:
+            try:
+                query = query.ilike('store_name', f"%{search_term}%")
+            except Exception:
+                # If store_name column is missing or ilike not supported, fallback to in-memory filter
+                pass
+
+        seller_products_result = query.order('added_at', desc=True).execute()
+
+        products = []
+        search_lower = search_term.lower() if search_term else None
+
+        for sp in seller_products_result.data or []:
+            product_data = sp.get('products') or {}
+            if not product_data:
+                continue
+            if product_data.get('is_active') is False:
+                continue
+            if category and product_data.get('category') != category:
+                continue
+
+            seller_info = sp.get('users') or {}
+            store_name = (sp.get('store_name') or seller_info.get('store_name') or '').strip()
+
+            # Enforce case-insensitive partial match on store name
+            if search_lower and (not store_name or search_lower not in store_name.lower()):
+                continue
+
+            merged_product = {
+                **product_data,
+                'store_name': store_name,
+                'is_seller_product': sp.get('is_seller_product', True),
+                'seller_id': sp.get('seller_id') or product_data.get('seller_id'),
+                'seller_name': seller_info.get('name'),
+                'seller_verification_status': seller_info.get('verification_status') or seller_info.get('verificationStatus')
+            }
+            products.append(format_product_response(merged_product))
+
+        return {"success": True, "products": products}
     except Exception as e:
         logging.error(f"Get products error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1244,17 +1297,34 @@ async def get_my_products(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Only sellers can access this")
     
     try:
-        # Get seller's selected product IDs from seller_products table
-        seller_products = supabase_admin.table('seller_products').select('product_id').eq('seller_id', current_user['id']).eq('is_active', True).execute()
-        
+        seller_products = supabase_admin.table('seller_products') \
+            .select('*, products(*)') \
+            .eq('seller_id', current_user['id']) \
+            .eq('is_active', True) \
+            .execute()
+
         if not seller_products.data:
             return {"success": True, "products": []}
-        
-        product_ids = [sp['product_id'] for sp in seller_products.data]
-        
-        # Get full product details
-        products = supabase_admin.table('products').select('*').in_('id', product_ids).execute()
-        return {"success": True, "products": [format_product_response(p) for p in products.data]}
+
+        products = []
+        for sp in seller_products.data:
+            product_data = sp.get('products') or {}
+            if not product_data:
+                continue
+            if product_data.get('is_active') is False:
+                continue
+
+            merged_product = {
+                **product_data,
+                'store_name': sp.get('store_name'),
+                'is_seller_product': sp.get('is_seller_product'),
+                'seller_id': sp.get('seller_id') or product_data.get('seller_id'),
+                'seller_name': current_user.get('name'),
+                'seller_verification_status': current_user.get('verificationStatus') or current_user.get('verification_status')
+            }
+            products.append(format_product_response(merged_product))
+
+        return {"success": True, "products": products}
     except Exception as e:
         logging.error(f"Get my products error: {str(e)}")
         # Fallback: if seller_products table doesn't exist yet, return empty
@@ -1444,6 +1514,14 @@ async def seller_add_product(product_id: str, current_user: dict = Depends(get_c
         raise HTTPException(status_code=403, detail="Seller must be verified to add products")
     
     try:
+        store_name = (current_user.get('storeName') or '').strip()
+        if not store_name:
+            seller_profile = supabase_admin.table('users').select('store_name').eq('id', current_user['id']).execute()
+            if seller_profile.data:
+                store_name = (seller_profile.data[0].get('store_name') or '').strip()
+        if not store_name:
+            raise HTTPException(status_code=400, detail="Store name is required to add products")
+        
         # Check product exists
         product = supabase_admin.table('products').select('*').eq('id', product_id).execute()
         
@@ -1456,7 +1534,11 @@ async def seller_add_product(product_id: str, current_user: dict = Depends(get_c
             
             if existing.data:
                 # Reactivate if was deactivated
-                supabase_admin.table('seller_products').update({'is_active': True}).eq('seller_id', current_user['id']).eq('product_id', product_id).execute()
+                supabase_admin.table('seller_products').update({
+                    'is_active': True,
+                    'store_name': store_name,
+                    'is_seller_product': True
+                }).eq('seller_id', current_user['id']).eq('product_id', product_id).execute()
                 return {"success": True, "message": "Product re-added to your store"}
         except Exception as e:
             if "seller_products" not in str(e):
@@ -1469,7 +1551,9 @@ async def seller_add_product(product_id: str, current_user: dict = Depends(get_c
             'seller_id': current_user['id'],
             'product_id': product_id,
             'is_active': True,
-            'added_at': datetime.now(timezone.utc).isoformat()
+            'added_at': datetime.now(timezone.utc).isoformat(),
+            'store_name': store_name,
+            'is_seller_product': True
         }
         
         supabase_admin.table('seller_products').insert(seller_product_data).execute()

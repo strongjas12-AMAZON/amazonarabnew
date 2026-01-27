@@ -17,12 +17,15 @@ const Products = () => {
 
   useEffect(() => {
     fetchCategories();
-    fetchProducts();
   }, []);
 
   useEffect(() => {
-    fetchProducts(selectedCategory);
-  }, [selectedCategory]);
+    const handler = setTimeout(() => {
+      fetchProducts(selectedCategory, searchQuery);
+    }, 300);
+
+    return () => clearTimeout(handler);
+  }, [selectedCategory, searchQuery]);
 
   const fetchCategories = async () => {
     try {
@@ -33,10 +36,13 @@ const Products = () => {
     }
   };
 
-  const fetchProducts = async (category = '') => {
+  const fetchProducts = async (category = '', search = '') => {
     try {
       setLoading(true);
-      const url = category ? `/products?category=${category}` : '/products';
+      const params = new URLSearchParams();
+      if (category) params.append('category', category);
+      if (search) params.append('search', search);
+      const url = params.toString() ? `/products?${params.toString()}` : '/products';
       const response = await api.get(url);
       setProducts(response.data.products || []);
     } catch (error) {
@@ -59,57 +65,7 @@ const Products = () => {
     toast.success(`${product.title} added to cart`);
   };
 
-  // Helper function to check if text matches search query (fuzzy matching for store names)
-  const matchesSearch = (product, query) => {
-    const lowerQuery = query.toLowerCase();
-    
-    // Exact substring match for product title and description
-    if (product.title.toLowerCase().includes(lowerQuery) ||
-        product.description?.toLowerCase().includes(lowerQuery)) {
-      return true;
-    }
-    
-    // For store name and seller name, use fuzzy matching if query length >= 3
-    const storeName = product.users?.storeName?.toLowerCase() || '';
-    const sellerName = product.users?.name?.toLowerCase() || '';
-    
-    if (lowerQuery.length >= 3) {
-      // Check if all characters in query appear in order in store/seller name
-      const fuzzyMatch = (text) => {
-        let queryIndex = 0;
-        for (let i = 0; i < text.length && queryIndex < lowerQuery.length; i++) {
-          if (text[i] === lowerQuery[queryIndex]) {
-            queryIndex++;
-          }
-        }
-        return queryIndex === lowerQuery.length;
-      };
-      
-      // Also check for partial word matches (words that start with the query)
-      const wordMatch = (text) => {
-        return text.split(/\s+/).some(word => word.startsWith(lowerQuery));
-      };
-      
-      if (storeName && (storeName.includes(lowerQuery) || fuzzyMatch(storeName) || wordMatch(storeName))) {
-        return true;
-      }
-      
-      if (sellerName && (sellerName.includes(lowerQuery) || fuzzyMatch(sellerName) || wordMatch(sellerName))) {
-        return true;
-      }
-    } else {
-      // For queries less than 3 characters, use exact substring match
-      if (storeName.includes(lowerQuery) || sellerName.includes(lowerQuery)) {
-        return true;
-      }
-    }
-    
-    return false;
-  };
-
-  const filteredProducts = products.filter((product) =>
-    matchesSearch(product, searchQuery)
-  );
+  const filteredProducts = products;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">

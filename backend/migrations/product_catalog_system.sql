@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS seller_products (
     product_id UUID REFERENCES products(id) ON DELETE CASCADE,
     added_at TIMESTAMPTZ DEFAULT NOW(),
     is_active BOOLEAN DEFAULT true,
+    store_name TEXT,
+    is_seller_product BOOLEAN DEFAULT true,
     UNIQUE(seller_id, product_id)
 );
 
@@ -38,6 +40,7 @@ CREATE POLICY "Admins can view all seller products" ON seller_products
 -- 6. Create indexes for performance
 CREATE INDEX IF NOT EXISTS idx_seller_products_seller_id ON seller_products(seller_id);
 CREATE INDEX IF NOT EXISTS idx_seller_products_product_id ON seller_products(product_id);
+CREATE INDEX IF NOT EXISTS idx_seller_products_store_name ON seller_products((LOWER(store_name)));
 CREATE INDEX IF NOT EXISTS idx_products_is_active ON products(is_active);
 
 -- Note: Run this SQL in Supabase SQL Editor before deploying the new backend
