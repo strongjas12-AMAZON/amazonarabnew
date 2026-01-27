@@ -3650,8 +3650,8 @@ async def search_stores(query: Optional[str] = None, limit: int = 20, offset: in
 
 
 @api_router.get("/stores/{store_id}")
-async def get_store_detail(store_id: str):
-    """Public: Get store details (buyers can access)"""
+async def get_store_detail(store_id: str, current_user: dict = Depends(get_current_user)):
+    """Protected: Get store details (login required)"""
     try:
         # Get store info with seller details
         result = supabase.table('stores').select(
