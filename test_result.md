@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: Build a Seller Dashboard Order Center with 5 status tabs (Pending Payment, To Be Shipped, To Be Received, To Be Evaluated, After-Sales/Refund), shipment tracking, and refund management connected to Supabase for real-time updates.
+user_problem_statement: Build a Buyer Store Search & Store Detail system connected to Supabase, with STRICT access control so buyers can ONLY see products that a seller has explicitly added to their store. Buyers must NOT see the master product catalog.
 
 backend:
   - task: "Order Center API - Get seller orders with status counts"
