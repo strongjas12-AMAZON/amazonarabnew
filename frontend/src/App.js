@@ -38,6 +38,10 @@ function App() {
               <Route path="/register" element={<Register />} />
               <Route path="/products" element={<Products />} />
               <Route path="/contact" element={<Contact />} />
+              
+              {/* Store Routes (Public) */}
+              <Route path="/stores/search" element={<StoreSearch />} />
+              <Route path="/stores/:storeId" element={<StoreDetail />} />
 
               {/* Protected Routes */}
               <Route
