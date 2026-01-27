@@ -3562,6 +3562,446 @@ async def update_seller_order_status(order_id: str, status: str, current_user: d
         raise HTTPException(status_code=400, detail=str(e))
 
 
+# =====================================================
+# STORE SYSTEM ENDPOINTS (BUYER STORE SEARCH & DETAIL)
+# =====================================================
+
+@api_router.post("/admin/seed-catalog", dependencies=[Depends(RateLimitKey("admin"))])
+@limiter.limit("5/hour")
+async def seed_product_catalog(request: Request, current_user: dict = Depends(get_current_user)):
+    """Admin-only: Seed the product catalog with 100 products"""
+    try:
+        # Check admin role
+        if current_user.get('role') != 'admin':
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        # Import catalog
+        from product_catalog import PRODUCT_CATALOG
+        
+        # Check if already seeded
+        existing = supabase_admin.table('product_catalog').select('id').limit(1).execute()
+        if existing.data:
+            raise HTTPException(status_code=400, detail="Catalog already seeded. Delete existing products first.")
+        
+        # Insert all products
+        catalog_items = []
+        for product in PRODUCT_CATALOG:
+            catalog_items.append({
+                'name': product['title'],
+                'description': product['description'],
+                'base_price': product['price'],
+                'images': product['images'],
+                'category': product['category']
+            })
+        
+        result = supabase_admin.table('product_catalog').insert(catalog_items).execute()
+        
+        return {
+            "success": True,
+            "message": f"Successfully seeded {len(result.data)} products to catalog"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Seed catalog error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.get("/stores/search")
+async def search_stores(query: Optional[str] = None, limit: int = 20, offset: int = 0):
+    """Public: Search stores by name (buyers can access)"""
+    try:
+        # Build query
+        db_query = supabase.table('stores').select('id, seller_id, store_name, status, created_at')
+        
+        # Only active stores
+        db_query = db_query.eq('status', 'active')
+        
+        # Filter by name if provided
+        if query:
+            db_query = db_query.ilike('store_name', f'%{query}%')
+        
+        # Pagination
+        db_query = db_query.range(offset, offset + limit - 1).order('store_name')
+        
+        result = db_query.execute()
+        
+        # Format response
+        stores = []
+        for store in result.data:
+            stores.append({
+                'id': store['id'],
+                'sellerId': store['seller_id'],
+                'storeName': store['store_name'],
+                'status': store['status'],
+                'createdAt': store['created_at']
+            })
+        
+        return {
+            "success": True,
+            "stores": stores,
+            "total": len(stores)
+        }
+    
+    except Exception as e:
+        logging.error(f"Search stores error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.get("/stores/{store_id}")
+async def get_store_detail(store_id: str):
+    """Public: Get store details (buyers can access)"""
+    try:
+        # Get store info with seller details
+        result = supabase.table('stores').select(
+            'id, seller_id, store_name, status, created_at, users:seller_id(name, email, verification_status)'
+        ).eq('id', store_id).eq('status', 'active').single().execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Store not found or inactive")
+        
+        store = result.data
+        
+        # Format response
+        store_data = {
+            'id': store['id'],
+            'sellerId': store['seller_id'],
+            'storeName': store['store_name'],
+            'status': store['status'],
+            'createdAt': store['created_at']
+        }
+        
+        if store.get('users'):
+            store_data['seller'] = {
+                'name': store['users'].get('name'),
+                'email': store['users'].get('email'),
+                'verificationStatus': store['users'].get('verification_status')
+            }
+        
+        return {
+            "success": True,
+            "store": store_data
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Get store detail error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.get("/stores/{store_id}/products")
+async def get_store_products(store_id: str, limit: int = 50, offset: int = 0):
+    """
+    Public: Get products from a specific store (BUYERS SEE ONLY THESE)
+    CRITICAL: This joins store_products with product_catalog
+    Buyers can ONLY see what's in store_products, NOT the full catalog
+    """
+    try:
+        # Get store products with catalog info
+        # IMPORTANT: Query starts from store_products, NOT product_catalog
+        result = supabase.table('store_products').select(
+            '''
+            id,
+            store_id,
+            seller_id,
+            catalog_product_id,
+            price,
+            stock,
+            custom_description,
+            is_active,
+            created_at,
+            product_catalog:catalog_product_id(name, description, base_price, images, category)
+            '''
+        ).eq('store_id', store_id).eq('is_active', True).range(offset, offset + limit - 1).order('created_at', desc=True).execute()
+        
+        # Format response
+        products = []
+        for item in result.data:
+            catalog_info = item.get('product_catalog', {})
+            
+            products.append({
+                'id': item['id'],
+                'storeId': item['store_id'],
+                'sellerId': item['seller_id'],
+                'catalogProductId': item['catalog_product_id'],
+                'price': float(item['price']),  # Store-specific price
+                'stock': item['stock'],
+                'customDescription': item['custom_description'],
+                'isActive': item['is_active'],
+                'createdAt': item['created_at'],
+                # Catalog info (name, images from master catalog)
+                'name': catalog_info.get('name'),
+                'description': item['custom_description'] or catalog_info.get('description'),
+                'basePrice': float(catalog_info.get('base_price', 0)),
+                'images': catalog_info.get('images', []),
+                'category': catalog_info.get('category')
+            })
+        
+        return {
+            "success": True,
+            "products": products,
+            "total": len(products)
+        }
+    
+    except Exception as e:
+        logging.error(f"Get store products error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.get("/seller/catalog/products")
+async def get_catalog_products_for_seller(
+    current_user: dict = Depends(get_current_user),
+    category: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0
+):
+    """
+    Seller-only: Browse product catalog to add products to their store
+    Buyers CANNOT access this endpoint (enforced by RLS)
+    """
+    try:
+        # Verify seller role
+        if current_user.get('role') != 'seller':
+            raise HTTPException(status_code=403, detail="Seller access required")
+        
+        # Query catalog (RLS enforces seller-only access)
+        query = supabase.table('product_catalog').select('*')
+        
+        if category:
+            query = query.eq('category', category)
+        
+        query = query.range(offset, offset + limit - 1).order('name')
+        result = query.execute()
+        
+        # Format response
+        products = []
+        for product in result.data:
+            products.append({
+                'id': product['id'],
+                'name': product['name'],
+                'description': product['description'],
+                'basePrice': float(product['base_price']),
+                'images': product['images'],
+                'category': product['category'],
+                'createdAt': product['created_at']
+            })
+        
+        return {
+            "success": True,
+            "products": products,
+            "total": len(products)
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Get catalog products error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.post("/seller/store/products")
+async def add_product_to_store(
+    catalog_product_id: str = Form(...),
+    price: float = Form(...),
+    stock: int = Form(0),
+    custom_description: Optional[str] = Form(None),
+    current_user: dict = Depends(get_current_user)
+):
+    """Seller-only: Add a catalog product to their store"""
+    try:
+        # Verify seller role
+        if current_user.get('role') != 'seller':
+            raise HTTPException(status_code=403, detail="Seller access required")
+        
+        seller_id = current_user['id']
+        
+        # Get seller's store
+        store_result = supabase_admin.table('stores').select('id').eq('seller_id', seller_id).single().execute()
+        
+        if not store_result.data:
+            raise HTTPException(status_code=404, detail="Store not found. Please contact support.")
+        
+        store_id = store_result.data['id']
+        
+        # Check if product already in store
+        existing = supabase_admin.table('store_products').select('id').eq('store_id', store_id).eq('catalog_product_id', catalog_product_id).execute()
+        
+        if existing.data:
+            raise HTTPException(status_code=400, detail="Product already in your store")
+        
+        # Add product to store
+        data = {
+            'store_id': store_id,
+            'seller_id': seller_id,
+            'catalog_product_id': catalog_product_id,
+            'price': price,
+            'stock': stock,
+            'custom_description': custom_description,
+            'is_active': True
+        }
+        
+        result = supabase_admin.table('store_products').insert(data).execute()
+        
+        return {
+            "success": True,
+            "message": "Product added to store successfully",
+            "storeProduct": result.data[0] if result.data else None
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Add product to store error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.get("/seller/store/products")
+async def get_my_store_products(current_user: dict = Depends(get_current_user)):
+    """Seller-only: Get all products in their store"""
+    try:
+        # Verify seller role
+        if current_user.get('role') != 'seller':
+            raise HTTPException(status_code=403, detail="Seller access required")
+        
+        seller_id = current_user['id']
+        
+        # Get store products with catalog info
+        result = supabase_admin.table('store_products').select(
+            '''
+            id,
+            store_id,
+            seller_id,
+            catalog_product_id,
+            price,
+            stock,
+            custom_description,
+            is_active,
+            created_at,
+            product_catalog:catalog_product_id(name, description, base_price, images, category)
+            '''
+        ).eq('seller_id', seller_id).order('created_at', desc=True).execute()
+        
+        # Format response
+        products = []
+        for item in result.data:
+            catalog_info = item.get('product_catalog', {})
+            
+            products.append({
+                'id': item['id'],
+                'storeId': item['store_id'],
+                'catalogProductId': item['catalog_product_id'],
+                'price': float(item['price']),
+                'stock': item['stock'],
+                'customDescription': item['custom_description'],
+                'isActive': item['is_active'],
+                'createdAt': item['created_at'],
+                'name': catalog_info.get('name'),
+                'description': catalog_info.get('description'),
+                'basePrice': float(catalog_info.get('base_price', 0)),
+                'images': catalog_info.get('images', []),
+                'category': catalog_info.get('category')
+            })
+        
+        return {
+            "success": True,
+            "products": products
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Get my store products error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.put("/seller/store/products/{product_id}")
+async def update_store_product(
+    product_id: str,
+    price: Optional[float] = Form(None),
+    stock: Optional[int] = Form(None),
+    custom_description: Optional[str] = Form(None),
+    is_active: Optional[bool] = Form(None),
+    current_user: dict = Depends(get_current_user)
+):
+    """Seller-only: Update a product in their store"""
+    try:
+        # Verify seller role
+        if current_user.get('role') != 'seller':
+            raise HTTPException(status_code=403, detail="Seller access required")
+        
+        seller_id = current_user['id']
+        
+        # Build update data
+        update_data = {}
+        if price is not None:
+            update_data['price'] = price
+        if stock is not None:
+            update_data['stock'] = stock
+        if custom_description is not None:
+            update_data['custom_description'] = custom_description
+        if is_active is not None:
+            update_data['is_active'] = is_active
+        
+        if not update_data:
+            raise HTTPException(status_code=400, detail="No fields to update")
+        
+        update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+        
+        # Update product (RLS ensures only own products)
+        result = supabase_admin.table('store_products').update(update_data).eq('id', product_id).eq('seller_id', seller_id).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Product not found in your store")
+        
+        return {
+            "success": True,
+            "message": "Store product updated successfully"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Update store product error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.delete("/seller/store/products/{product_id}")
+async def remove_product_from_store(
+    product_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Seller-only: Remove a product from their store"""
+    try:
+        # Verify seller role
+        if current_user.get('role') != 'seller':
+            raise HTTPException(status_code=403, detail="Seller access required")
+        
+        seller_id = current_user['id']
+        
+        # Delete product (RLS ensures only own products)
+        result = supabase_admin.table('store_products').delete().eq('id', product_id).eq('seller_id', seller_id).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Product not found in your store")
+        
+        return {
+            "success": True,
+            "message": "Product removed from store successfully"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Remove product from store error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# =====================================================
+# END STORE SYSTEM ENDPOINTS
+# =====================================================
+
 @api_router.get("/me")
 async def get_current_user_info(current_user: dict = Depends(get_current_user)):
     """Get current user info"""
