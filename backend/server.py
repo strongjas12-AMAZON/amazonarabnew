@@ -2851,6 +2851,717 @@ async def reject_store_name_request(request_id: str, action: StoreNameChangeAdmi
         raise HTTPException(status_code=400, detail=str(e))
 
 
+# ============================================
+# SELLER ORDER CENTER ENDPOINTS
+# ============================================
+
+# Pydantic models for Order Center
+class ShipOrderRequest(BaseModel):
+    trackingNumber: str
+    courierName: str
+    courierCode: Optional[str] = None
+    estimatedDelivery: Optional[str] = None
+    deliveryNotes: Optional[str] = None
+
+
+class UpdateShipmentRequest(BaseModel):
+    trackingNumber: Optional[str] = None
+    courierName: Optional[str] = None
+    deliveryStatus: Optional[str] = None
+    deliveryNotes: Optional[str] = None
+
+
+class RefundActionRequest(BaseModel):
+    action: str = Field(..., pattern="^(approve|reject)$")
+    sellerResponse: Optional[str] = None
+    approvedAmount: Optional[float] = None
+
+
+class CreateRefundRequest(BaseModel):
+    orderId: str
+    reason: str
+    description: Optional[str] = None
+    refundType: Optional[str] = 'refund'
+    requestedAmount: Optional[float] = None
+
+
+# Available courier options
+COURIER_OPTIONS = [
+    {"code": "dhl", "name": "DHL Express", "icon": "📦"},
+    {"code": "fedex", "name": "FedEx", "icon": "📫"},
+    {"code": "ups", "name": "UPS", "icon": "📬"},
+    {"code": "aramex", "name": "Aramex", "icon": "🚚"},
+    {"code": "smsa", "name": "SMSA Express", "icon": "📮"},
+    {"code": "sf_express", "name": "SF Express", "icon": "🏃"},
+    {"code": "other", "name": "Other Courier", "icon": "📨"},
+]
+
+
+def format_shipment_response(shipment_data: dict) -> dict:
+    """Format shipment data for frontend"""
+    return {
+        "id": shipment_data.get("id"),
+        "orderId": shipment_data.get("order_id"),
+        "trackingNumber": shipment_data.get("tracking_number"),
+        "courierName": shipment_data.get("courier_name"),
+        "courierCode": shipment_data.get("courier_code"),
+        "shippedAt": shipment_data.get("shipped_at"),
+        "estimatedDelivery": shipment_data.get("estimated_delivery"),
+        "deliveryStatus": shipment_data.get("delivery_status"),
+        "deliveryNotes": shipment_data.get("delivery_notes"),
+        "createdAt": shipment_data.get("created_at"),
+        "updatedAt": shipment_data.get("updated_at"),
+    }
+
+
+def format_refund_response(refund_data: dict) -> dict:
+    """Format refund data for frontend"""
+    result = {
+        "id": refund_data.get("id"),
+        "orderId": refund_data.get("order_id"),
+        "buyerId": refund_data.get("buyer_id"),
+        "sellerId": refund_data.get("seller_id"),
+        "refundType": refund_data.get("refund_type"),
+        "reason": refund_data.get("reason"),
+        "description": refund_data.get("description"),
+        "evidenceUrls": refund_data.get("evidence_urls", []),
+        "requestedAmount": float(refund_data.get("requested_amount", 0)) if refund_data.get("requested_amount") else None,
+        "approvedAmount": float(refund_data.get("approved_amount", 0)) if refund_data.get("approved_amount") else None,
+        "status": refund_data.get("status"),
+        "sellerResponse": refund_data.get("seller_response"),
+        "sellerRespondedAt": refund_data.get("seller_responded_at"),
+        "adminNote": refund_data.get("admin_note"),
+        "resolvedAt": refund_data.get("resolved_at"),
+        "createdAt": refund_data.get("created_at"),
+        "updatedAt": refund_data.get("updated_at"),
+    }
+    # Include buyer info if available
+    if 'users' in refund_data and refund_data['users']:
+        result['buyer'] = {
+            'name': refund_data['users'].get('name'),
+            'email': refund_data['users'].get('email'),
+        }
+    return result
+
+
+def format_order_center_response(order_data: dict, include_shipment: bool = True) -> dict:
+    """Format order data for Order Center with additional fields"""
+    result = format_order_response(order_data)
+    result['orderStatus'] = order_data.get('order_status') or order_data.get('orderStatus') or 'pending_payment'
+    result['sellerId'] = order_data.get('seller_id')
+    
+    # Include shipment info if available
+    if include_shipment and 'shipments' in order_data and order_data['shipments']:
+        shipments = order_data['shipments']
+        if isinstance(shipments, list) and len(shipments) > 0:
+            result['shipment'] = format_shipment_response(shipments[0])
+        elif isinstance(shipments, dict):
+            result['shipment'] = format_shipment_response(shipments)
+    
+    # Include refund info if available
+    if 'refunds' in order_data and order_data['refunds']:
+        refunds = order_data['refunds']
+        if isinstance(refunds, list):
+            result['refunds'] = [format_refund_response(r) for r in refunds]
+        elif isinstance(refunds, dict):
+            result['refunds'] = [format_refund_response(refunds)]
+    
+    # Include buyer info if available
+    if 'users' in order_data and order_data['users']:
+        result['buyer'] = {
+            'name': order_data['users'].get('name'),
+            'email': order_data['users'].get('email'),
+        }
+    
+    return result
+
+
+@api_router.get("/couriers")
+async def get_courier_options():
+    """Get available courier options for shipping"""
+    return {"success": True, "couriers": COURIER_OPTIONS}
+
+
+@api_router.get("/seller/order-center")
+async def get_seller_order_center(
+    status: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get seller's orders for Order Center with counts per status"""
+    if current_user['role'] != 'seller':
+        raise HTTPException(status_code=403, detail="Only sellers can access Order Center")
+    
+    try:
+        # Get all orders where seller has products
+        all_orders_result = supabase_admin.table('orders')\
+            .select('*, order_items(*, products(*)), shipments(*), refunds(*), users!buyer_id(name, email)')\
+            .execute()
+        
+        # Filter orders that contain seller's products
+        seller_orders = []
+        for order in all_orders_result.data or []:
+            # Check if any order item belongs to seller's products
+            has_seller_item = False
+            seller_items = []
+            
+            for item in order.get('order_items', []):
+                product = item.get('products')
+                if product:
+                    # Check if product is in seller's store via seller_products
+                    seller_product = supabase_admin.table('seller_products')\
+                        .select('id')\
+                        .eq('seller_id', current_user['id'])\
+                        .eq('product_id', product.get('id'))\
+                        .eq('is_active', True)\
+                        .execute()
+                    
+                    if seller_product.data:
+                        has_seller_item = True
+                        seller_items.append(item)
+            
+            if has_seller_item:
+                # Only include seller's items in the order
+                order['order_items'] = seller_items
+                seller_orders.append(order)
+        
+        # Calculate counts per status
+        status_counts = {
+            'pending_payment': 0,
+            'to_be_shipped': 0,
+            'to_be_received': 0,
+            'to_be_evaluated': 0,
+            'after_sales': 0,
+            'completed': 0,
+        }
+        
+        for order in seller_orders:
+            order_status = order.get('order_status') or 'pending_payment'
+            payment_status = order.get('payment_status')
+            
+            # Determine effective status
+            if payment_status == 'pending_payment' or order_status == 'pending_payment':
+                effective_status = 'pending_payment'
+            elif order_status in status_counts:
+                effective_status = order_status
+            elif payment_status == 'paid' and (not order_status or order_status == 'pending_payment'):
+                effective_status = 'to_be_shipped'
+            else:
+                effective_status = order_status or 'pending_payment'
+            
+            if effective_status in status_counts:
+                status_counts[effective_status] += 1
+        
+        # Filter by status if provided
+        filtered_orders = seller_orders
+        if status:
+            filtered_orders = []
+            for order in seller_orders:
+                order_status = order.get('order_status') or 'pending_payment'
+                payment_status = order.get('payment_status')
+                
+                if status == 'pending_payment':
+                    if payment_status == 'pending_payment' or order_status == 'pending_payment':
+                        filtered_orders.append(order)
+                elif status == 'to_be_shipped':
+                    if payment_status == 'paid' and order_status in ('pending_payment', 'to_be_shipped', None):
+                        filtered_orders.append(order)
+                elif status == 'after_sales':
+                    # Include orders with pending refunds
+                    refunds = order.get('refunds', [])
+                    has_pending_refund = any(r.get('status') in ('pending', 'seller_review') for r in (refunds if isinstance(refunds, list) else [refunds] if refunds else []))
+                    if order_status == 'after_sales' or has_pending_refund:
+                        filtered_orders.append(order)
+                elif order_status == status:
+                    filtered_orders.append(order)
+        
+        # Format orders for response
+        formatted_orders = [format_order_center_response(o) for o in filtered_orders]
+        
+        return {
+            "success": True,
+            "orders": formatted_orders,
+            "counts": status_counts,
+            "total": len(seller_orders)
+        }
+    except Exception as e:
+        logging.error(f"Get seller order center error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/seller/order-center/{order_id}")
+async def get_seller_order_detail(order_id: str, current_user: dict = Depends(get_current_user)):
+    """Get detailed order info for a specific order"""
+    if current_user['role'] != 'seller':
+        raise HTTPException(status_code=403, detail="Only sellers can access Order Center")
+    
+    try:
+        order_result = supabase_admin.table('orders')\
+            .select('*, order_items(*, products(*)), shipments(*), refunds(*, users!buyer_id(name, email)), users!buyer_id(name, email)')\
+            .eq('id', order_id)\
+            .execute()
+        
+        if not order_result.data:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        order = order_result.data[0]
+        
+        # Verify seller has products in this order
+        has_seller_item = False
+        seller_items = []
+        for item in order.get('order_items', []):
+            product = item.get('products')
+            if product:
+                seller_product = supabase_admin.table('seller_products')\
+                    .select('id')\
+                    .eq('seller_id', current_user['id'])\
+                    .eq('product_id', product.get('id'))\
+                    .eq('is_active', True)\
+                    .execute()
+                
+                if seller_product.data:
+                    has_seller_item = True
+                    seller_items.append(item)
+        
+        if not has_seller_item:
+            raise HTTPException(status_code=403, detail="You don't have products in this order")
+        
+        order['order_items'] = seller_items
+        return {"success": True, "order": format_order_center_response(order)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Get order detail error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/seller/orders/{order_id}/ship")
+async def ship_order(order_id: str, req: ShipOrderRequest, current_user: dict = Depends(get_current_user)):
+    """Seller ships an order - adds tracking info and updates status"""
+    if current_user['role'] != 'seller':
+        raise HTTPException(status_code=403, detail="Only sellers can ship orders")
+    
+    try:
+        # Verify order exists and seller has products in it
+        order_result = supabase_admin.table('orders')\
+            .select('*, order_items(*, products(*))')\
+            .eq('id', order_id)\
+            .execute()
+        
+        if not order_result.data:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        order = order_result.data[0]
+        
+        # Verify seller owns products in this order
+        has_seller_item = False
+        for item in order.get('order_items', []):
+            product = item.get('products')
+            if product:
+                seller_product = supabase_admin.table('seller_products')\
+                    .select('id')\
+                    .eq('seller_id', current_user['id'])\
+                    .eq('product_id', product.get('id'))\
+                    .eq('is_active', True)\
+                    .execute()
+                
+                if seller_product.data:
+                    has_seller_item = True
+                    break
+        
+        if not has_seller_item:
+            raise HTTPException(status_code=403, detail="You don't have products in this order")
+        
+        # Check order status - must be paid/to_be_shipped
+        payment_status = order.get('payment_status')
+        order_status = order.get('order_status')
+        
+        if payment_status != 'paid' and order_status != 'to_be_shipped':
+            raise HTTPException(status_code=400, detail="Order must be paid before shipping")
+        
+        # Create shipment record
+        shipment_data = {
+            'id': str(uuid.uuid4()),
+            'order_id': order_id,
+            'tracking_number': req.trackingNumber,
+            'courier_name': req.courierName,
+            'courier_code': req.courierCode,
+            'shipped_at': datetime.now(timezone.utc).isoformat(),
+            'estimated_delivery': req.estimatedDelivery,
+            'delivery_status': 'picked_up',
+            'delivery_notes': req.deliveryNotes,
+            'created_at': datetime.now(timezone.utc).isoformat(),
+            'updated_at': datetime.now(timezone.utc).isoformat(),
+        }
+        
+        # Check if shipment already exists
+        existing_shipment = supabase_admin.table('shipments').select('id').eq('order_id', order_id).execute()
+        
+        if existing_shipment.data:
+            # Update existing shipment
+            supabase_admin.table('shipments').update({
+                'tracking_number': req.trackingNumber,
+                'courier_name': req.courierName,
+                'courier_code': req.courierCode,
+                'shipped_at': datetime.now(timezone.utc).isoformat(),
+                'delivery_status': 'picked_up',
+                'updated_at': datetime.now(timezone.utc).isoformat(),
+            }).eq('order_id', order_id).execute()
+        else:
+            # Insert new shipment
+            supabase_admin.table('shipments').insert(shipment_data).execute()
+        
+        # Update order status to 'to_be_received'
+        supabase_admin.table('orders').update({
+            'order_status': 'to_be_received',
+            'seller_id': current_user['id']  # Set seller_id if not already set
+        }).eq('id', order_id).execute()
+        
+        return {
+            "success": True,
+            "message": "Order shipped successfully",
+            "shipment": format_shipment_response(shipment_data)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Ship order error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.put("/seller/orders/{order_id}/shipment")
+async def update_shipment(order_id: str, req: UpdateShipmentRequest, current_user: dict = Depends(get_current_user)):
+    """Update shipment tracking info"""
+    if current_user['role'] != 'seller':
+        raise HTTPException(status_code=403, detail="Only sellers can update shipments")
+    
+    try:
+        # Verify shipment exists
+        shipment_result = supabase_admin.table('shipments').select('*').eq('order_id', order_id).execute()
+        
+        if not shipment_result.data:
+            raise HTTPException(status_code=404, detail="Shipment not found")
+        
+        update_data = {'updated_at': datetime.now(timezone.utc).isoformat()}
+        if req.trackingNumber is not None:
+            update_data['tracking_number'] = req.trackingNumber
+        if req.courierName is not None:
+            update_data['courier_name'] = req.courierName
+        if req.deliveryStatus is not None:
+            update_data['delivery_status'] = req.deliveryStatus
+            # If marked as delivered, update order status
+            if req.deliveryStatus == 'delivered':
+                supabase_admin.table('orders').update({
+                    'order_status': 'to_be_evaluated'
+                }).eq('id', order_id).execute()
+        if req.deliveryNotes is not None:
+            update_data['delivery_notes'] = req.deliveryNotes
+        
+        result = supabase_admin.table('shipments').update(update_data).eq('order_id', order_id).execute()
+        
+        return {"success": True, "shipment": format_shipment_response(result.data[0])}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Update shipment error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.get("/seller/refunds")
+async def get_seller_refunds(status: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    """Get refund requests for seller's orders"""
+    if current_user['role'] != 'seller':
+        raise HTTPException(status_code=403, detail="Only sellers can view refunds")
+    
+    try:
+        # Get orders that contain seller's products first
+        all_orders_result = supabase_admin.table('orders')\
+            .select('id, order_items(*, products(*))')\
+            .execute()
+        
+        seller_order_ids = []
+        for order in all_orders_result.data or []:
+            for item in order.get('order_items', []):
+                product = item.get('products')
+                if product:
+                    seller_product = supabase_admin.table('seller_products')\
+                        .select('id')\
+                        .eq('seller_id', current_user['id'])\
+                        .eq('product_id', product.get('id'))\
+                        .eq('is_active', True)\
+                        .execute()
+                    if seller_product.data:
+                        seller_order_ids.append(order['id'])
+                        break
+        
+        if not seller_order_ids:
+            return {"success": True, "refunds": [], "counts": {"pending": 0, "approved": 0, "rejected": 0, "completed": 0}}
+        
+        # Get refunds for seller's orders
+        query = supabase_admin.table('refunds')\
+            .select('*, users!buyer_id(name, email), orders!order_id(id, total_amount, created_at)')\
+            .in_('order_id', seller_order_ids)
+        
+        if status:
+            query = query.eq('status', status)
+        
+        refunds_result = query.order('created_at', desc=True).execute()
+        
+        # Calculate counts
+        all_refunds = supabase_admin.table('refunds').select('status').in_('order_id', seller_order_ids).execute()
+        counts = {"pending": 0, "seller_review": 0, "approved": 0, "rejected": 0, "processing": 0, "completed": 0}
+        for r in all_refunds.data or []:
+            s = r.get('status')
+            if s in counts:
+                counts[s] += 1
+        
+        formatted_refunds = []
+        for refund in refunds_result.data or []:
+            formatted = format_refund_response(refund)
+            if 'orders' in refund and refund['orders']:
+                formatted['order'] = {
+                    'id': refund['orders'].get('id'),
+                    'totalAmount': refund['orders'].get('total_amount'),
+                    'createdAt': refund['orders'].get('created_at'),
+                }
+            formatted_refunds.append(formatted)
+        
+        return {
+            "success": True,
+            "refunds": formatted_refunds,
+            "counts": counts
+        }
+    except Exception as e:
+        logging.error(f"Get seller refunds error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.put("/seller/refunds/{refund_id}")
+async def respond_to_refund(refund_id: str, req: RefundActionRequest, current_user: dict = Depends(get_current_user)):
+    """Seller approves or rejects a refund request"""
+    if current_user['role'] != 'seller':
+        raise HTTPException(status_code=403, detail="Only sellers can respond to refunds")
+    
+    try:
+        # Get refund
+        refund_result = supabase_admin.table('refunds').select('*').eq('id', refund_id).execute()
+        
+        if not refund_result.data:
+            raise HTTPException(status_code=404, detail="Refund request not found")
+        
+        refund = refund_result.data[0]
+        
+        # Verify seller owns products in the order
+        order_result = supabase_admin.table('orders')\
+            .select('*, order_items(*, products(*))')\
+            .eq('id', refund['order_id'])\
+            .execute()
+        
+        if not order_result.data:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        has_seller_item = False
+        for item in order_result.data[0].get('order_items', []):
+            product = item.get('products')
+            if product:
+                seller_product = supabase_admin.table('seller_products')\
+                    .select('id')\
+                    .eq('seller_id', current_user['id'])\
+                    .eq('product_id', product.get('id'))\
+                    .eq('is_active', True)\
+                    .execute()
+                if seller_product.data:
+                    has_seller_item = True
+                    break
+        
+        if not has_seller_item:
+            raise HTTPException(status_code=403, detail="You cannot respond to this refund")
+        
+        # Update refund status
+        update_data = {
+            'seller_id': current_user['id'],
+            'seller_response': req.sellerResponse,
+            'seller_responded_at': datetime.now(timezone.utc).isoformat(),
+            'updated_at': datetime.now(timezone.utc).isoformat(),
+        }
+        
+        if req.action == 'approve':
+            update_data['status'] = 'approved'
+            update_data['approved_amount'] = req.approvedAmount or refund.get('requested_amount')
+            # Update order status
+            supabase_admin.table('orders').update({
+                'order_status': 'after_sales'
+            }).eq('id', refund['order_id']).execute()
+        else:  # reject
+            update_data['status'] = 'rejected'
+        
+        result = supabase_admin.table('refunds').update(update_data).eq('id', refund_id).execute()
+        
+        return {"success": True, "refund": format_refund_response(result.data[0])}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Respond to refund error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.post("/buyer/refunds")
+async def create_refund_request(req: CreateRefundRequest, current_user: dict = Depends(get_current_user)):
+    """Buyer creates a refund request"""
+    if current_user['role'] != 'buyer':
+        raise HTTPException(status_code=403, detail="Only buyers can request refunds")
+    
+    try:
+        # Verify order belongs to buyer
+        order_result = supabase_admin.table('orders')\
+            .select('*, order_items(*, products(*))')\
+            .eq('id', req.orderId)\
+            .eq('buyer_id', current_user['id'])\
+            .execute()
+        
+        if not order_result.data:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        order = order_result.data[0]
+        
+        # Check if refund already exists for this order
+        existing_refund = supabase_admin.table('refunds')\
+            .select('id')\
+            .eq('order_id', req.orderId)\
+            .in_('status', ['pending', 'seller_review', 'processing'])\
+            .execute()
+        
+        if existing_refund.data:
+            raise HTTPException(status_code=400, detail="A refund request already exists for this order")
+        
+        # Get seller_id from order items
+        seller_id = None
+        for item in order.get('order_items', []):
+            product = item.get('products')
+            if product:
+                # Find seller who has this product in their store
+                seller_product = supabase_admin.table('seller_products')\
+                    .select('seller_id')\
+                    .eq('product_id', product.get('id'))\
+                    .eq('is_active', True)\
+                    .execute()
+                if seller_product.data:
+                    seller_id = seller_product.data[0].get('seller_id')
+                    break
+        
+        refund_data = {
+            'id': str(uuid.uuid4()),
+            'order_id': req.orderId,
+            'buyer_id': current_user['id'],
+            'seller_id': seller_id,
+            'refund_type': req.refundType or 'refund',
+            'reason': req.reason,
+            'description': req.description,
+            'requested_amount': req.requestedAmount or float(order.get('total_amount', 0)),
+            'status': 'pending',
+            'created_at': datetime.now(timezone.utc).isoformat(),
+            'updated_at': datetime.now(timezone.utc).isoformat(),
+        }
+        
+        result = supabase_admin.table('refunds').insert(refund_data).execute()
+        
+        # Update order status to after_sales
+        supabase_admin.table('orders').update({
+            'order_status': 'after_sales'
+        }).eq('id', req.orderId).execute()
+        
+        return {"success": True, "refund": format_refund_response(result.data[0])}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Create refund request error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.get("/buyer/refunds")
+async def get_buyer_refunds(current_user: dict = Depends(get_current_user)):
+    """Get buyer's refund requests"""
+    if current_user['role'] != 'buyer':
+        raise HTTPException(status_code=403, detail="Only buyers can view their refunds")
+    
+    try:
+        refunds_result = supabase_admin.table('refunds')\
+            .select('*, orders!order_id(id, total_amount, created_at, order_items(*, products(*)))')\
+            .eq('buyer_id', current_user['id'])\
+            .order('created_at', desc=True)\
+            .execute()
+        
+        formatted_refunds = []
+        for refund in refunds_result.data or []:
+            formatted = format_refund_response(refund)
+            if 'orders' in refund and refund['orders']:
+                formatted['order'] = format_order_response(refund['orders'])
+            formatted_refunds.append(formatted)
+        
+        return {"success": True, "refunds": formatted_refunds}
+    except Exception as e:
+        logging.error(f"Get buyer refunds error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.put("/seller/orders/{order_id}/status")
+async def update_seller_order_status(order_id: str, status: str, current_user: dict = Depends(get_current_user)):
+    """Seller updates order status"""
+    if current_user['role'] != 'seller':
+        raise HTTPException(status_code=403, detail="Only sellers can update order status")
+    
+    valid_statuses = ['to_be_shipped', 'to_be_received', 'to_be_evaluated', 'completed']
+    if status not in valid_statuses:
+        raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")
+    
+    try:
+        # Verify order and seller ownership
+        order_result = supabase_admin.table('orders')\
+            .select('*, order_items(*, products(*))')\
+            .eq('id', order_id)\
+            .execute()
+        
+        if not order_result.data:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        order = order_result.data[0]
+        
+        has_seller_item = False
+        for item in order.get('order_items', []):
+            product = item.get('products')
+            if product:
+                seller_product = supabase_admin.table('seller_products')\
+                    .select('id')\
+                    .eq('seller_id', current_user['id'])\
+                    .eq('product_id', product.get('id'))\
+                    .eq('is_active', True)\
+                    .execute()
+                if seller_product.data:
+                    has_seller_item = True
+                    break
+        
+        if not has_seller_item:
+            raise HTTPException(status_code=403, detail="You cannot update this order")
+        
+        # Update order status
+        update_data = {
+            'order_status': status,
+            'seller_id': current_user['id']
+        }
+        
+        # If completing order, also update payment_status
+        if status == 'completed':
+            update_data['payment_status'] = 'completed'
+        
+        result = supabase_admin.table('orders').update(update_data).eq('id', order_id).execute()
+        
+        return {"success": True, "order": format_order_center_response(result.data[0], include_shipment=False)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Update order status error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @api_router.get("/me")
 async def get_current_user_info(current_user: dict = Depends(get_current_user)):
     """Get current user info"""
