@@ -3609,8 +3609,8 @@ async def seed_product_catalog(request: Request, current_user: dict = Depends(ge
 
 
 @api_router.get("/stores/search")
-async def search_stores(query: Optional[str] = None, limit: int = 20, offset: int = 0):
-    """Public: Search stores by name (buyers can access)"""
+async def search_stores(query: Optional[str] = None, limit: int = 20, offset: int = 0, current_user: dict = Depends(get_current_user)):
+    """Protected: Search stores by name (login required)"""
     try:
         # Build query
         db_query = supabase.table('stores').select('id, seller_id, store_name, status, created_at')
