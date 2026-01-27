@@ -10,7 +10,7 @@ import sys
 from typing import Dict, Any, Optional
 
 # Configuration
-BASE_URL = "https://code-mirror-48.preview.emergentagent.com/api"
+BASE_URL = "https://git-clone-8.preview.emergentagent.com/api"
 SELLER_EMAIL = "testseller_new@test.com"
 SELLER_PASSWORD = "TestPass123!"
 
