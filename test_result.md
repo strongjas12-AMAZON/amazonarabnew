@@ -202,29 +202,41 @@ backend:
         comment: "Implemented GET/PUT/DELETE /api/seller/store/products for sellers to manage their store inventory"
 
 frontend:
-  - task: "Order Center Component"
+  - task: "Store Search Page"
     implemented: true
     working: "NA"
-    file: "frontend/src/pages/dashboard/OrderCenter.js"
+    file: "frontend/src/pages/StoreSearch.js"
     stuck_count: 0
     priority: "high"
     needs_retesting: true
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "Created OrderCenter component with 5 status tabs, real-time subscriptions, ship modal, and refund modal"
-  
-  - task: "Seller Dashboard Integration"
+        comment: "Created StoreSearch component with search functionality, store cards, and navigation to store detail page"
+
+  - task: "Store Detail Page"
     implemented: true
     working: "NA"
-    file: "frontend/src/pages/dashboard/SellerDashboard.js"
+    file: "frontend/src/pages/StoreDetail.js"
     stuck_count: 0
     priority: "high"
     needs_retesting: true
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "Added Order Center tab to SellerDashboard"
+        comment: "Created StoreDetail component showing store info and ONLY products from store_products table. Integrated with cart functionality."
+
+  - task: "Navigation Updates"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/App.js, frontend/src/components/Navbar.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Added /stores/search and /stores/:storeId routes. Added 'Stores' link to main navigation."
 
 metadata:
   created_by: "main_agent"
