@@ -39,9 +39,23 @@ function App() {
               <Route path="/products" element={<Products />} />
               <Route path="/contact" element={<Contact />} />
               
-              {/* Store Routes (Public) */}
-              <Route path="/stores/search" element={<StoreSearch />} />
-              <Route path="/stores/:storeId" element={<StoreDetail />} />
+              {/* Store Routes (Protected - Login Required) */}
+              <Route
+                path="/stores/search"
+                element={
+                  <ProtectedRoute>
+                    <StoreSearch />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/stores/:storeId"
+                element={
+                  <ProtectedRoute>
+                    <StoreDetail />
+                  </ProtectedRoute>
+                }
+              />
 
               {/* Protected Routes */}
               <Route
