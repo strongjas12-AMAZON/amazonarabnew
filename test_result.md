@@ -212,7 +212,7 @@ frontend:
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "Created StoreSearch component with search functionality, store cards, and navigation to store detail page"
+        comment: "Created StoreSearch component with search functionality, store cards, and navigation to store detail page. UPDATED: Now protected route (login required). Uses api module for authenticated requests."
 
   - task: "Store Detail Page"
     implemented: true
@@ -224,7 +224,7 @@ frontend:
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "Created StoreDetail component showing store info and ONLY products from store_products table. Integrated with cart functionality."
+        comment: "Created StoreDetail component showing store info and ONLY products from store_products table. Integrated with cart functionality. UPDATED: Now protected route (login required). Uses api module for authenticated requests."
 
   - task: "Navigation Updates"
     implemented: true
@@ -236,7 +236,7 @@ frontend:
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "Added /stores/search and /stores/:storeId routes. Added 'Stores' link to main navigation."
+        comment: "Added /stores/search and /stores/:storeId routes as protected routes with ProtectedRoute component. Added 'Stores' link to main navigation."
 
 metadata:
   created_by: "main_agent"
