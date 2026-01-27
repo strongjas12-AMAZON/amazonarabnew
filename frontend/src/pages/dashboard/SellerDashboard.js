@@ -5,8 +5,9 @@ import { toast } from 'sonner';
 import { useDropzone } from 'react-dropzone';
 import { 
   Package, Plus, Edit, Trash2, Upload, AlertCircle, CheckCircle, Tag, 
-  ShoppingCart, Clock, DollarSign, Wallet, Search, Store, Check
+  ShoppingCart, Clock, DollarSign, Wallet, Search, Store, Check, ClipboardList
 } from 'lucide-react';
+import OrderCenter from './OrderCenter';
 
 const SellerDashboard = () => {
   const { user } = useAuth();
