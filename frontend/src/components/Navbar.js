@@ -48,6 +48,13 @@ const Navbar = () => {
               Products
             </Link>
             <Link
+              to="/stores/search"
+              className={`transition-colors ${isActive('/stores/search') || location.pathname.startsWith('/stores/') ? 'text-[#D4AF37]' : 'text-gray-300 hover:text-[#D4AF37]'}`}
+              data-testid="nav-stores"
+            >
+              Stores
+            </Link>
+            <Link
               to="/contact"
               className={`transition-colors ${isActive('/contact') ? 'text-[#D4AF37]' : 'text-gray-300 hover:text-[#D4AF37]'}`}
               data-testid="nav-contact"
