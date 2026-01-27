@@ -3,8 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Store, Package, ShoppingCart, DollarSign } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCart } from '../context/CartContext';
-
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+import api from '../lib/api';
 
 export default function StoreDetail() {
   const { storeId } = useParams();
@@ -25,8 +24,8 @@ export default function StoreDetail() {
 
   const fetchStoreDetails = async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/stores/${storeId}`);
-      const data = await response.json();
+      const response = await api.get(`/stores/${storeId}`);
+      const data = response.data;
 
       if (data.success) {
         setStore(data.store);
@@ -44,8 +43,8 @@ export default function StoreDetail() {
 
   const fetchStoreProducts = async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/stores/${storeId}/products?limit=100`);
-      const data = await response.json();
+      const response = await api.get(`/stores/${storeId}/products?limit=100`);
+      const data = response.data;
 
       if (data.success) {
         setProducts(data.products || []);
