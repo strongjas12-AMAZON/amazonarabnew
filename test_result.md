@@ -105,22 +105,19 @@
 user_problem_statement: Build a Buyer Store Search & Store Detail system connected to Supabase, with STRICT access control so buyers can ONLY see products that a seller has explicitly added to their store. Buyers must NOT see the master product catalog.
 
 backend:
-  - task: "Order Center API - Get seller orders with status counts"
+  - task: "Database Migration - Create store system tables"
     implemented: true
-    working: false
-    file: "backend/server.py"
+    working: "NA"
+    file: "backend/migrations/store_system_migration.sql"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "Implemented GET /api/seller/order-center endpoint with status filtering and counts"
-      - working: false
-        agent: "testing"
-        comment: "Database migration needed - shipments/refunds tables missing foreign key relationships. API returns HTTP 520 error: 'Could not find a relationship between orders and shipments in the schema cache'. This is expected as mentioned in review request."
-  
-  - task: "Ship Order API"
+        comment: "Created SQL migration for product_catalog, stores, and store_products tables with strict RLS policies. Buyers CANNOT access catalog directly."
+
+  - task: "Admin Seed Catalog API"
     implemented: true
     working: "NA"
     file: "backend/server.py"
@@ -130,37 +127,79 @@ backend:
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "Implemented POST /api/seller/orders/{id}/ship for adding tracking info"
-  
-  - task: "Refund Management API"
+        comment: "Implemented POST /api/admin/seed-catalog endpoint to seed 100 products from PRODUCT_CATALOG"
+
+  - task: "Store Search API"
     implemented: true
-    working: true
+    working: "NA"
     file: "backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "Implemented GET/PUT /api/seller/refunds and POST /api/buyer/refunds endpoints"
-      - working: true
-        agent: "testing"
-        comment: "GET /api/seller/refunds working correctly. Returns proper structure with refunds array and counts object. Missing optional status fields (seller_review, processing) but core functionality works."
-  
-  - task: "Courier Options API"
+        comment: "Implemented GET /api/stores/search with query parameter for filtering by store name"
+
+  - task: "Store Detail API"
     implemented: true
-    working: true
+    working: "NA"
     file: "backend/server.py"
     stuck_count: 0
-    priority: "low"
-    needs_retesting: false
+    priority: "high"
+    needs_retesting: true
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "Implemented GET /api/couriers endpoint"
-      - working: true
-        agent: "testing"
-        comment: "GET /api/couriers working perfectly. Returns 7 courier options with proper structure (code, name, icon). Public endpoint accessible without authentication."
+        comment: "Implemented GET /api/stores/{store_id} to get store details with seller info"
+
+  - task: "Store Products API (Buyer View)"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "CRITICAL: Implemented GET /api/stores/{store_id}/products. Query starts from store_products (NOT catalog). Joins with catalog for name/images only. Buyers can ONLY see active store products."
+
+  - task: "Seller Browse Catalog API"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented GET /api/seller/catalog/products for sellers to browse master catalog. RLS enforces seller-only access."
+
+  - task: "Seller Add Product to Store API"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented POST /api/seller/store/products for sellers to add catalog products to their store with custom pricing/stock"
+
+  - task: "Seller Manage Store Products APIs"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented GET/PUT/DELETE /api/seller/store/products for sellers to manage their store inventory"
 
 frontend:
   - task: "Order Center Component"
