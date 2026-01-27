@@ -3566,7 +3566,7 @@ async def update_seller_order_status(order_id: str, status: str, current_user: d
 # STORE SYSTEM ENDPOINTS (BUYER STORE SEARCH & DETAIL)
 # =====================================================
 
-@api_router.post("/admin/seed-catalog", dependencies=[Depends(RateLimitKey("admin"))])
+@api_router.post("/admin/seed-catalog")
 @limiter.limit("5/hour")
 async def seed_product_catalog(request: Request, current_user: dict = Depends(get_current_user)):
     """Admin-only: Seed the product catalog with 100 products"""
