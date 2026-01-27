@@ -101,3 +101,108 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: Build a Seller Dashboard Order Center with 5 status tabs (Pending Payment, To Be Shipped, To Be Received, To Be Evaluated, After-Sales/Refund), shipment tracking, and refund management connected to Supabase for real-time updates.
+
+backend:
+  - task: "Order Center API - Get seller orders with status counts"
+    implemented: true
+    working: false
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented GET /api/seller/order-center endpoint with status filtering and counts"
+      - working: false
+        agent: "testing"
+        comment: "Database migration needed - shipments/refunds tables missing foreign key relationships. API returns HTTP 520 error: 'Could not find a relationship between orders and shipments in the schema cache'. This is expected as mentioned in review request."
+  
+  - task: "Ship Order API"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented POST /api/seller/orders/{id}/ship for adding tracking info"
+  
+  - task: "Refund Management API"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented GET/PUT /api/seller/refunds and POST /api/buyer/refunds endpoints"
+      - working: true
+        agent: "testing"
+        comment: "GET /api/seller/refunds working correctly. Returns proper structure with refunds array and counts object. Missing optional status fields (seller_review, processing) but core functionality works."
+  
+  - task: "Courier Options API"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "low"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented GET /api/couriers endpoint"
+      - working: true
+        agent: "testing"
+        comment: "GET /api/couriers working perfectly. Returns 7 courier options with proper structure (code, name, icon). Public endpoint accessible without authentication."
+
+frontend:
+  - task: "Order Center Component"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/dashboard/OrderCenter.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Created OrderCenter component with 5 status tabs, real-time subscriptions, ship modal, and refund modal"
+  
+  - task: "Seller Dashboard Integration"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/dashboard/SellerDashboard.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Added Order Center tab to SellerDashboard"
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 2
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Ship Order API"
+  stuck_tasks: 
+    - "Order Center API - Get seller orders with status counts"
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+  - agent: "main"
+    message: "Implemented Seller Dashboard Order Center feature with backend APIs and frontend components. Please test the backend APIs first: 1) GET /api/couriers (public), 2) GET /api/seller/order-center (requires seller auth), 3) POST /api/seller/orders/{id}/ship, 4) GET /api/seller/refunds, 5) PUT /api/seller/refunds/{id}. Test credentials: testseller_new@test.com / TestPass123!"
+  - agent: "testing"
+    message: "Backend testing completed for Seller Order Center APIs. RESULTS: ✅ GET /api/couriers (working), ✅ Authentication with testseller_new@test.com (working), ❌ GET /api/seller/order-center (database migration needed - shipments/refunds tables missing foreign key relationships), ✅ GET /api/seller/refunds (working). The order-center endpoint failure is EXPECTED as mentioned in review request. Database migration for shipments and refunds tables needs to be run in Supabase."
