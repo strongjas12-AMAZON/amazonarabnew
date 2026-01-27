@@ -954,6 +954,11 @@ const SellerDashboard = () => {
           )}
         </div>
       )}
+
+      {/* Order Center Section */}
+      {activeTab === 'orderCenter' && (
+        <OrderCenter />
+      )}
     </div>
   );
 };
