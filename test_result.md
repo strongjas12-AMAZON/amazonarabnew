@@ -139,7 +139,7 @@ backend:
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "Implemented GET /api/stores/search with query parameter for filtering by store name"
+        comment: "Implemented GET /api/stores/search with query parameter for filtering by store name. UPDATED: Now requires authentication (login required)."
 
   - task: "Store Detail API"
     implemented: true
@@ -151,7 +151,7 @@ backend:
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "Implemented GET /api/stores/{store_id} to get store details with seller info"
+        comment: "Implemented GET /api/stores/{store_id} to get store details with seller info. UPDATED: Now requires authentication (login required)."
 
   - task: "Store Products API (Buyer View)"
     implemented: true
@@ -163,7 +163,7 @@ backend:
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "CRITICAL: Implemented GET /api/stores/{store_id}/products. Query starts from store_products (NOT catalog). Joins with catalog for name/images only. Buyers can ONLY see active store products."
+        comment: "CRITICAL: Implemented GET /api/stores/{store_id}/products. Query starts from store_products (NOT catalog). Joins with catalog for name/images only. Buyers can ONLY see active store products. UPDATED: Now requires authentication (login required)."
 
   - task: "Seller Browse Catalog API"
     implemented: true
