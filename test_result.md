@@ -240,20 +240,21 @@ frontend:
 
 metadata:
   created_by: "main_agent"
-  version: "1.0"
-  test_sequence: 2
+  version: "2.0"
+  test_sequence: 0
   run_ui: false
 
 test_plan:
   current_focus:
-    - "Ship Order API"
-  stuck_tasks: 
-    - "Order Center API - Get seller orders with status counts"
+    - "Database Migration - Create store system tables"
+    - "Store Search API"
+    - "Store Detail API"
+    - "Store Products API (Buyer View)"
+    - "Admin Seed Catalog API"
+  stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
 agent_communication:
   - agent: "main"
-    message: "Implemented Seller Dashboard Order Center feature with backend APIs and frontend components. Please test the backend APIs first: 1) GET /api/couriers (public), 2) GET /api/seller/order-center (requires seller auth), 3) POST /api/seller/orders/{id}/ship, 4) GET /api/seller/refunds, 5) PUT /api/seller/refunds/{id}. Test credentials: testseller_new@test.com / TestPass123!"
-  - agent: "testing"
-    message: "Backend testing completed for Seller Order Center APIs. RESULTS: ✅ GET /api/couriers (working), ✅ Authentication with testseller_new@test.com (working), ❌ GET /api/seller/order-center (database migration needed - shipments/refunds tables missing foreign key relationships), ✅ GET /api/seller/refunds (working). The order-center endpoint failure is EXPECTED as mentioned in review request. Database migration for shipments and refunds tables needs to be run in Supabase."
+    message: "Implemented complete Buyer Store Search & Store Detail system with strict access control. CRITICAL SECURITY: Buyers can ONLY query store_products table, NOT product_catalog. RLS policies enforce this at database level. Created migration SQL, 8 backend APIs, and 2 frontend pages. IMPORTANT: User MUST run the migration SQL in Supabase before testing. Please test backend APIs first: 1) POST /api/admin/seed-catalog (admin auth required to seed 100 products), 2) GET /api/stores/search (public), 3) GET /api/stores/{id} (public), 4) GET /api/stores/{id}/products (public - this is the CRITICAL endpoint that enforces buyer access control). Test credentials: admin - support@arabshopping.org, testseller_new@test.com / TestPass123!, testbuyer@test.com / TestPass123!"
