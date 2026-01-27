@@ -101,3 +101,99 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: Build a Seller Dashboard Order Center with 5 status tabs (Pending Payment, To Be Shipped, To Be Received, To Be Evaluated, After-Sales/Refund), shipment tracking, and refund management connected to Supabase for real-time updates.
+
+backend:
+  - task: "Order Center API - Get seller orders with status counts"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented GET /api/seller/order-center endpoint with status filtering and counts"
+  
+  - task: "Ship Order API"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented POST /api/seller/orders/{id}/ship for adding tracking info"
+  
+  - task: "Refund Management API"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented GET/PUT /api/seller/refunds and POST /api/buyer/refunds endpoints"
+  
+  - task: "Courier Options API"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "low"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented GET /api/couriers endpoint"
+
+frontend:
+  - task: "Order Center Component"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/dashboard/OrderCenter.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Created OrderCenter component with 5 status tabs, real-time subscriptions, ship modal, and refund modal"
+  
+  - task: "Seller Dashboard Integration"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/dashboard/SellerDashboard.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Added Order Center tab to SellerDashboard"
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 1
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Order Center API - Get seller orders with status counts"
+    - "Ship Order API"
+    - "Refund Management API"
+    - "Courier Options API"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+  - agent: "main"
+    message: "Implemented Seller Dashboard Order Center feature with backend APIs and frontend components. Please test the backend APIs first: 1) GET /api/couriers (public), 2) GET /api/seller/order-center (requires seller auth), 3) POST /api/seller/orders/{id}/ship, 4) GET /api/seller/refunds, 5) PUT /api/seller/refunds/{id}. Test credentials: testseller_new@test.com / TestPass123!"
