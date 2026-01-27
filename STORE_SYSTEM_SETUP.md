@@ -88,19 +88,26 @@ This seeds 100 products across categories:
 
 ### Public Endpoints (Buyers Can Access)
 
+❌ None - All store endpoints require authentication
+
+### Protected Endpoints (Authentication Required)
+
 #### Search Stores
 ```bash
 GET /api/stores/search?query=storename&limit=20&offset=0
+Authorization: Bearer {token}
 ```
 
 #### Get Store Details
 ```bash
 GET /api/stores/{store_id}
+Authorization: Bearer {token}
 ```
 
 #### Get Store Products (CRITICAL - This is what buyers see)
 ```bash
 GET /api/stores/{store_id}/products?limit=50&offset=0
+Authorization: Bearer {token}
 ```
 
 ### Seller Endpoints (Authentication Required)
