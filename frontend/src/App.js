@@ -15,6 +15,8 @@ import Cart from './pages/Cart';
 import Checkout from './pages/Checkout';
 import Orders from './pages/Orders';
 import Contact from './pages/Contact';
+import StoreSearch from './pages/StoreSearch';
+import StoreDetail from './pages/StoreDetail';
 
 // Dashboards
 import AdminDashboard from './pages/dashboard/AdminDashboard';
