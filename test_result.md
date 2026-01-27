@@ -195,11 +195,9 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Order Center API - Get seller orders with status counts"
     - "Ship Order API"
-    - "Refund Management API"
-    - "Courier Options API"
-  stuck_tasks: []
+  stuck_tasks: 
+    - "Order Center API - Get seller orders with status counts"
   test_all: false
   test_priority: "high_first"
 
