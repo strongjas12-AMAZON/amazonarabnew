@@ -140,6 +140,28 @@ class CreateOrderWithWalletRequest(BaseModel):
     totalAmount: float
     useWallet: bool = False
 
+class CreateAddressRequest(BaseModel):
+    fullName: str
+    phone: str
+    addressLine1: str
+    addressLine2: Optional[str] = None
+    city: str
+    state: str
+    postalCode: str
+    country: str
+    isDefault: Optional[bool] = False
+
+class UpdateAddressRequest(BaseModel):
+    fullName: Optional[str] = None
+    phone: Optional[str] = None
+    addressLine1: Optional[str] = None
+    addressLine2: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    postalCode: Optional[str] = None
+    country: Optional[str] = None
+    isDefault: Optional[bool] = None
+
 # Helper functions
 def get_signed_document_url(file_path: str, expires_in: int = 3600) -> Optional[str]:
     """Generate signed URL for private document access (1 hour expiry)"""
