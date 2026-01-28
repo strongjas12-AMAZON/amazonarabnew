@@ -3585,6 +3585,197 @@ async def update_seller_order_status(order_id: str, status: str, current_user: d
 
 
 # =====================================================
+# SHIPPING ADDRESS ENDPOINTS
+# =====================================================
+
+@api_router.get("/buyer/addresses")
+async def get_buyer_addresses(current_user: dict = Depends(get_current_user)):
+    """Get all addresses for the current buyer"""
+    try:
+        # Verify buyer role
+        if current_user.get('role') != 'buyer':
+            raise HTTPException(status_code=403, detail="Buyer access required")
+        
+        user_id = current_user['id']
+        
+        # Get all addresses for user
+        result = supabase_admin.table('addresses').select('*').eq('user_id', user_id).order('is_default', desc=True).order('created_at', desc=True).execute()
+        
+        # Format response
+        addresses = []
+        for addr in result.data:
+            addresses.append({
+                'id': addr['id'],
+                'userId': addr['user_id'],
+                'fullName': addr['full_name'],
+                'phone': addr['phone'],
+                'addressLine1': addr['address_line_1'],
+                'addressLine2': addr.get('address_line_2'),
+                'city': addr['city'],
+                'state': addr['state'],
+                'postalCode': addr['postal_code'],
+                'country': addr['country'],
+                'isDefault': addr.get('is_default', False),
+                'createdAt': addr['created_at']
+            })
+        
+        return {
+            "success": True,
+            "addresses": addresses
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Get addresses error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.post("/buyer/addresses")
+async def create_address(req: CreateAddressRequest, current_user: dict = Depends(get_current_user)):
+    """Create a new shipping address"""
+    try:
+        # Verify buyer role
+        if current_user.get('role') != 'buyer':
+            raise HTTPException(status_code=403, detail="Buyer access required")
+        
+        user_id = current_user['id']
+        
+        # If this is set as default, we need to unset other defaults
+        # This is handled by the database trigger
+        
+        data = {
+            'user_id': user_id,
+            'full_name': req.fullName,
+            'phone': req.phone,
+            'address_line_1': req.addressLine1,
+            'address_line_2': req.addressLine2,
+            'city': req.city,
+            'state': req.state,
+            'postal_code': req.postalCode,
+            'country': req.country,
+            'is_default': req.isDefault
+        }
+        
+        result = supabase_admin.table('addresses').insert(data).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=400, detail="Failed to create address")
+        
+        addr = result.data[0]
+        
+        return {
+            "success": True,
+            "message": "Address created successfully",
+            "address": {
+                'id': addr['id'],
+                'userId': addr['user_id'],
+                'fullName': addr['full_name'],
+                'phone': addr['phone'],
+                'addressLine1': addr['address_line_1'],
+                'addressLine2': addr.get('address_line_2'),
+                'city': addr['city'],
+                'state': addr['state'],
+                'postalCode': addr['postal_code'],
+                'country': addr['country'],
+                'isDefault': addr.get('is_default', False),
+                'createdAt': addr['created_at']
+            }
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Create address error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.put("/buyer/addresses/{address_id}")
+async def update_address(address_id: str, req: UpdateAddressRequest, current_user: dict = Depends(get_current_user)):
+    """Update a shipping address"""
+    try:
+        # Verify buyer role
+        if current_user.get('role') != 'buyer':
+            raise HTTPException(status_code=403, detail="Buyer access required")
+        
+        user_id = current_user['id']
+        
+        # Build update data
+        update_data = {}
+        if req.fullName is not None:
+            update_data['full_name'] = req.fullName
+        if req.phone is not None:
+            update_data['phone'] = req.phone
+        if req.addressLine1 is not None:
+            update_data['address_line_1'] = req.addressLine1
+        if req.addressLine2 is not None:
+            update_data['address_line_2'] = req.addressLine2
+        if req.city is not None:
+            update_data['city'] = req.city
+        if req.state is not None:
+            update_data['state'] = req.state
+        if req.postalCode is not None:
+            update_data['postal_code'] = req.postalCode
+        if req.country is not None:
+            update_data['country'] = req.country
+        if req.isDefault is not None:
+            update_data['is_default'] = req.isDefault
+        
+        if not update_data:
+            raise HTTPException(status_code=400, detail="No fields to update")
+        
+        update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+        
+        # Update address (RLS ensures only own addresses)
+        result = supabase_admin.table('addresses').update(update_data).eq('id', address_id).eq('user_id', user_id).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Address not found")
+        
+        return {
+            "success": True,
+            "message": "Address updated successfully"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Update address error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.delete("/buyer/addresses/{address_id}")
+async def delete_address(address_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a shipping address"""
+    try:
+        # Verify buyer role
+        if current_user.get('role') != 'buyer':
+            raise HTTPException(status_code=403, detail="Buyer access required")
+        
+        user_id = current_user['id']
+        
+        # Delete address (RLS ensures only own addresses)
+        result = supabase_admin.table('addresses').delete().eq('id', address_id).eq('user_id', user_id).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Address not found")
+        
+        return {
+            "success": True,
+            "message": "Address deleted successfully"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Delete address error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+# =====================================================
+# END SHIPPING ADDRESS ENDPOINTS
+# =====================================================
+
+# =====================================================
 # STORE SYSTEM ENDPOINTS (BUYER STORE SEARCH & DETAIL)
 # =====================================================
 
