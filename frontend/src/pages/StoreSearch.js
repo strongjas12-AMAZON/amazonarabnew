@@ -50,11 +50,11 @@ export default function StoreSearch() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black py-12 px-4">
+    <div className="min-h-screen py-12 px-4">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="text-center mb-12">
-          <h1 className="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-200 mb-4">
+          <h1 className="font-['Playfair_Display'] text-5xl font-bold text-gold-gradient mb-4">
             Browse Stores
           </h1>
           <p className="text-gray-400 text-lg">
@@ -70,13 +70,13 @@ export default function StoreSearch() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search stores by name..."
-              className="w-full px-6 py-4 pl-14 bg-gray-800/50 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 transition-all"
+              className="luxury-input w-full pl-14"
             />
             <Search className="absolute left-5 top-1/2 transform -translate-y-1/2 text-gray-500" size={20} />
             <button
               type="submit"
               disabled={searching}
-              className="absolute right-2 top-1/2 transform -translate-y-1/2 px-6 py-2 bg-gradient-to-r from-yellow-500 to-yellow-400 text-black font-semibold rounded-lg hover:from-yellow-400 hover:to-yellow-300 transition-all disabled:opacity-50"
+              className="absolute right-2 top-1/2 transform -translate-y-1/2 btn-gold px-6 py-2 disabled:opacity-50"
             >
               {searching ? 'Searching...' : 'Search'}
             </button>
@@ -86,7 +86,7 @@ export default function StoreSearch() {
         {/* Loading State */}
         {loading && (
           <div className="text-center py-20">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-yellow-400"></div>
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#D4AF37]"></div>
             <p className="text-gray-400 mt-4">Loading stores...</p>
           </div>
         )}
@@ -95,7 +95,7 @@ export default function StoreSearch() {
         {!loading && stores.length === 0 && (
           <div className="text-center py-20">
             <ShoppingBag size={64} className="mx-auto text-gray-600 mb-4" />
-            <h3 className="text-2xl font-semibold text-gray-300 mb-2">No stores found</h3>
+            <h3 className="font-['Playfair_Display'] text-2xl font-semibold text-gray-300 mb-2">No stores found</h3>
             <p className="text-gray-500">
               {searchQuery ? 'Try a different search term' : 'No active stores available yet'}
             </p>
@@ -109,24 +109,24 @@ export default function StoreSearch() {
               <div
                 key={store.id}
                 onClick={() => handleStoreClick(store.id)}
-                className="group bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700 rounded-2xl p-6 hover:border-yellow-500 transition-all cursor-pointer hover:shadow-xl hover:shadow-yellow-500/10 transform hover:-translate-y-1"
+                className="luxury-card group cursor-pointer hover:border-[#D4AF37] transition-all hover:shadow-xl hover:shadow-[rgba(212,175,55,0.1)] transform hover:-translate-y-1"
               >
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center space-x-3">
-                    <div className="p-3 bg-gradient-to-br from-yellow-500 to-yellow-400 rounded-xl group-hover:scale-110 transition-transform">
-                      <Store className="text-black" size={24} />
+                    <div className="p-3 bg-gradient-to-br from-[#D4AF37] to-[#F4E4B0] rounded-xl group-hover:scale-110 transition-transform">
+                      <Store className="text-[#0a0a0a]" size={24} />
                     </div>
                     <div>
-                      <h3 className="text-xl font-bold text-white group-hover:text-yellow-400 transition-colors">
+                      <h3 className="text-xl font-['Playfair_Display'] font-bold text-white group-hover:text-[#D4AF37] transition-colors">
                         {store.storeName}
                       </h3>
                       <p className="text-sm text-gray-500">Verified Seller</p>
                     </div>
                   </div>
-                  <ChevronRight className="text-gray-600 group-hover:text-yellow-400 transition-colors" size={20} />
+                  <ChevronRight className="text-gray-600 group-hover:text-[#D4AF37] transition-colors" size={20} />
                 </div>
 
-                <div className="pt-4 border-t border-gray-700">
+                <div className="pt-4 border-t border-[rgba(212,175,55,0.2)]">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-400">Store ID</span>
                     <span className="text-gray-500 font-mono text-xs">
