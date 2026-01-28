@@ -1827,6 +1827,10 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
     if current_user.get('banStatus') in ('banned', 'suspended'):
         raise HTTPException(status_code=403, detail="Your account is restricted. You cannot place orders.")
     
+    # Validate shipping information is provided
+    if not req.shippingAddress or not req.shippingName or not req.shippingPhone:
+        raise HTTPException(status_code=400, detail="Shipping information is required")
+    
     try:
         payment_method = 'WALLET' if req.useWallet else 'USDT_TRON'
         payment_status = 'paid' if req.useWallet else 'pending_payment'
@@ -1870,6 +1874,10 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
             'payment_status': payment_status,
             'confirmed_by_admin': confirmed_by_admin,
             'confirmed_at': datetime.now(timezone.utc).isoformat() if confirmed_by_admin else None,
+            'shipping_address_id': req.shippingAddressId,
+            'shipping_name': req.shippingName,
+            'shipping_phone': req.shippingPhone,
+            'shipping_address_snapshot': req.shippingAddress,
             'created_at': datetime.now(timezone.utc).isoformat()
         }
         
