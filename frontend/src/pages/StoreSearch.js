@@ -65,18 +65,18 @@ export default function StoreSearch() {
         {/* Search Bar */}
         <form onSubmit={handleSearch} className="mb-10">
           <div className="relative max-w-2xl mx-auto">
+            <Search className="absolute left-5 top-1/2 transform -translate-y-1/2 text-gray-500 z-10" size={20} />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search stores by name..."
-              className="luxury-input w-full pl-14"
+              className="luxury-input w-full pl-14 pr-32"
             />
-            <Search className="absolute left-5 top-1/2 transform -translate-y-1/2 text-gray-500" size={20} />
             <button
               type="submit"
               disabled={searching}
-              className="absolute right-2 top-1/2 transform -translate-y-1/2 btn-gold px-6 py-2 disabled:opacity-50"
+              className="absolute right-2 top-1/2 transform -translate-y-1/2 px-6 py-2 bg-gradient-to-r from-[#D4AF37] to-[#F4E4B0] text-[#0a0a0a] font-semibold rounded-lg hover:from-[#F4E4B0] hover:to-[#D4AF37] transition-all disabled:opacity-50 text-sm"
             >
               {searching ? 'Searching...' : 'Search'}
             </button>
