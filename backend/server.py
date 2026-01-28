@@ -96,6 +96,10 @@ class CreateOrderRequest(BaseModel):
     items: List[dict]
     totalAmount: float
     useWallet: Optional[bool] = False
+    shippingAddressId: Optional[str] = None
+    shippingName: Optional[str] = None
+    shippingPhone: Optional[str] = None
+    shippingAddress: Optional[dict] = None
 
 class UpdateOrderStatusRequest(BaseModel):
     status: str
