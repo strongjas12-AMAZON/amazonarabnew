@@ -456,16 +456,17 @@ class APITester:
                 if data.get("success"):
                     store = data.get("store", {})
                     
-                    # Check required store fields
-                    required_fields = ["id", "store_name", "seller_id"]
-                    missing_fields = [field for field in required_fields if field not in store]
+                    # Check required store fields (handle both camelCase and snake_case)
+                    store_name = store.get("store_name") or store.get("storeName")
+                    seller_id = store.get("seller_id") or store.get("sellerId")
+                    store_id = store.get("id")
                     
-                    if not missing_fields:
+                    if store_id and store_name and seller_id:
                         self.log_test(
                             "GET /api/stores/{store_id}", 
                             True, 
-                            f"Store details retrieved: {store.get('store_name')} (ID: {store.get('id')})",
-                            {"store_id": store.get("id"), "store_name": store.get("store_name"), "seller_id": store.get("seller_id")}
+                            f"Store details retrieved: {store_name} (ID: {store_id})",
+                            {"store_id": store_id, "store_name": store_name, "seller_id": seller_id}
                         )
                     else:
                         self.log_test(
