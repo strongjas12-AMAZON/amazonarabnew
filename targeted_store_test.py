@@ -48,10 +48,11 @@ def main():
         print("❌ Seller has no products in store")
         return
     
-    # Extract store ID from first product
-    store_id = products[0].get("store_id")
+    # Extract store ID from first product (try both camelCase and snake_case)
+    store_id = products[0].get("storeId") or products[0].get("store_id")
     if not store_id:
-        print("❌ No store_id found in seller products")
+        print("❌ No store_id/storeId found in seller products")
+        print(f"Product keys: {list(products[0].keys())}")
         return
     
     print(f"✅ Found seller's store ID: {store_id}")
