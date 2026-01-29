@@ -105,6 +105,21 @@
 user_problem_statement: Build a Buyer Store Search & Store Detail system connected to Supabase, with STRICT access control so buyers can ONLY see products that a seller has explicitly added to their store. Buyers must NOT see the master product catalog.
 
 backend:
+  - task: "Seller Order Center - Complete Order Flow"
+    implemented: true
+    working: false
+    file: "backend/server.py"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Fixed Order Center to use NEW store_products system instead of old seller_products table. Updated order flow from buyer purchase to seller shipment."
+      - working: false
+        agent: "testing"
+        comment: "CRITICAL ISSUE: Order system still references OLD 'products' table but we're using NEW 'store_products' system. Order creation fails with foreign key constraint error: 'Key (product_id)=(store_product_id) is not present in table products'. Complete order flow broken - buyers cannot create orders, sellers cannot view/ship orders. ROOT CAUSE: order_items table expects product_id from 'products' table, but system now uses 'store_products' IDs. URGENT FIX NEEDED: Update order system to work with NEW store_products system."
+
   - task: "Database Migration - Create store system tables"
     implemented: true
     working: true
