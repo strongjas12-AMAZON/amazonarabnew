@@ -3008,35 +3008,46 @@ async def get_seller_order_center(
     status: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """Get seller's orders for Order Center with counts per status"""
+    """Get seller's orders for Order Center with counts per status (NEW STORE SYSTEM)"""
     if current_user['role'] != 'seller':
         raise HTTPException(status_code=403, detail="Only sellers can access Order Center")
     
     try:
-        # Get all orders where seller has products
+        # Get all orders with items
         all_orders_result = supabase_admin.table('orders')\
-            .select('*, order_items(*, products(*)), shipments(*), refunds(*), users!buyer_id(name, email)')\
+            .select('*, order_items(*), shipments(*), refunds(*), users!buyer_id(name, email)')\
             .execute()
         
-        # Filter orders that contain seller's products
+        # Filter orders that contain seller's products (NEW SYSTEM: check store_products)
         seller_orders = []
         for order in all_orders_result.data or []:
-            # Check if any order item belongs to seller's products
+            # Check if any order item belongs to seller's store products
             has_seller_item = False
             seller_items = []
             
             for item in order.get('order_items', []):
-                product = item.get('products')
-                if product:
-                    # Check if product is in seller's store via seller_products
-                    seller_product = supabase_admin.table('seller_products')\
-                        .select('id')\
+                product_id = item.get('product_id')
+                if product_id:
+                    # Check if this product_id is a store_product belonging to this seller
+                    store_product = supabase_admin.table('store_products')\
+                        .select('id, catalog_product_id, price, stock, product_catalog!inner(name, description, images, category)')\
                         .eq('seller_id', current_user['id'])\
-                        .eq('product_id', product.get('id'))\
+                        .eq('id', product_id)\
                         .eq('is_active', True)\
                         .execute()
                     
-                    if seller_product.data:
+                    if store_product.data:
+                        # Add product info to item
+                        sp = store_product.data[0]
+                        catalog_info = sp.get('product_catalog', {})
+                        item['products'] = {
+                            'id': sp['id'],
+                            'title': catalog_info.get('name'),
+                            'description': catalog_info.get('description'),
+                            'images': catalog_info.get('images', []),
+                            'category': catalog_info.get('category'),
+                            'price': sp.get('price')
+                        }
                         has_seller_item = True
                         seller_items.append(item)
             
