@@ -98,9 +98,15 @@ const SellerDashboard = () => {
     }
   };
 
-  const handleAddToStore = async (productId) => {
+  const handleAddToStore = async (product) => {
     try {
-      await api.post(`/seller/products/${productId}`);
+      // Backend expects form data with catalog_product_id, price, and stock
+      const formData = new FormData();
+      formData.append('catalog_product_id', product.id);
+      formData.append('price', product.basePrice || product.price || 0);
+      formData.append('stock', 10); // Default stock of 10
+      
+      await api.post('/seller/store/products', formData);
       toast.success('Product added to your store!');
       fetchData();
     } catch (error) {
