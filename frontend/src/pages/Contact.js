@@ -109,7 +109,7 @@ const Contact = () => {
               <div className="text-center py-12" data-testid="contact-success-message">
                 <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-4" />
                 <h3 className="text-2xl font-bold text-white mb-2">Message Sent!</h3>
-                <p className="text-gray-400">Your email client should open shortly. We'll get back to you soon.</p>
+                <p className="text-gray-400">Thank you for contacting us! We've received your message and will respond to you at {formData.email} within 24 hours.</p>
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-6">
