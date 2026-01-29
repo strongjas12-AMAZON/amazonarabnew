@@ -614,7 +614,7 @@ const SellerDashboard = () => {
                       {product.images && product.images.length > 0 ? (
                         <img
                           src={product.images[0]}
-                          alt={product.title}
+                          alt={product.name || product.title}
                           className="w-full h-full object-cover"
                         />
                       ) : (
@@ -636,9 +636,9 @@ const SellerDashboard = () => {
                     </div>
                     
                     <div className="p-3">
-                      <h3 className="font-semibold text-white text-sm mb-1 truncate">{product.title}</h3>
+                      <h3 className="font-semibold text-white text-sm mb-1 truncate">{product.name || product.title}</h3>
                       <p className="text-xs text-gray-400 mb-2 line-clamp-2">{product.description}</p>
-                      <p className="text-[#D4AF37] font-bold">${product.price?.toFixed(2)}</p>
+                      <p className="text-[#D4AF37] font-bold">${(product.basePrice || product.price || 0).toFixed(2)}</p>
                       
                       {product.isSelected ? (
                         <button
@@ -651,7 +651,7 @@ const SellerDashboard = () => {
                         </button>
                       ) : (
                         <button
-                          onClick={() => handleAddToStore(product.id)}
+                          onClick={() => handleAddToStore(product)}
                           className="w-full mt-2 p-2 bg-[rgba(212,175,55,0.1)] hover:bg-[rgba(212,175,55,0.2)] text-[#D4AF37] rounded-lg transition-colors text-sm flex items-center justify-center gap-1"
                           data-testid="add-to-store-btn"
                         >
