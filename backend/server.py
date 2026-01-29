@@ -1314,7 +1314,7 @@ async def get_products(category: Optional[str] = None, search: Optional[str] = N
                 'seller_id': store_info.get('seller_id'),
                 'store_id': store_info.get('id'),
                 'is_active': sp.get('is_active', True),
-                'added_at': sp.get('added_at'),
+                'added_at': sp.get('created_at'),
                 'catalog_product_id': sp.get('catalog_product_id')
             }
             products.append(merged_product)
