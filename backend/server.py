@@ -3601,12 +3601,10 @@ async def update_seller_order_status(order_id: str, status: str, current_user: d
 
 @api_router.get("/buyer/addresses")
 async def get_buyer_addresses(current_user: dict = Depends(get_current_user)):
-    """Get all addresses for the current buyer"""
+    """Get all addresses for the current user (any authenticated user can have addresses)"""
     try:
-        # Verify buyer role
-        if current_user.get('role') != 'buyer':
-            raise HTTPException(status_code=403, detail="Buyer access required")
-        
+        # Any authenticated user can have shipping addresses
+        # Removed strict buyer-only check to allow sellers/admins to also have addresses
         user_id = current_user['id']
         
         # Get all addresses for user
