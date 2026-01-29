@@ -3753,12 +3753,10 @@ async def update_address(address_id: str, req: UpdateAddressRequest, current_use
 
 @api_router.delete("/buyer/addresses/{address_id}")
 async def delete_address(address_id: str, current_user: dict = Depends(get_current_user)):
-    """Delete a shipping address"""
+    """Delete a shipping address (any authenticated user)"""
     try:
-        # Verify buyer role
-        if current_user.get('role') != 'buyer':
-            raise HTTPException(status_code=403, detail="Buyer access required")
-        
+        # Any authenticated user can delete their own addresses
+        # Removed strict buyer-only check
         user_id = current_user['id']
         
         # Delete address (RLS ensures only own addresses)
