@@ -282,15 +282,10 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Admin Seed Catalog API"
-    - "Seller Browse Catalog API" 
-    - "Seller Add Product to Store API"
-    - "Seller Manage Store Products APIs"
-  stuck_tasks:
-    - "Admin Seed Catalog API"
-    - "Seller Browse Catalog API"
-    - "Seller Add Product to Store API"
-    - "Seller Manage Store Products APIs"
+    - "Frontend Store Search Page"
+    - "Frontend Store Detail Page" 
+    - "Frontend Navigation Updates"
+  stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
