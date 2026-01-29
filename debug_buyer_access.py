@@ -6,7 +6,7 @@ Debug buyer store access
 import requests
 import json
 
-BASE_URL = "https://clone-source-3.preview.emergentagent.com/api"
+BASE_URL = "https://git-copier-1.preview.emergentagent.com/api"
 SELLER_EMAIL = "testseller_new@test.com"
 SELLER_PASSWORD = "TestPass123!"
 BUYER_EMAIL = "testbuyer@test.com"

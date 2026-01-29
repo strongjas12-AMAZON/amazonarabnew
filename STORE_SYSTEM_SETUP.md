@@ -38,7 +38,7 @@ After running the migration, seed the catalog with 100 pre-defined products:
 
 ```bash
 # Login as admin first to get token, then:
-curl -X POST https://clone-source-3.preview.emergentagent.com/api/admin/seed-catalog \
+curl -X POST https://git-copier-1.preview.emergentagent.com/api/admin/seed-catalog \
   -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
 ```
 
