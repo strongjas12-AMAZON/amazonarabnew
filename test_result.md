@@ -122,7 +122,7 @@ backend:
 
   - task: "Admin Seed Catalog API"
     implemented: true
-    working: false
+    working: true
     file: "backend/server.py"
     stuck_count: 1
     priority: "high"
@@ -134,6 +134,9 @@ backend:
       - working: false
         agent: "testing"
         comment: "CRITICAL ISSUE: Two conflicting seed-catalog endpoints exist (lines 1658 and 3794). First seeds 'products' table, second seeds 'product_catalog' table. Second endpoint overrides first. Current catalog seeding fails due to table mismatch - seller APIs expect product_catalog table but products are in products table."
+      - working: true
+        agent: "testing"
+        comment: "FIXED: Duplicate seed-catalog endpoint removed. POST /api/admin/seed-catalog now correctly seeds product_catalog table. Tested complete flow: 1) Admin login ✅ 2) Clear catalog ✅ 3) Seed catalog ✅ (50 products seeded) 4) Seller login ✅ 5) Seller browse catalog ✅ (50 products available) 6) Seller add product to store ✅ (price $25.99, stock 10) 7) Seller view store products ✅ (1 product) 8) Buyer login ✅ 9) Store search ✅ (13 stores) 10) Store products security test ✅ (buyers only see store products, not master catalog)."
 
   - task: "Store Search API"
     implemented: true
