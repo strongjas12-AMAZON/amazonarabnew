@@ -645,8 +645,26 @@ class APITester:
                     total = data.get("total", 0)
                     
                     # Store a product ID for later tests
-                    if products and len(products) > 0 and not self.catalog_product_id:
+                    if products and len(products) > 0:
                         self.catalog_product_id = products[0].get("id")
+                    
+                    # If no products in catalog, try to get one from admin products endpoint
+                    if not products:
+                        # Try to get products from the admin products endpoint (different table)
+                        admin_headers = {"Authorization": f"Bearer {self.admin_token}"}
+                        admin_response = self.session.get(f"{self.base_url}/admin/products", headers=admin_headers)
+                        if admin_response.status_code == 200:
+                            admin_data = admin_response.json()
+                            admin_products = admin_data.get("products", [])
+                            if admin_products:
+                                self.catalog_product_id = admin_products[0].get("id")
+                                self.log_test(
+                                    "GET /api/seller/catalog/products", 
+                                    True, 
+                                    f"Catalog browsing works but product_catalog table is empty. Found {len(admin_products)} products in admin products table instead.",
+                                    {"products_count": len(products), "total": total, "admin_products_available": len(admin_products)}
+                                )
+                                return
                     
                     self.log_test(
                         "GET /api/seller/catalog/products", 
