@@ -239,7 +239,7 @@ backend:
     working: true
     file: "backend/server.py"
     stuck_count: 1
-    priority: "medium"
+    priority: "high"
     needs_retesting: false
     status_history:
       - working: "NA"
@@ -254,6 +254,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "COMPREHENSIVE TESTING: Successfully added multiple products to seller store. Added 3 different products with varying prices ($29.99, $19.99, $39.99) and stock levels (15, 20, 8). All products added successfully using FormData with catalog_product_id from product_catalog table."
+      - working: true
+        agent: "testing"
+        comment: "USER REPORTED FIX VERIFIED: ✅ FIXED - Auto-create store functionality working! The user-reported issue 'Error when adding product to store Cannot coerce result to single JSON object' has been successfully resolved. POST /api/seller/store/products now auto-creates store if seller doesn't have one and successfully adds products (price $99.99, stock 20). No 'PGRST116' or 'single JSON object' errors detected. Store creation and product addition flow working correctly for testseller_new@test.com."
 
   - task: "Seller Manage Store Products APIs"
     implemented: true
