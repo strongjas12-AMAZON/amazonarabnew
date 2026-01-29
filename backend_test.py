@@ -2820,7 +2820,27 @@ class APITester:
         self.test_multiple_orders_flow()
         
         # Summary
-        self.print_summary()
+        passed = sum(1 for result in self.test_results if result["success"])
+        failed = len(self.test_results) - passed
+        
+        print("\n" + "="*80)
+        print("📊 ORDER SYSTEM TEST SUMMARY")
+        print("="*80)
+        
+        print(f"Total Tests: {len(self.test_results)}")
+        print(f"✅ Passed: {passed}")
+        print(f"❌ Failed: {failed}")
+        print(f"Success Rate: {(passed/len(self.test_results)*100):.1f}%")
+        
+        if failed > 0:
+            print(f"\n❌ FAILED TESTS:")
+            for result in self.test_results:
+                if not result["success"]:
+                    print(f"   • {result['test']}: {result['details']}")
+        
+        print("\n" + "="*80)
+        
+        return passed == len(self.test_results)
 
     # ============ ORDER SYSTEM TESTING - COMPREHENSIVE END-TO-END FLOW ============
     
