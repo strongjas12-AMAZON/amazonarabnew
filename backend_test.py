@@ -1346,7 +1346,7 @@ class APITester:
     def run_all_tests(self):
         """Run all tests in the specific sequence requested"""
         print("=" * 80)
-        print("BACKEND API TESTING - STORE SYSTEM AFTER FIXES")
+        print("BACKEND API TESTING - COMPLETE PRODUCT CATALOG AND MARKETPLACE FLOW")
         print("=" * 80)
         print(f"Base URL: {self.base_url}")
         print(f"Admin Email: {ADMIN_EMAIL}")
@@ -1355,8 +1355,8 @@ class APITester:
         print("=" * 80)
         print()
         
-        # Test Flow as requested:
-        print("🔐 STEP 1: Login as Admin")
+        # Test Flow as requested in review:
+        print("🔐 STEP 1: Admin Login & Seed Catalog")
         print("-" * 40)
         self.test_admin_login()
         print()
@@ -1366,44 +1366,64 @@ class APITester:
         self.test_admin_clear_catalog()
         print()
         
-        print("🌱 STEP 3: Seed Product Catalog (~100 products to product_catalog table)")
+        print("🌱 STEP 3: Seed Product Catalog (100 products to product_catalog table)")
         print("-" * 40)
         self.test_admin_seed_catalog()
         print()
         
-        print("🔐 STEP 4: Login as Seller")
+        print("📋 STEP 4: Admin View Products (VERIFY: Should return products from product_catalog table)")
+        print("-" * 40)
+        self.test_admin_get_products()
+        print()
+        
+        print("🔐 STEP 5: Seller Flow - Login")
         print("-" * 40)
         self.test_seller_login()
         print()
         
-        print("📚 STEP 5: Seller Browse Catalog (should return products from product_catalog)")
+        print("📚 STEP 6: Seller Browse Catalog (VERIFY: Should show product_catalog items available to add)")
         print("-" * 40)
         self.test_seller_catalog_browsing()
         print()
         
-        print("➕ STEP 6: Seller Add Product to Store (with form data: catalog_product_id, price: 25.99, stock: 10)")
+        print("➕ STEP 7: Seller Add Product to Store (FormData: catalog_product_id, price: 29.99, stock: 15)")
         print("-" * 40)
         self.test_seller_add_product_to_store()
         print()
         
-        print("👀 STEP 7: Seller View Store Products (should show the added product)")
+        print("➕ STEP 8: Seller Add Multiple Products (Add 2-3 different products)")
+        print("-" * 40)
+        self.test_seller_add_multiple_products()
+        print()
+        
+        print("👀 STEP 9: Seller View Store Products (VERIFY: Should show products added to seller's store)")
         print("-" * 40)
         self.test_seller_get_store_products()
         print()
         
-        print("🔐 STEP 8: Login as Buyer")
+        print("🔐 STEP 10: Buyer Login")
         print("-" * 40)
         self.test_buyer_login()
         print()
         
-        print("🔍 STEP 9: Search Stores (should return stores)")
+        print("🛒 STEP 11: Products Page (VERIFY: Should return products from store_products table)")
+        print("-" * 40)
+        self.test_products_page_buyer_view()
+        print()
+        
+        print("🔍 STEP 12: Store Search Flow - Search All Stores")
         print("-" * 40)
         self.test_store_search_all()
         print()
         
-        print("🏪 STEP 10: Get Store Products (should show products added by seller)")
+        print("🏪 STEP 13: Store Detail")
         print("-" * 40)
-        self.test_store_products_security()
+        self.test_store_detail()
+        print()
+        
+        print("🏪 STEP 14: Store Products (Should return products in specific store)")
+        print("-" * 40)
+        self.test_store_products_specific_store()
         print()
         
         # Summary
@@ -1426,12 +1446,13 @@ class APITester:
                     print(f"❌ {result['test']}: {result['details']}")
             print()
         
-        # Key verification points
+        # Key verification points from review request
         print("KEY VERIFICATION POINTS:")
-        print("✓ product_catalog table gets seeded (not products table)")
-        print("✓ Seller can browse product_catalog")
-        print("✓ Seller can add products from catalog to their store")
-        print("✓ Buyer can only see products added to stores")
+        print("✓ Admin can see catalog after seeding (product_catalog table)")
+        print("✓ Seller can browse catalog and add to store")
+        print("✓ Products page shows what sellers added (not empty)")
+        print("✓ Data flows correctly: product_catalog → store_products → /products endpoint")
+        print("✓ No references to old 'products' or 'seller_products' tables")
         print()
         
         print("=" * 80)
