@@ -342,10 +342,9 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Seller Browse Catalog API - Verify 100 Products Fix"
-    - "Seller Add Product to Store API - Auto-Create Store Fix" 
-    - "Products Page API - Verify Seller Products Appear"
-  stuck_tasks: []
+    - "Seller Order Center - Complete Order Flow"
+  stuck_tasks:
+    - "Seller Order Center - Complete Order Flow"
   test_all: false
   test_priority: "high_first"
 
