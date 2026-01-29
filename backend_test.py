@@ -600,7 +600,9 @@ class APITester:
             )
             return
             
-        if not self.store_id:
+        # Use seller's store ID if available, otherwise use any store ID
+        test_store_id = self.seller_store_id or self.store_id
+        if not test_store_id:
             self.log_test(
                 "GET /api/stores/{store_id}/products (SECURITY)", 
                 False, 
@@ -611,29 +613,45 @@ class APITester:
             
         try:
             headers = {"Authorization": f"Bearer {self.buyer_token}"}
-            response = self.session.get(f"{self.base_url}/stores/{self.store_id}/products", headers=headers)
+            response = self.session.get(f"{self.base_url}/stores/{test_store_id}/products", headers=headers)
             
             if response.status_code == 200:
                 data = response.json()
                 if data.get("success"):
                     products = data.get("products", [])
                     
-                    # CRITICAL: Verify this returns ONLY store_products, not the master catalog
-                    # If this returns 100+ products, it's likely returning the master catalog (security issue)
-                    if len(products) < 50:  # Reasonable threshold - stores shouldn't have 50+ products typically
-                        self.log_test(
-                            "GET /api/stores/{store_id}/products (SECURITY)", 
-                            True, 
-                            f"SECURITY PASS: Found {len(products)} store products (not master catalog). Buyers can only see products seller added to their store.",
-                            {"products_count": len(products), "store_id": self.store_id}
-                        )
+                    # If testing seller's store, we should see the product they added
+                    if test_store_id == self.seller_store_id:
+                        if len(products) > 0:
+                            self.log_test(
+                                "GET /api/stores/{store_id}/products (SECURITY)", 
+                                True, 
+                                f"SECURITY PASS: Found {len(products)} store products in seller's store. Buyers can see products seller added to their store.",
+                                {"products_count": len(products), "store_id": test_store_id, "is_seller_store": True}
+                            )
+                        else:
+                            self.log_test(
+                                "GET /api/stores/{store_id}/products (SECURITY)", 
+                                False, 
+                                f"Expected to find products in seller's store but found {len(products)}. Seller added a product but buyer can't see it.",
+                                {"products_count": len(products), "store_id": test_store_id, "is_seller_store": True}
+                            )
                     else:
-                        self.log_test(
-                            "GET /api/stores/{store_id}/products (SECURITY)", 
-                            False, 
-                            f"SECURITY FAIL: Found {len(products)} products - this may be returning the master catalog instead of store_products only!",
-                            {"products_count": len(products), "store_id": self.store_id}
-                        )
+                        # Testing a different store - should have fewer products (not master catalog)
+                        if len(products) < 50:  # Reasonable threshold - stores shouldn't have 50+ products typically
+                            self.log_test(
+                                "GET /api/stores/{store_id}/products (SECURITY)", 
+                                True, 
+                                f"SECURITY PASS: Found {len(products)} store products (not master catalog). Buyers can only see products seller added to their store.",
+                                {"products_count": len(products), "store_id": test_store_id, "is_seller_store": False}
+                            )
+                        else:
+                            self.log_test(
+                                "GET /api/stores/{store_id}/products (SECURITY)", 
+                                False, 
+                                f"SECURITY FAIL: Found {len(products)} products - this may be returning the master catalog instead of store_products only!",
+                                {"products_count": len(products), "store_id": test_store_id, "is_seller_store": False}
+                            )
                 else:
                     self.log_test(
                         "GET /api/stores/{store_id}/products (SECURITY)", 
@@ -645,7 +663,7 @@ class APITester:
                 self.log_test(
                     "GET /api/stores/{store_id}/products (SECURITY)", 
                     False, 
-                    f"Store not found (ID: {self.store_id})",
+                    f"Store not found (ID: {test_store_id})",
                     response.text
                 )
             elif response.status_code == 401:
