@@ -15,6 +15,8 @@ import Cart from './pages/Cart';
 import Checkout from './pages/Checkout';
 import Orders from './pages/Orders';
 import Contact from './pages/Contact';
+import StoreSearch from './pages/StoreSearch';
+import StoreDetail from './pages/StoreDetail';
 
 // Dashboards
 import AdminDashboard from './pages/dashboard/AdminDashboard';
@@ -36,6 +38,24 @@ function App() {
               <Route path="/register" element={<Register />} />
               <Route path="/products" element={<Products />} />
               <Route path="/contact" element={<Contact />} />
+              
+              {/* Store Routes (Protected - Login Required) */}
+              <Route
+                path="/stores/search"
+                element={
+                  <ProtectedRoute>
+                    <StoreSearch />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/stores/:storeId"
+                element={
+                  <ProtectedRoute>
+                    <StoreDetail />
+                  </ProtectedRoute>
+                }
+              />
 
               {/* Protected Routes */}
               <Route

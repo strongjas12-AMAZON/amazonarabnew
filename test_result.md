@@ -102,25 +102,22 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: Build a Seller Dashboard Order Center with 5 status tabs (Pending Payment, To Be Shipped, To Be Received, To Be Evaluated, After-Sales/Refund), shipment tracking, and refund management connected to Supabase for real-time updates.
+user_problem_statement: Build a Buyer Store Search & Store Detail system connected to Supabase, with STRICT access control so buyers can ONLY see products that a seller has explicitly added to their store. Buyers must NOT see the master product catalog.
 
 backend:
-  - task: "Order Center API - Get seller orders with status counts"
+  - task: "Database Migration - Create store system tables"
     implemented: true
-    working: false
-    file: "backend/server.py"
+    working: "NA"
+    file: "backend/migrations/store_system_migration.sql"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "Implemented GET /api/seller/order-center endpoint with status filtering and counts"
-      - working: false
-        agent: "testing"
-        comment: "Database migration needed - shipments/refunds tables missing foreign key relationships. API returns HTTP 520 error: 'Could not find a relationship between orders and shipments in the schema cache'. This is expected as mentioned in review request."
-  
-  - task: "Ship Order API"
+        comment: "Created SQL migration for product_catalog, stores, and store_products tables with strict RLS policies. Buyers CANNOT access catalog directly."
+
+  - task: "Admin Seed Catalog API"
     implemented: true
     working: "NA"
     file: "backend/server.py"
@@ -130,79 +127,134 @@ backend:
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "Implemented POST /api/seller/orders/{id}/ship for adding tracking info"
-  
-  - task: "Refund Management API"
+        comment: "Implemented POST /api/admin/seed-catalog endpoint to seed 100 products from PRODUCT_CATALOG"
+
+  - task: "Store Search API"
     implemented: true
-    working: true
+    working: "NA"
     file: "backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "Implemented GET/PUT /api/seller/refunds and POST /api/buyer/refunds endpoints"
-      - working: true
-        agent: "testing"
-        comment: "GET /api/seller/refunds working correctly. Returns proper structure with refunds array and counts object. Missing optional status fields (seller_review, processing) but core functionality works."
-  
-  - task: "Courier Options API"
+        comment: "Implemented GET /api/stores/search with query parameter for filtering by store name. UPDATED: Now requires authentication (login required)."
+
+  - task: "Store Detail API"
     implemented: true
-    working: true
+    working: "NA"
     file: "backend/server.py"
     stuck_count: 0
-    priority: "low"
-    needs_retesting: false
+    priority: "high"
+    needs_retesting: true
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "Implemented GET /api/couriers endpoint"
-      - working: true
-        agent: "testing"
-        comment: "GET /api/couriers working perfectly. Returns 7 courier options with proper structure (code, name, icon). Public endpoint accessible without authentication."
+        comment: "Implemented GET /api/stores/{store_id} to get store details with seller info. UPDATED: Now requires authentication (login required)."
+
+  - task: "Store Products API (Buyer View)"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "CRITICAL: Implemented GET /api/stores/{store_id}/products. Query starts from store_products (NOT catalog). Joins with catalog for name/images only. Buyers can ONLY see active store products. UPDATED: Now requires authentication (login required)."
+
+  - task: "Seller Browse Catalog API"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented GET /api/seller/catalog/products for sellers to browse master catalog. RLS enforces seller-only access."
+
+  - task: "Seller Add Product to Store API"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented POST /api/seller/store/products for sellers to add catalog products to their store with custom pricing/stock"
+
+  - task: "Seller Manage Store Products APIs"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented GET/PUT/DELETE /api/seller/store/products for sellers to manage their store inventory"
 
 frontend:
-  - task: "Order Center Component"
+  - task: "Store Search Page"
     implemented: true
     working: "NA"
-    file: "frontend/src/pages/dashboard/OrderCenter.js"
+    file: "frontend/src/pages/StoreSearch.js"
     stuck_count: 0
     priority: "high"
     needs_retesting: true
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "Created OrderCenter component with 5 status tabs, real-time subscriptions, ship modal, and refund modal"
-  
-  - task: "Seller Dashboard Integration"
+        comment: "Created StoreSearch component with search functionality, store cards, and navigation to store detail page. UPDATED: Now protected route (login required). Uses api module for authenticated requests."
+
+  - task: "Store Detail Page"
     implemented: true
     working: "NA"
-    file: "frontend/src/pages/dashboard/SellerDashboard.js"
+    file: "frontend/src/pages/StoreDetail.js"
     stuck_count: 0
     priority: "high"
     needs_retesting: true
     status_history:
       - working: "NA"
         agent: "main"
-        comment: "Added Order Center tab to SellerDashboard"
+        comment: "Created StoreDetail component showing store info and ONLY products from store_products table. Integrated with cart functionality. UPDATED: Now protected route (login required). Uses api module for authenticated requests."
+
+  - task: "Navigation Updates"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/App.js, frontend/src/components/Navbar.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Added /stores/search and /stores/:storeId routes as protected routes with ProtectedRoute component. Added 'Stores' link to main navigation."
 
 metadata:
   created_by: "main_agent"
-  version: "1.0"
-  test_sequence: 2
+  version: "2.0"
+  test_sequence: 0
   run_ui: false
 
 test_plan:
   current_focus:
-    - "Ship Order API"
-  stuck_tasks: 
-    - "Order Center API - Get seller orders with status counts"
+    - "Database Migration - Create store system tables"
+    - "Store Search API"
+    - "Store Detail API"
+    - "Store Products API (Buyer View)"
+    - "Admin Seed Catalog API"
+  stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
 agent_communication:
   - agent: "main"
-    message: "Implemented Seller Dashboard Order Center feature with backend APIs and frontend components. Please test the backend APIs first: 1) GET /api/couriers (public), 2) GET /api/seller/order-center (requires seller auth), 3) POST /api/seller/orders/{id}/ship, 4) GET /api/seller/refunds, 5) PUT /api/seller/refunds/{id}. Test credentials: testseller_new@test.com / TestPass123!"
-  - agent: "testing"
-    message: "Backend testing completed for Seller Order Center APIs. RESULTS: ✅ GET /api/couriers (working), ✅ Authentication with testseller_new@test.com (working), ❌ GET /api/seller/order-center (database migration needed - shipments/refunds tables missing foreign key relationships), ✅ GET /api/seller/refunds (working). The order-center endpoint failure is EXPECTED as mentioned in review request. Database migration for shipments and refunds tables needs to be run in Supabase."
+    message: "Implemented complete Buyer Store Search & Store Detail system with strict access control. CRITICAL SECURITY: Buyers can ONLY query store_products table, NOT product_catalog. RLS policies enforce this at database level. Created migration SQL, 8 backend APIs, and 2 frontend pages. IMPORTANT: User MUST run the migration SQL in Supabase before testing. Please test backend APIs first: 1) POST /api/admin/seed-catalog (admin auth required to seed 100 products), 2) GET /api/stores/search (public), 3) GET /api/stores/{id} (public), 4) GET /api/stores/{id}/products (public - this is the CRITICAL endpoint that enforces buyer access control). Test credentials: admin - support@arabshopping.org, testseller_new@test.com / TestPass123!, testbuyer@test.com / TestPass123!"

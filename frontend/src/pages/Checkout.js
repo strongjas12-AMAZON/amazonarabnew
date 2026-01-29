@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { toast } from 'sonner';
 import api from '../lib/api';
-import { Copy, AlertTriangle, CheckCircle2, Wallet } from 'lucide-react';
+import { Copy, AlertTriangle, CheckCircle2, Wallet, MapPin, Plus, Trash2, Edit } from 'lucide-react';
 
 const WALLET_ADDRESS = process.env.REACT_APP_ADMIN_WALLET;
 const QR_IMAGE_URL = 'https://customer-assets.emergentagent.com/job_luxmarket-4/artifacts/aiqkmbx4_Screenshot%202025-12-12%20at%201.41.52%E2%80%AFPM.png';
@@ -15,10 +15,29 @@ const Checkout = () => {
   const [paymentMethod, setPaymentMethod] = useState('crypto'); // 'crypto' or 'wallet'
   const [walletBalance, setWalletBalance] = useState(0);
   const [loadingBalance, setLoadingBalance] = useState(true);
+  
+  // Shipping state
+  const [addresses, setAddresses] = useState([]);
+  const [selectedAddress, setSelectedAddress] = useState(null);
+  const [showAddressForm, setShowAddressForm] = useState(false);
+  const [loadingAddresses, setLoadingAddresses] = useState(true);
+  const [addressForm, setAddressForm] = useState({
+    fullName: '',
+    phone: '',
+    addressLine1: '',
+    addressLine2: '',
+    city: '',
+    state: '',
+    postalCode: '',
+    country: '',
+    isDefault: false
+  });
+  
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchWalletBalance();
+    fetchAddresses();
   }, []);
 
   const fetchWalletBalance = async () => {
@@ -33,6 +52,72 @@ const Checkout = () => {
     }
   };
 
+  const fetchAddresses = async () => {
+    try {
+      const response = await api.get('/buyer/addresses');
+      if (response.data.success) {
+        setAddresses(response.data.addresses || []);
+        // Auto-select default address if exists
+        const defaultAddr = response.data.addresses.find(addr => addr.isDefault);
+        if (defaultAddr) {
+          setSelectedAddress(defaultAddr);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch addresses', error);
+    } finally {
+      setLoadingAddresses(false);
+    }
+  };
+
+  const handleSaveAddress = async () => {
+    // Validate required fields
+    if (!addressForm.fullName || !addressForm.phone || !addressForm.addressLine1 || 
+        !addressForm.city || !addressForm.state || !addressForm.postalCode || !addressForm.country) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    try {
+      const response = await api.post('/buyer/addresses', addressForm);
+      if (response.data.success) {
+        toast.success('Address saved successfully');
+        setAddresses([response.data.address, ...addresses]);
+        setSelectedAddress(response.data.address);
+        setShowAddressForm(false);
+        // Reset form
+        setAddressForm({
+          fullName: '',
+          phone: '',
+          addressLine1: '',
+          addressLine2: '',
+          city: '',
+          state: '',
+          postalCode: '',
+          country: '',
+          isDefault: false
+        });
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to save address');
+    }
+  };
+
+  const handleDeleteAddress = async (addressId) => {
+    try {
+      const response = await api.delete(`/buyer/addresses/${addressId}`);
+      if (response.data.success) {
+        toast.success('Address deleted');
+        setAddresses(addresses.filter(addr => addr.id !== addressId));
+        if (selectedAddress?.id === addressId) {
+          setSelectedAddress(null);
+        }
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to delete address');
+    }
+  };
+
   const handleCopyAddress = () => {
     navigator.clipboard.writeText(WALLET_ADDRESS);
     toast.success('Wallet address copied!');
@@ -41,6 +126,12 @@ const Checkout = () => {
   const handlePlaceOrder = async () => {
     const total = getTotal();
     const useWallet = paymentMethod === 'wallet';
+
+    // Validate shipping information
+    if (!selectedAddress) {
+      toast.error('Please select or add a shipping address');
+      return;
+    }
 
     if (useWallet) {
       if (walletBalance < total) {
@@ -66,7 +157,20 @@ const Checkout = () => {
       const response = await api.post('/orders', {
         items: orderItems,
         totalAmount: total,
-        useWallet: useWallet
+        useWallet: useWallet,
+        shippingAddressId: selectedAddress.id,
+        shippingName: selectedAddress.fullName,
+        shippingPhone: selectedAddress.phone,
+        shippingAddress: {
+          fullName: selectedAddress.fullName,
+          phone: selectedAddress.phone,
+          addressLine1: selectedAddress.addressLine1,
+          addressLine2: selectedAddress.addressLine2,
+          city: selectedAddress.city,
+          state: selectedAddress.state,
+          postalCode: selectedAddress.postalCode,
+          country: selectedAddress.country
+        }
       });
 
       toast.success(useWallet ? 'Order placed successfully using wallet balance!' : 'Order placed successfully! Awaiting admin confirmation.');
@@ -83,6 +187,8 @@ const Checkout = () => {
     navigate('/cart');
     return null;
   }
+
+  const canPlaceOrder = selectedAddress && (paymentMethod === 'wallet' ? walletBalance >= getTotal() : confirmed);
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -108,6 +214,205 @@ const Checkout = () => {
             </span>
           </div>
         </div>
+      </div>
+
+      {/* SHIPPING INFORMATION SECTION */}
+      <div className="luxury-card mb-8">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-2">
+            <MapPin className="w-6 h-6 text-[#D4AF37]" />
+            <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white">Shipping Information</h2>
+          </div>
+          {!showAddressForm && (
+            <button
+              onClick={() => setShowAddressForm(true)}
+              className="btn-gold-outline flex items-center gap-2 text-sm px-4 py-2"
+            >
+              <Plus className="w-4 h-4" />
+              Add New Address
+            </button>
+          )}
+        </div>
+
+        {loadingAddresses ? (
+          <div className="text-center py-8">
+            <p className="text-gray-400">Loading addresses...</p>
+          </div>
+        ) : showAddressForm ? (
+          <div className="bg-[rgba(30,30,30,0.6)] rounded-lg p-6">
+            <h3 className="text-lg font-semibold text-white mb-4">Add New Shipping Address</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Full Name *</label>
+                <input
+                  type="text"
+                  value={addressForm.fullName}
+                  onChange={(e) => setAddressForm({...addressForm, fullName: e.target.value})}
+                  className="luxury-input w-full"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Phone Number *</label>
+                <input
+                  type="tel"
+                  value={addressForm.phone}
+                  onChange={(e) => setAddressForm({...addressForm, phone: e.target.value})}
+                  placeholder="+1XXXXXXXXXX"
+                  className="luxury-input w-full"
+                  required
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2">Address Line 1 *</label>
+                <input
+                  type="text"
+                  value={addressForm.addressLine1}
+                  onChange={(e) => setAddressForm({...addressForm, addressLine1: e.target.value})}
+                  className="luxury-input w-full"
+                  required
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2">Address Line 2 (Optional)</label>
+                <input
+                  type="text"
+                  value={addressForm.addressLine2}
+                  onChange={(e) => setAddressForm({...addressForm, addressLine2: e.target.value})}
+                  className="luxury-input w-full"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">City *</label>
+                <input
+                  type="text"
+                  value={addressForm.city}
+                  onChange={(e) => setAddressForm({...addressForm, city: e.target.value})}
+                  className="luxury-input w-full"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">State / Province *</label>
+                <input
+                  type="text"
+                  value={addressForm.state}
+                  onChange={(e) => setAddressForm({...addressForm, state: e.target.value})}
+                  className="luxury-input w-full"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Postal Code *</label>
+                <input
+                  type="text"
+                  value={addressForm.postalCode}
+                  onChange={(e) => setAddressForm({...addressForm, postalCode: e.target.value})}
+                  className="luxury-input w-full"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Country *</label>
+                <input
+                  type="text"
+                  value={addressForm.country}
+                  onChange={(e) => setAddressForm({...addressForm, country: e.target.value})}
+                  className="luxury-input w-full"
+                  required
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={addressForm.isDefault}
+                    onChange={(e) => setAddressForm({...addressForm, isDefault: e.target.checked})}
+                    className="w-4 h-4 accent-[#D4AF37]"
+                  />
+                  <span className="text-sm text-gray-300">Set as default address</span>
+                </label>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={handleSaveAddress}
+                className="btn-gold flex-1"
+              >
+                Save Address
+              </button>
+              <button
+                onClick={() => setShowAddressForm(false)}
+                className="btn-gold-outline flex-1"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : addresses.length === 0 ? (
+          <div className="text-center py-8 bg-[rgba(30,30,30,0.6)] rounded-lg">
+            <MapPin size={48} className="mx-auto text-gray-600 mb-3" />
+            <p className="text-gray-400 mb-4">No saved addresses yet</p>
+            <button
+              onClick={() => setShowAddressForm(true)}
+              className="btn-gold inline-flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Add Your First Address
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {addresses.map((addr) => (
+              <div
+                key={addr.id}
+                onClick={() => setSelectedAddress(addr)}
+                className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                  selectedAddress?.id === addr.id
+                    ? 'border-[#D4AF37] bg-[rgba(212,175,55,0.1)]'
+                    : 'border-gray-600 bg-[rgba(30,30,30,0.6)] hover:border-gray-500'
+                }`}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <p className="font-semibold text-white">{addr.fullName}</p>
+                      {addr.isDefault && (
+                        <span className="px-2 py-0.5 bg-[#D4AF37] text-black text-xs font-semibold rounded">
+                          Default
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-300">{addr.phone}</p>
+                    <p className="text-sm text-gray-400 mt-1">
+                      {addr.addressLine1}
+                      {addr.addressLine2 && `, ${addr.addressLine2}`}
+                    </p>
+                    <p className="text-sm text-gray-400">
+                      {addr.city}, {addr.state} {addr.postalCode}
+                    </p>
+                    <p className="text-sm text-gray-400">{addr.country}</p>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteAddress(addr.id);
+                    }}
+                    className="p-2 text-red-400 hover:text-red-300 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!selectedAddress && !showAddressForm && addresses.length > 0 && (
+          <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+            <p className="text-red-400 text-sm">⚠️ Please select a shipping address to continue</p>
+          </div>
+        )}
       </div>
 
       <div className="luxury-card mb-8">
@@ -258,16 +563,18 @@ const Checkout = () => {
         {/* Place Order Button */}
         <button
           onClick={handlePlaceOrder}
-          disabled={
-            loading ||
-            (paymentMethod === 'crypto' && !confirmed) ||
-            (paymentMethod === 'wallet' && walletBalance < getTotal())
-          }
+          disabled={loading || !canPlaceOrder}
           className="btn-gold w-full disabled:opacity-50 disabled:cursor-not-allowed"
           data-testid="place-order-btn"
         >
           {loading ? 'Placing Order...' : paymentMethod === 'wallet' ? 'Place Order with Wallet' : 'Place Order'}
         </button>
+        
+        {!selectedAddress && (
+          <p className="text-red-400 text-sm text-center mt-3">
+            ⚠️ Please complete shipping information above to place order
+          </p>
+        )}
       </div>
 
       <div className="luxury-card bg-green-500/10 border-green-500/30">
