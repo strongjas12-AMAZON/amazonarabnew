@@ -3364,23 +3364,24 @@ async def get_seller_refunds(status: Optional[str] = None, current_user: dict = 
         raise HTTPException(status_code=403, detail="Only sellers can view refunds")
     
     try:
-        # Get orders that contain seller's products first
+        # Get orders that contain seller's products first (NEW SYSTEM: use store_products)
         all_orders_result = supabase_admin.table('orders')\
-            .select('id, order_items(*, products(*))')\
+            .select('id, order_items(*)')\
             .execute()
         
         seller_order_ids = []
         for order in all_orders_result.data or []:
             for item in order.get('order_items', []):
-                product = item.get('products')
-                if product:
-                    seller_product = supabase_admin.table('seller_products')\
+                product_id = item.get('product_id')  # This is now store_product_id
+                if product_id:
+                    # Check if this store_product belongs to the seller
+                    store_product = supabase_admin.table('store_products')\
                         .select('id')\
                         .eq('seller_id', current_user['id'])\
-                        .eq('product_id', product.get('id'))\
+                        .eq('id', product_id)\
                         .eq('is_active', True)\
                         .execute()
-                    if seller_product.data:
+                    if store_product.data:
                         seller_order_ids.append(order['id'])
                         break
         
