@@ -3673,7 +3673,9 @@ class APITester:
 def main():
     """Main test runner"""
     tester = APITester()
-    success = tester.run_all_tests()
+    
+    # Run comprehensive order system tests as requested
+    success = tester.run_comprehensive_order_system_tests()
     
     # Exit with appropriate code
     sys.exit(0 if success else 1)
