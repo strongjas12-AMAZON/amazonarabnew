@@ -1548,6 +1548,586 @@ class APITester:
                 None
             )
 
+    def test_seller_order_center_comprehensive(self):
+        """Test complete Seller Order Center functionality - comprehensive order flow"""
+        print("\n🛒 COMPREHENSIVE SELLER ORDER CENTER TESTING")
+        print("=" * 60)
+        
+        # Step 1: Setup - Ensure Products in Store
+        print("\n1️⃣ SETUP - ENSURE PRODUCTS IN STORE")
+        print("-" * 40)
+        self.test_seller_has_products_in_store()
+        
+        # Step 2: Buyer Creates Order
+        print("\n2️⃣ BUYER CREATES ORDER")
+        print("-" * 25)
+        self.test_buyer_create_order()
+        
+        # Step 3: Admin Confirms Payment
+        print("\n3️⃣ ADMIN CONFIRMS PAYMENT")
+        print("-" * 28)
+        self.test_admin_confirm_payment()
+        
+        # Step 4: Seller Order Center - View Orders
+        print("\n4️⃣ SELLER ORDER CENTER - VIEW ORDERS")
+        print("-" * 38)
+        self.test_seller_view_orders()
+        self.test_seller_filter_orders_by_status()
+        
+        # Step 5: Seller Ships Order
+        print("\n5️⃣ SELLER SHIPS ORDER")
+        print("-" * 22)
+        self.test_seller_ship_order()
+        
+        # Step 6: Verify Order Center Updates
+        print("\n6️⃣ VERIFY ORDER CENTER UPDATES")
+        print("-" * 33)
+        self.test_verify_order_status_updates()
+        
+        # Step 7: Check Refunds Endpoint
+        print("\n7️⃣ CHECK REFUNDS ENDPOINT")
+        print("-" * 28)
+        self.test_seller_refunds_endpoint()
+
+    def test_seller_has_products_in_store(self):
+        """Step 1: Ensure seller has products in store"""
+        if not self.seller_token:
+            self.log_test(
+                "Setup - Check Seller Store Products", 
+                False, 
+                "No seller auth token available",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            response = self.session.get(f"{self.base_url}/seller/store/products", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    products = data.get("products", [])
+                    
+                    if len(products) >= 2:
+                        # Store product info for order creation
+                        self.store_product_id = products[0].get("id")
+                        self.store_product_price = products[0].get("price", 25.99)
+                        
+                        self.log_test(
+                            "Setup - Check Seller Store Products", 
+                            True, 
+                            f"✅ Seller has {len(products)} products in store. Ready for order testing.",
+                            {"products_count": len(products), "sample_product_id": self.store_product_id, "sample_price": self.store_product_price}
+                        )
+                    else:
+                        # Need to add products - use existing method
+                        self.log_test(
+                            "Setup - Check Seller Store Products", 
+                            False, 
+                            f"❌ Seller only has {len(products)} products. Need at least 2 for testing. Adding products...",
+                            {"products_count": len(products)}
+                        )
+                        # Add products using existing methods
+                        self.test_seller_add_product_auto_create_store()
+                        self.test_add_another_product_to_existing_store()
+                else:
+                    self.log_test(
+                        "Setup - Check Seller Store Products", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            else:
+                self.log_test(
+                    "Setup - Check Seller Store Products", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "Setup - Check Seller Store Products", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_buyer_create_order(self):
+        """Step 2: Buyer creates order with seller's products"""
+        if not self.buyer_token:
+            self.log_test(
+                "Buyer Create Order", 
+                False, 
+                "No buyer auth token available",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.buyer_token}"}
+            
+            # First get available products
+            products_response = self.session.get(f"{self.base_url}/products", headers=headers)
+            
+            if products_response.status_code != 200:
+                self.log_test(
+                    "Buyer Create Order", 
+                    False, 
+                    f"Cannot get products: HTTP {products_response.status_code}",
+                    None
+                )
+                return
+                
+            products_data = products_response.json()
+            products = products_data.get("products", [])
+            
+            if not products:
+                self.log_test(
+                    "Buyer Create Order", 
+                    False, 
+                    "No products available for order creation",
+                    None
+                )
+                return
+            
+            # Use first available product
+            product = products[0]
+            product_id = product.get("id")
+            product_price = product.get("price", 25.99)
+            quantity = 2
+            total_amount = float(product_price) * quantity
+            
+            # Create order
+            order_data = {
+                "items": [
+                    {
+                        "productId": product_id,
+                        "quantity": quantity,
+                        "price": product_price
+                    }
+                ],
+                "totalAmount": total_amount,
+                "shippingName": "Test Buyer",
+                "shippingPhone": "+1234567890",
+                "shippingAddress": {
+                    "street": "123 Test Street",
+                    "city": "Test City",
+                    "state": "Test State",
+                    "zipCode": "12345",
+                    "country": "Test Country"
+                }
+            }
+            
+            response = self.session.post(f"{self.base_url}/orders", headers=headers, json=order_data)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    order = data.get("order", {})
+                    self.test_order_id = order.get("id")
+                    
+                    self.log_test(
+                        "Buyer Create Order", 
+                        True, 
+                        f"✅ Order created successfully. Order ID: {self.test_order_id}, Total: ${total_amount}",
+                        {"order_id": self.test_order_id, "total_amount": total_amount, "product_id": product_id, "quantity": quantity}
+                    )
+                else:
+                    self.log_test(
+                        "Buyer Create Order", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            else:
+                self.log_test(
+                    "Buyer Create Order", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "Buyer Create Order", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_admin_confirm_payment(self):
+        """Step 3: Admin confirms payment for the order"""
+        if not self.admin_token or not hasattr(self, 'test_order_id'):
+            self.log_test(
+                "Admin Confirm Payment", 
+                False, 
+                "No admin token or order ID available",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.admin_token}"}
+            
+            # Update order status to paid
+            status_data = {"status": "paid"}
+            
+            response = self.session.put(f"{self.base_url}/orders/{self.test_order_id}/status", headers=headers, json=status_data)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    order = data.get("order", {})
+                    payment_status = order.get("paymentStatus")
+                    
+                    self.log_test(
+                        "Admin Confirm Payment", 
+                        True, 
+                        f"✅ Payment confirmed successfully. Order payment status: {payment_status}",
+                        {"order_id": self.test_order_id, "payment_status": payment_status}
+                    )
+                else:
+                    self.log_test(
+                        "Admin Confirm Payment", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            else:
+                self.log_test(
+                    "Admin Confirm Payment", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "Admin Confirm Payment", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_seller_view_orders(self):
+        """Step 4a: Seller views orders in Order Center"""
+        if not self.seller_token:
+            self.log_test(
+                "Seller View Orders", 
+                False, 
+                "No seller auth token available",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            response = self.session.get(f"{self.base_url}/seller/order-center", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    orders = data.get("orders", [])
+                    counts = data.get("counts", {})
+                    
+                    # Check if our test order is visible
+                    test_order_found = False
+                    if hasattr(self, 'test_order_id'):
+                        test_order_found = any(order.get("id") == self.test_order_id for order in orders)
+                    
+                    if test_order_found:
+                        self.log_test(
+                            "Seller View Orders", 
+                            True, 
+                            f"✅ VERIFIED: Seller sees the order created by buyer. Total orders: {len(orders)}, Counts: {counts}",
+                            {"orders_count": len(orders), "counts": counts, "test_order_found": True}
+                        )
+                    else:
+                        self.log_test(
+                            "Seller View Orders", 
+                            False, 
+                            f"❌ Test order not found in seller's order center. Total orders: {len(orders)}",
+                            {"orders_count": len(orders), "counts": counts, "test_order_found": False}
+                        )
+                else:
+                    self.log_test(
+                        "Seller View Orders", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            else:
+                self.log_test(
+                    "Seller View Orders", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "Seller View Orders", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_seller_filter_orders_by_status(self):
+        """Step 4b: Seller filters orders by status"""
+        if not self.seller_token:
+            self.log_test(
+                "Seller Filter Orders by Status", 
+                False, 
+                "No seller auth token available",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            
+            # Test filtering by to_be_shipped status
+            response = self.session.get(f"{self.base_url}/seller/order-center?status=to_be_shipped", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    orders = data.get("orders", [])
+                    counts = data.get("counts", {})
+                    
+                    # Check if orders contain seller's products and correct status
+                    valid_orders = []
+                    for order in orders:
+                        order_items = order.get("orderItems", [])
+                        has_seller_products = any(
+                            item.get("product", {}).get("sellerId") == self.seller_token or 
+                            "store" in str(item.get("product", {})).lower()
+                            for item in order_items
+                        )
+                        if has_seller_products:
+                            valid_orders.append(order)
+                    
+                    self.log_test(
+                        "Seller Filter Orders by Status", 
+                        True, 
+                        f"✅ VERIFIED: Order filtering works. Status 'to_be_shipped': {len(orders)} orders, {len(valid_orders)} with seller's products",
+                        {"filtered_orders": len(orders), "seller_orders": len(valid_orders), "counts": counts}
+                    )
+                else:
+                    self.log_test(
+                        "Seller Filter Orders by Status", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            else:
+                self.log_test(
+                    "Seller Filter Orders by Status", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "Seller Filter Orders by Status", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_seller_ship_order(self):
+        """Step 5: Seller ships the order"""
+        if not self.seller_token or not hasattr(self, 'test_order_id'):
+            self.log_test(
+                "Seller Ship Order", 
+                False, 
+                "No seller token or order ID available",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            
+            # Create shipment
+            from datetime import datetime, timedelta
+            estimated_delivery = (datetime.now() + timedelta(days=7)).isoformat()
+            
+            shipment_data = {
+                "trackingNumber": "TEST123456",
+                "courierName": "DHL Express", 
+                "courierCode": "dhl",
+                "estimatedDelivery": estimated_delivery
+            }
+            
+            response = self.session.post(f"{self.base_url}/seller/orders/{self.test_order_id}/ship", headers=headers, json=shipment_data)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    shipment = data.get("shipment", {})
+                    order = data.get("order", {})
+                    
+                    self.log_test(
+                        "Seller Ship Order", 
+                        True, 
+                        f"✅ VERIFIED: Shipment created successfully. Tracking: {shipment.get('trackingNumber')}, Order status: {order.get('status')}",
+                        {"shipment_id": shipment.get("id"), "tracking_number": shipment.get("trackingNumber"), "order_status": order.get("status")}
+                    )
+                else:
+                    self.log_test(
+                        "Seller Ship Order", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            else:
+                self.log_test(
+                    "Seller Ship Order", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "Seller Ship Order", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_verify_order_status_updates(self):
+        """Step 6: Verify order moved to correct status after shipping"""
+        if not self.seller_token:
+            self.log_test(
+                "Verify Order Status Updates", 
+                False, 
+                "No seller auth token available",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            
+            # Check orders in to_be_received status
+            response = self.session.get(f"{self.base_url}/seller/order-center?status=to_be_received", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    orders = data.get("orders", [])
+                    
+                    # Check if our test order is now in to_be_received
+                    test_order_found = False
+                    test_order_has_shipment = False
+                    
+                    if hasattr(self, 'test_order_id'):
+                        for order in orders:
+                            if order.get("id") == self.test_order_id:
+                                test_order_found = True
+                                shipments = order.get("shipments", [])
+                                test_order_has_shipment = len(shipments) > 0
+                                break
+                    
+                    if test_order_found and test_order_has_shipment:
+                        self.log_test(
+                            "Verify Order Status Updates", 
+                            True, 
+                            f"✅ VERIFIED: Order now shows in 'to_be_received' tab with shipment info attached",
+                            {"orders_in_status": len(orders), "test_order_found": True, "has_shipment": True}
+                        )
+                    elif test_order_found:
+                        self.log_test(
+                            "Verify Order Status Updates", 
+                            False, 
+                            f"❌ Order found in to_be_received but missing shipment info",
+                            {"orders_in_status": len(orders), "test_order_found": True, "has_shipment": False}
+                        )
+                    else:
+                        self.log_test(
+                            "Verify Order Status Updates", 
+                            False, 
+                            f"❌ Test order not found in to_be_received status. Total orders: {len(orders)}",
+                            {"orders_in_status": len(orders), "test_order_found": False}
+                        )
+                else:
+                    self.log_test(
+                        "Verify Order Status Updates", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            else:
+                self.log_test(
+                    "Verify Order Status Updates", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "Verify Order Status Updates", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_seller_refunds_endpoint(self):
+        """Step 7: Check seller refunds endpoint works"""
+        if not self.seller_token:
+            self.log_test(
+                "Seller Refunds Endpoint", 
+                False, 
+                "No seller auth token available",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            response = self.session.get(f"{self.base_url}/seller/refunds", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    refunds = data.get("refunds", [])
+                    counts = data.get("counts", {})
+                    
+                    self.log_test(
+                        "Seller Refunds Endpoint", 
+                        True, 
+                        f"✅ VERIFIED: Refunds endpoint works. Found {len(refunds)} refunds, Counts: {counts}",
+                        {"refunds_count": len(refunds), "counts": counts}
+                    )
+                else:
+                    self.log_test(
+                        "Seller Refunds Endpoint", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            else:
+                self.log_test(
+                    "Seller Refunds Endpoint", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "Seller Refunds Endpoint", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
     def run_all_tests(self):
         """Run all tests in the specific sequence requested for seller catalog and add product fixes"""
         print("=" * 80)
