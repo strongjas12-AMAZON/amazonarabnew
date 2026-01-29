@@ -288,4 +288,8 @@ agent_communication:
   - agent: "main"
     message: "Starting comprehensive backend testing. Fixed missing 'deprecated' python dependency. Backend and frontend services are running. Testing all Store System APIs with focus on: 1) Auth flows (login/register), 2) Store Search API, 3) Store Detail API, 4) Store Products API (buyer view - critical security check), 5) Seller catalog browsing, 6) Seller add/manage store products. Test credentials as above."
   - agent: "testing"
+    message: "Backend testing complete. Found critical issue: duplicate seed-catalog endpoints causing table mismatch. products table vs product_catalog table. Seller APIs expect product_catalog but seeding was going to products."
+  - agent: "main"
+    message: "FIXED: Removed duplicate seed-catalog endpoint. Now only one endpoint exists at /api/admin/seed-catalog which seeds to product_catalog table correctly. Added /api/admin/clear-catalog endpoint to clear product_catalog and store_products. Renamed old clear endpoint to /api/admin/clear-legacy-products. Ready for retesting."
+  - agent: "testing"
     message: "TESTING COMPLETE - CRITICAL DATABASE SCHEMA ISSUE FOUND: The system has two conflicting product tables: 'products' (old) and 'product_catalog' (new). The seed-catalog endpoint has duplicate implementations - one seeds 'products' table, another seeds 'product_catalog' table. Seller APIs expect 'product_catalog' but products are being created in 'products' table, causing foreign key constraint violations. SECURITY TEST PASSED: Buyers can only access store_products, not master catalog. Store search/detail APIs working correctly. Main agent needs to fix the catalog seeding issue by ensuring products are created in the correct 'product_catalog' table."
