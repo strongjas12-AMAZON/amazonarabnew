@@ -831,10 +831,10 @@ class APITester:
             )
 
     def test_seller_catalog_browsing(self):
-        """Test GET /api/seller/catalog/products - Seller browses master catalog"""
+        """Test GET /api/seller/catalog/products - VERIFY: Should return 100 products (not just 50)"""
         if not self.seller_token:
             self.log_test(
-                "GET /api/seller/catalog/products", 
+                "GET /api/seller/catalog/products - Verify 100 Products", 
                 False, 
                 "No seller auth token available - seller login failed",
                 None
@@ -855,6 +855,36 @@ class APITester:
                     if products and len(products) > 0:
                         self.catalog_product_id = products[0].get("id")
                     
+                    # CRITICAL VALIDATION: Should return 100 products (not 50)
+                    if len(products) >= 100:
+                        self.log_test(
+                            "GET /api/seller/catalog/products - Verify 100 Products", 
+                            True, 
+                            f"✅ FIXED: Seller can see {len(products)} products in catalog (should be 100, not limited to 50)",
+                            {"products_count": len(products), "total": total, "expected_minimum": 100}
+                        )
+                    elif len(products) == 50:
+                        self.log_test(
+                            "GET /api/seller/catalog/products - Verify 100 Products", 
+                            False, 
+                            f"❌ ISSUE STILL EXISTS: Seller can only see 50 products in catalog, should see 100. Limit not increased properly.",
+                            {"products_count": len(products), "total": total, "issue": "limit_still_50"}
+                        )
+                    elif len(products) > 50 and len(products) < 100:
+                        self.log_test(
+                            "GET /api/seller/catalog/products - Verify 100 Products", 
+                            True, 
+                            f"✅ PARTIALLY FIXED: Seller can see {len(products)} products (more than 50 but less than 100). Limit increased but may need adjustment.",
+                            {"products_count": len(products), "total": total, "note": "partial_fix"}
+                        )
+                    else:
+                        self.log_test(
+                            "GET /api/seller/catalog/products - Verify 100 Products", 
+                            False, 
+                            f"❌ UNEXPECTED: Seller can only see {len(products)} products in catalog. Expected at least 100.",
+                            {"products_count": len(products), "total": total, "issue": "unexpected_count"}
+                        )
+                    
                     # If no products in catalog, try to get one from admin products endpoint
                     if not products:
                         # Try to get products from the admin products endpoint (different table)
@@ -866,43 +896,36 @@ class APITester:
                             if admin_products:
                                 self.catalog_product_id = admin_products[0].get("id")
                                 self.log_test(
-                                    "GET /api/seller/catalog/products", 
-                                    True, 
-                                    f"Catalog browsing works but product_catalog table is empty. Found {len(admin_products)} products in admin products table instead.",
+                                    "GET /api/seller/catalog/products - Verify 100 Products", 
+                                    False, 
+                                    f"❌ CATALOG EMPTY: Catalog browsing endpoint works but product_catalog table is empty. Found {len(admin_products)} products in admin products table instead.",
                                     {"products_count": len(products), "total": total, "admin_products_available": len(admin_products)}
                                 )
                                 return
-                    
-                    self.log_test(
-                        "GET /api/seller/catalog/products", 
-                        True, 
-                        f"Seller can browse catalog: {len(products)} products, total: {total}",
-                        {"products_count": len(products), "total": total}
-                    )
                 else:
                     self.log_test(
-                        "GET /api/seller/catalog/products", 
+                        "GET /api/seller/catalog/products - Verify 100 Products", 
                         False, 
                         "Response missing success=true",
                         data
                     )
             elif response.status_code == 403:
                 self.log_test(
-                    "GET /api/seller/catalog/products", 
+                    "GET /api/seller/catalog/products - Verify 100 Products", 
                     False, 
                     "Access forbidden - check if user has seller role",
                     response.text
                 )
             elif response.status_code == 401:
                 self.log_test(
-                    "GET /api/seller/catalog/products", 
+                    "GET /api/seller/catalog/products - Verify 100 Products", 
                     False, 
                     "Unauthorized - check if auth token is valid",
                     response.text
                 )
             else:
                 self.log_test(
-                    "GET /api/seller/catalog/products", 
+                    "GET /api/seller/catalog/products - Verify 100 Products", 
                     False, 
                     f"HTTP {response.status_code}: {response.text}",
                     None
@@ -910,7 +933,7 @@ class APITester:
                 
         except Exception as e:
             self.log_test(
-                "GET /api/seller/catalog/products", 
+                "GET /api/seller/catalog/products - Verify 100 Products", 
                 False, 
                 f"Exception: {str(e)}",
                 None
