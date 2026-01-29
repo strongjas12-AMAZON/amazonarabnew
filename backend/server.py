@@ -4339,6 +4339,105 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# Contact Form Endpoint
+@api_router.post("/contact")
+async def submit_contact_form(
+    name: str = Form(...),
+    email: str = Form(...),
+    subject: str = Form(...),
+    message: str = Form(...)
+):
+    """Public endpoint to submit contact form - sends email to support"""
+    try:
+        # Validate email format
+        if not email or '@' not in email:
+            raise HTTPException(status_code=400, detail="Invalid email address")
+        
+        # Validate required fields
+        if not name or not subject or not message:
+            raise HTTPException(status_code=400, detail="All fields are required")
+        
+        # Create email content
+        support_email = "support@arabshopping.org"
+        email_subject = f"Contact Form: {subject}"
+        
+        html_content = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #1a1a1a; color: #fff; padding: 20px;">
+            <div style="text-align: center; padding: 20px 0; border-bottom: 2px solid #D4AF37;">
+                <h1 style="color: #D4AF37; margin: 0;">Amazon Arab</h1>
+                <p style="color: #888; margin: 5px 0 0 0;">Contact Form Submission</p>
+            </div>
+            
+            <div style="padding: 30px 20px;">
+                <h2 style="color: #D4AF37; margin-bottom: 20px;">New Contact Form Message</h2>
+                
+                <div style="background: #2a2a2a; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                            <td style="padding: 10px 0; color: #888; width: 120px;">Name:</td>
+                            <td style="padding: 10px 0; color: #fff;"><strong>{name}</strong></td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px 0; color: #888;">Email:</td>
+                            <td style="padding: 10px 0; color: #D4AF37;"><strong>{email}</strong></td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px 0; color: #888;">Subject:</td>
+                            <td style="padding: 10px 0; color: #fff;"><strong>{subject}</strong></td>
+                        </tr>
+                    </table>
+                </div>
+                
+                <div style="background: #2a2a2a; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <p style="color: #888; margin: 0 0 10px 0; font-weight: bold;">Message:</p>
+                    <p style="color: #fff; line-height: 1.6; margin: 0; white-space: pre-wrap;">{message}</p>
+                </div>
+                
+                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #333; color: #888; text-align: center;">
+                    <p style="margin: 5px 0; font-size: 12px;">
+                        This email was sent from the Amazon Arab contact form.
+                    </p>
+                    <p style="margin: 5px 0; font-size: 12px;">
+                        Reply directly to this email to respond to the customer at: {email}
+                    </p>
+                </div>
+            </div>
+            
+            <div style="text-align: center; padding: 20px; border-top: 2px solid #D4AF37; color: #888; font-size: 12px;">
+                <p style="margin: 5px 0;">© 2025 Amazon Arab. All rights reserved.</p>
+                <p style="margin: 5px 0;">Premium Multi-Vendor Marketplace</p>
+            </div>
+        </div>
+        """
+        
+        # Send email to support
+        if RESEND_API_KEY:
+            params = {
+                "from": f"Amazon Arab Contact <{SENDER_EMAIL}>",
+                "to": [support_email],
+                "reply_to": [email],  # Allow direct reply to customer
+                "subject": email_subject,
+                "html": html_content
+            }
+            result = await asyncio.to_thread(resend.Emails.send, params)
+            logging.info(f"Contact form email sent to {support_email}: {result.get('id')}")
+            
+            return {
+                "success": True,
+                "message": "Your message has been sent successfully! We'll get back to you within 24 hours."
+            }
+        else:
+            logging.warning("RESEND_API_KEY not configured, cannot send contact form email")
+            raise HTTPException(status_code=500, detail="Email service not configured")
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Contact form submission error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to send message. Please try again later.")
+
+
 # Logging
 logging.basicConfig(
     level=logging.INFO,
