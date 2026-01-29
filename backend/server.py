@@ -4057,13 +4057,26 @@ async def add_product_to_store(
         
         seller_id = current_user['id']
         
-        # Get seller's store
-        store_result = supabase_admin.table('stores').select('id').eq('seller_id', seller_id).single().execute()
+        # Get or create seller's store
+        store_result = supabase_admin.table('stores').select('id').eq('seller_id', seller_id).execute()
         
-        if not store_result.data:
-            raise HTTPException(status_code=404, detail="Store not found. Please contact support.")
-        
-        store_id = store_result.data['id']
+        if not store_result.data or len(store_result.data) == 0:
+            # Auto-create store if it doesn't exist
+            store_name = current_user.get('store_name') or current_user.get('name', 'Seller') + "'s Store"
+            
+            new_store = supabase_admin.table('stores').insert({
+                'seller_id': seller_id,
+                'store_name': store_name,
+                'status': 'active'
+            }).execute()
+            
+            if not new_store.data:
+                raise HTTPException(status_code=500, detail="Failed to create store")
+            
+            store_id = new_store.data[0]['id']
+            logging.info(f"Auto-created store for seller {seller_id}: {store_name}")
+        else:
+            store_id = store_result.data[0]['id']
         
         # Check if product already in store
         existing = supabase_admin.table('store_products').select('id').eq('store_id', store_id).eq('catalog_product_id', catalog_product_id).execute()
