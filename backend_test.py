@@ -1057,7 +1057,159 @@ class APITester:
                 None
             )
 
-    def test_seller_add_multiple_products(self):
+    def test_verify_store_created(self):
+        """Test that store was created for seller after adding first product"""
+        if not self.seller_token:
+            self.log_test(
+                "Verify Store Created", 
+                False, 
+                "No seller auth token available - seller login failed",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            response = self.session.get(f"{self.base_url}/seller/store/products", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    products = data.get("products", [])
+                    
+                    if len(products) > 0:
+                        self.log_test(
+                            "Verify Store Created", 
+                            True, 
+                            f"✅ Store successfully created and contains {len(products)} product(s). Auto-create store functionality confirmed working.",
+                            {"products_count": len(products), "store_verified": True}
+                        )
+                    else:
+                        self.log_test(
+                            "Verify Store Created", 
+                            False, 
+                            "❌ Store appears to be empty after adding product. Store creation may have failed.",
+                            {"products_count": 0, "store_verified": False}
+                        )
+                else:
+                    self.log_test(
+                        "Verify Store Created", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            else:
+                self.log_test(
+                    "Verify Store Created", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "Verify Store Created", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_add_another_product_to_existing_store(self):
+        """Test adding another product to the now-existing store"""
+        if not self.seller_token:
+            self.log_test(
+                "Add Another Product to Existing Store", 
+                False, 
+                "No seller auth token available - seller login failed",
+                None
+            )
+            return
+            
+        # Get available catalog products
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            catalog_response = self.session.get(f"{self.base_url}/seller/catalog/products", headers=headers)
+            
+            if catalog_response.status_code != 200:
+                self.log_test(
+                    "Add Another Product to Existing Store", 
+                    False, 
+                    "Cannot get catalog products for second product test",
+                    None
+                )
+                return
+                
+            catalog_data = catalog_response.json()
+            catalog_products = catalog_data.get("products", [])
+            
+            if len(catalog_products) < 2:
+                self.log_test(
+                    "Add Another Product to Existing Store", 
+                    False, 
+                    f"Not enough catalog products available. Found {len(catalog_products)}, need at least 2",
+                    None
+                )
+                return
+            
+            # Use second product from catalog
+            second_product_id = catalog_products[1].get("id")
+            
+            form_data = {
+                "catalog_product_id": second_product_id,
+                "price": "149.99",
+                "stock": "15"
+            }
+            
+            response = self.session.post(f"{self.base_url}/seller/store/products", headers=headers, data=form_data)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    store_product = data.get("store_product", {})
+                    
+                    self.log_test(
+                        "Add Another Product to Existing Store", 
+                        True, 
+                        f"✅ Second product added successfully to existing store: price $149.99, stock 15. Store now has multiple products.",
+                        {"store_product_id": store_product.get("id"), "catalog_product_id": second_product_id, "price": "149.99", "stock": "15"}
+                    )
+                else:
+                    self.log_test(
+                        "Add Another Product to Existing Store", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            elif response.status_code == 400:
+                if "already exists" in response.text.lower():
+                    self.log_test(
+                        "Add Another Product to Existing Store", 
+                        True, 
+                        "✅ Second product already exists in store (expected behavior for repeat test)",
+                        response.text
+                    )
+                else:
+                    self.log_test(
+                        "Add Another Product to Existing Store", 
+                        False, 
+                        f"❌ Bad request: {response.text}",
+                        None
+                    )
+            else:
+                self.log_test(
+                    "Add Another Product to Existing Store", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "Add Another Product to Existing Store", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
         """Test adding 2-3 different products to seller store"""
         if not self.seller_token:
             self.log_test(
