@@ -263,6 +263,27 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleCancelOrder = async (orderId) => {
+    if (!window.confirm('Are you sure you want to cancel this order?')) return;
+    try {
+      await api.put(`/orders/${orderId}/status`, { status: 'cancelled' });
+      toast.success('Order cancelled successfully');
+      fetchData();
+    } catch (error) {
+      toast.error('Failed to cancel order');
+    }
+  };
+
+  const handleCompleteOrder = async (orderId) => {
+    try {
+      await api.put(`/orders/${orderId}/status`, { status: 'completed' });
+      toast.success('✅ Order marked as completed!');
+      fetchData();
+    } catch (error) {
+      toast.error('Failed to complete order');
+    }
+  };
+
   // Filter products
   const filteredProducts = products.filter(p => {
     const matchesSearch = p.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
