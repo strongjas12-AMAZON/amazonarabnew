@@ -167,6 +167,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "FIXED: Changed 'added_at' to 'created_at' in query ordering and response formatting. GET /api/products now returns 3 products from store_products table with proper joins to product_catalog and stores. Response includes expected fields: id, title, description, price, category, images, store_name, seller_id, stock. Products page shows what sellers added correctly."
+      - working: true
+        agent: "testing"
+        comment: "USER REPORTED FIX VERIFIED: ✅ VERIFIED - Products page shows 3 products from store_products table (at least 2 as expected). Seller additions are visible to buyers. GET /api/products endpoint correctly displays products that sellers have added to their stores, confirming the complete flow: seller adds products → products appear on /products page for buyers to see."
 
   - task: "Store Search API"
     implemented: true
