@@ -939,11 +939,11 @@ class APITester:
                 None
             )
 
-    def test_seller_add_product_to_store(self):
-        """Test POST /api/seller/store/products - Add product from catalog to store with form data"""
+    def test_seller_add_product_auto_create_store(self):
+        """Test POST /api/seller/store/products - VERIFY: Auto-create store if seller doesn't have one"""
         if not self.seller_token:
             self.log_test(
-                "POST /api/seller/store/products (Product 1)", 
+                "POST /api/seller/store/products - Auto-Create Store", 
                 False, 
                 "No seller auth token available - seller login failed",
                 None
@@ -952,7 +952,7 @@ class APITester:
             
         if not self.catalog_product_id:
             self.log_test(
-                "POST /api/seller/store/products (Product 1)", 
+                "POST /api/seller/store/products - Auto-Create Store", 
                 False, 
                 "No catalog product ID available - catalog browsing failed",
                 None
@@ -961,10 +961,15 @@ class APITester:
             
         try:
             headers = {"Authorization": f"Bearer {self.seller_token}"}
+            
+            # First, check if seller already has a store
+            store_check_response = self.session.get(f"{self.base_url}/seller/store/products", headers=headers)
+            has_existing_store = store_check_response.status_code == 200 and len(store_check_response.json().get("products", [])) > 0
+            
             form_data = {
                 "catalog_product_id": self.catalog_product_id,
-                "price": "29.99",
-                "stock": "15"
+                "price": "99.99",
+                "stock": "20"
             }
             
             response = self.session.post(f"{self.base_url}/seller/store/products", headers=headers, data=form_data)
@@ -978,52 +983,67 @@ class APITester:
                     if "store_id" in store_product:
                         self.seller_store_id = store_product["store_id"]
                     
-                    self.log_test(
-                        "POST /api/seller/store/products (Product 1)", 
-                        True, 
-                        f"Product 1 added to store successfully: {store_product.get('id', 'Unknown ID')} with price $29.99 and stock 15",
-                        {"store_product_id": store_product.get("id"), "catalog_product_id": self.catalog_product_id, "price": "29.99", "stock": "15", "store_id": store_product.get("store_id")}
-                    )
+                    if has_existing_store:
+                        self.log_test(
+                            "POST /api/seller/store/products - Auto-Create Store", 
+                            True, 
+                            f"✅ Product added successfully to existing store: price $99.99, stock 20. Store ID: {store_product.get('store_id', 'Unknown')}",
+                            {"store_product_id": store_product.get("id"), "catalog_product_id": self.catalog_product_id, "price": "99.99", "stock": "20", "store_id": store_product.get("store_id"), "auto_created": False}
+                        )
+                    else:
+                        self.log_test(
+                            "POST /api/seller/store/products - Auto-Create Store", 
+                            True, 
+                            f"✅ FIXED: Auto-create store functionality working! Product added and store created automatically: price $99.99, stock 20. Store ID: {store_product.get('store_id', 'Unknown')}",
+                            {"store_product_id": store_product.get("id"), "catalog_product_id": self.catalog_product_id, "price": "99.99", "stock": "20", "store_id": store_product.get("store_id"), "auto_created": True}
+                        )
                 else:
                     self.log_test(
-                        "POST /api/seller/store/products (Product 1)", 
+                        "POST /api/seller/store/products - Auto-Create Store", 
                         False, 
                         "Response missing success=true",
                         data
                     )
             elif response.status_code == 400:
-                # Check if it's a duplicate product error (acceptable)
-                if "already exists" in response.text.lower():
+                response_text = response.text.lower()
+                if "cannot coerce result to single json object" in response_text or "pgrst116" in response_text:
                     self.log_test(
-                        "POST /api/seller/store/products (Product 1)", 
+                        "POST /api/seller/store/products - Auto-Create Store", 
+                        False, 
+                        f"❌ ISSUE STILL EXISTS: 'Cannot coerce result to single JSON object' error still occurring. Auto-create store fix not working properly.",
+                        {"error": response.text, "issue": "coerce_error_still_exists"}
+                    )
+                elif "already exists" in response_text:
+                    self.log_test(
+                        "POST /api/seller/store/products - Auto-Create Store", 
                         True, 
-                        "Product already exists in store (expected behavior)",
+                        "✅ Product already exists in store (expected behavior for repeat test)",
                         response.text
                     )
                 else:
                     self.log_test(
-                        "POST /api/seller/store/products (Product 1)", 
+                        "POST /api/seller/store/products - Auto-Create Store", 
                         False, 
-                        f"Bad request: {response.text}",
-                        None
+                        f"❌ Bad request: {response.text}",
+                        {"error": response.text}
                     )
             elif response.status_code == 403:
                 self.log_test(
-                    "POST /api/seller/store/products (Product 1)", 
+                    "POST /api/seller/store/products - Auto-Create Store", 
                     False, 
                     "Access forbidden - check if user has seller role",
                     response.text
                 )
             elif response.status_code == 401:
                 self.log_test(
-                    "POST /api/seller/store/products (Product 1)", 
+                    "POST /api/seller/store/products - Auto-Create Store", 
                     False, 
                     "Unauthorized - check if auth token is valid",
                     response.text
                 )
             else:
                 self.log_test(
-                    "POST /api/seller/store/products (Product 1)", 
+                    "POST /api/seller/store/products - Auto-Create Store", 
                     False, 
                     f"HTTP {response.status_code}: {response.text}",
                     None
@@ -1031,7 +1051,7 @@ class APITester:
                 
         except Exception as e:
             self.log_test(
-                "POST /api/seller/store/products (Product 1)", 
+                "POST /api/seller/store/products - Auto-Create Store", 
                 False, 
                 f"Exception: {str(e)}",
                 None
