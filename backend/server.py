@@ -3798,6 +3798,33 @@ async def seed_product_catalog(request: Request, current_user: dict = Depends(ge
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@api_router.delete("/admin/clear-catalog")
+@limiter.limit("5/hour")
+async def clear_product_catalog_new(request: Request, current_user: dict = Depends(get_current_user)):
+    """Admin-only: Clear product_catalog table (for re-seeding)"""
+    try:
+        # Check admin role
+        if current_user.get('role') != 'admin':
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        # First delete all store_products that reference catalog products
+        supabase_admin.table('store_products').delete().neq('id', '00000000-0000-0000-0000-000000000000').execute()
+        
+        # Then delete all catalog products
+        result = supabase_admin.table('product_catalog').delete().neq('id', '00000000-0000-0000-0000-000000000000').execute()
+        
+        return {
+            "success": True,
+            "message": f"Cleared product catalog and store products"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Clear catalog error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @api_router.get("/stores/search")
 async def search_stores(query: Optional[str] = None, limit: int = 20, offset: int = 0, current_user: dict = Depends(get_current_user)):
     """Protected: Search stores by name (login required)"""
