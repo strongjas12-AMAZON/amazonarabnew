@@ -1659,9 +1659,9 @@ async def get_all_products_admin(current_user: dict = Depends(get_current_user))
 # This endpoint now seeds to product_catalog table for the new store system
 
 
-@api_router.delete("/admin/clear-catalog")
-async def clear_product_catalog(current_user: dict = Depends(get_current_user)):
-    """Clear all products from catalog (admin only)"""
+@api_router.delete("/admin/clear-legacy-products")
+async def clear_legacy_products(current_user: dict = Depends(get_current_user)):
+    """Clear all products from legacy 'products' table (admin only)"""
     if current_user['role'] != 'admin':
         raise HTTPException(status_code=403, detail="Admin access required")
     
@@ -1689,10 +1689,10 @@ async def clear_product_catalog(current_user: dict = Depends(get_current_user)):
         
         return {
             "success": True, 
-            "message": f"Deleted {deleted} products, deactivated {deactivated} products with orders"
+            "message": f"Deleted {deleted} legacy products, deactivated {deactivated} products with orders"
         }
     except Exception as e:
-        logging.error(f"Clear catalog error: {str(e)}")
+        logging.error(f"Clear legacy products error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
