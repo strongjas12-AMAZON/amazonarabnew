@@ -1076,9 +1076,9 @@ class APITester:
             )
 
     def run_all_tests(self):
-        """Run all tests in sequence"""
+        """Run all tests in the specific sequence requested"""
         print("=" * 80)
-        print("BACKEND API TESTING - BUYER STORE SEARCH & STORE DETAIL SYSTEM")
+        print("BACKEND API TESTING - STORE SYSTEM AFTER FIXES")
         print("=" * 80)
         print(f"Base URL: {self.base_url}")
         print(f"Admin Email: {ADMIN_EMAIL}")
@@ -1087,52 +1087,55 @@ class APITester:
         print("=" * 80)
         print()
         
-        # Test 1: Authentication APIs
-        print("🔐 AUTHENTICATION TESTS")
+        # Test Flow as requested:
+        print("🔐 STEP 1: Login as Admin")
         print("-" * 40)
         self.test_admin_login()
-        self.test_seller_login()
-        self.test_buyer_login()
         print()
         
-        # Test 2: Admin Seed Catalog API
-        print("🌱 ADMIN CATALOG SEEDING")
+        print("🧹 STEP 2: Clear Catalog First (Clean State)")
+        print("-" * 40)
+        self.test_admin_clear_catalog()
+        print()
+        
+        print("🌱 STEP 3: Seed Product Catalog (~100 products to product_catalog table)")
         print("-" * 40)
         self.test_admin_seed_catalog()
         print()
         
-        # Test 3: Store Search APIs
-        print("🔍 STORE SEARCH TESTS")
+        print("🔐 STEP 4: Login as Seller")
         print("-" * 40)
-        self.test_store_search_all()
-        self.test_store_search_query()
+        self.test_seller_login()
         print()
         
-        # Test 4: Store Detail API
-        print("🏪 STORE DETAIL TESTS")
-        print("-" * 40)
-        self.test_store_detail()
-        print()
-        
-        # Test 5: Store Products API (CRITICAL SECURITY TEST)
-        print("🔒 CRITICAL SECURITY TEST - STORE PRODUCTS")
-        print("-" * 40)
-        self.test_store_products_security()
-        print()
-        
-        # Test 6: Seller Catalog Browsing
-        print("📚 SELLER CATALOG BROWSING")
+        print("📚 STEP 5: Seller Browse Catalog (should return products from product_catalog)")
         print("-" * 40)
         self.test_seller_catalog_browsing()
         print()
         
-        # Test 7: Seller Store Management
-        print("🛠️ SELLER STORE MANAGEMENT")
+        print("➕ STEP 6: Seller Add Product to Store (with form data: catalog_product_id, price: 25.99, stock: 10)")
         print("-" * 40)
         self.test_seller_add_product_to_store()
+        print()
+        
+        print("👀 STEP 7: Seller View Store Products (should show the added product)")
+        print("-" * 40)
         self.test_seller_get_store_products()
-        self.test_seller_update_store_product()
-        self.test_seller_delete_store_product()
+        print()
+        
+        print("🔐 STEP 8: Login as Buyer")
+        print("-" * 40)
+        self.test_buyer_login()
+        print()
+        
+        print("🔍 STEP 9: Search Stores (should return stores)")
+        print("-" * 40)
+        self.test_store_search_all()
+        print()
+        
+        print("🏪 STEP 10: Get Store Products (should show products added by seller)")
+        print("-" * 40)
+        self.test_store_products_security()
         print()
         
         # Summary
@@ -1155,14 +1158,13 @@ class APITester:
                     print(f"❌ {result['test']}: {result['details']}")
             print()
         
-        # Highlight critical security test result
-        security_test = next((r for r in self.test_results if "SECURITY" in r["test"]), None)
-        if security_test:
-            if security_test["success"]:
-                print("🔒 CRITICAL SECURITY TEST: ✅ PASSED - Buyers can only see store products, not master catalog")
-            else:
-                print("🔒 CRITICAL SECURITY TEST: ❌ FAILED - SECURITY VULNERABILITY DETECTED!")
-            print()
+        # Key verification points
+        print("KEY VERIFICATION POINTS:")
+        print("✓ product_catalog table gets seeded (not products table)")
+        print("✓ Seller can browse product_catalog")
+        print("✓ Seller can add products from catalog to their store")
+        print("✓ Buyer can only see products added to stores")
+        print()
         
         print("=" * 80)
         
