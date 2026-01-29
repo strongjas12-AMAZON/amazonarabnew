@@ -757,7 +757,7 @@ class APITester:
             )
 
     def test_seller_add_product_to_store(self):
-        """Test POST /api/seller/store/products - Add product from catalog to store"""
+        """Test POST /api/seller/store/products - Add product from catalog to store with form data"""
         if not self.seller_token:
             self.log_test(
                 "POST /api/seller/store/products", 
@@ -780,9 +780,8 @@ class APITester:
             headers = {"Authorization": f"Bearer {self.seller_token}"}
             form_data = {
                 "catalog_product_id": self.catalog_product_id,
-                "price": 29.99,
-                "stock": 10,
-                "custom_description": "Test product added to store"
+                "price": "25.99",
+                "stock": "10"
             }
             
             response = self.session.post(f"{self.base_url}/seller/store/products", headers=headers, data=form_data)
@@ -795,8 +794,8 @@ class APITester:
                     self.log_test(
                         "POST /api/seller/store/products", 
                         True, 
-                        f"Product added to store successfully: {store_product.get('id', 'Unknown ID')}",
-                        {"store_product_id": store_product.get("id"), "catalog_product_id": self.catalog_product_id}
+                        f"Product added to store successfully: {store_product.get('id', 'Unknown ID')} with price $25.99 and stock 10",
+                        {"store_product_id": store_product.get("id"), "catalog_product_id": self.catalog_product_id, "price": "25.99", "stock": "10"}
                     )
                 else:
                     self.log_test(
