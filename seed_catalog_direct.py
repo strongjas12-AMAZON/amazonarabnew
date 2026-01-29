@@ -18,11 +18,11 @@ load_dotenv('/app/backend/.env')
 from product_catalog import PRODUCT_CATALOG
 
 # Initialize Supabase client
-SUPABASE_URL = os.getenv('SUPABASE_URL')
-SUPABASE_SERVICE_KEY = os.getenv('SUPABASE_SERVICE_KEY')
+SUPABASE_URL = os.getenv('NEXT_PUBLIC_SUPABASE_URL')
+SUPABASE_SERVICE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 
 if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
-    print("ERROR: Missing SUPABASE_URL or SUPABASE_SERVICE_KEY in .env file")
+    print("ERROR: Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env file")
     sys.exit(1)
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
