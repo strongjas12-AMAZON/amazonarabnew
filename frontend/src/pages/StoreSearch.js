@@ -113,16 +113,23 @@ export default function StoreSearch() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search stores by name..."
+              placeholder="Search stores by name... (real-time)"
               className="luxury-input w-full pl-14 pr-32"
             />
-            <button
-              type="submit"
-              disabled={searching}
-              className="absolute right-2 top-1/2 transform -translate-y-1/2 px-6 py-2 bg-gradient-to-r from-[#D4AF37] to-[#F4E4B0] text-[#0a0a0a] font-semibold rounded-lg hover:from-[#F4E4B0] hover:to-[#D4AF37] transition-all disabled:opacity-50 text-sm"
-            >
-              {searching ? 'Searching...' : 'Search'}
-            </button>
+            {searching && (
+              <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-[#D4AF37]"></div>
+              </div>
+            )}
+            {!searching && searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 transform -translate-y-1/2 px-4 py-2 text-gray-400 hover:text-white transition-colors text-sm"
+              >
+                Clear
+              </button>
+            )}
           </div>
         </form>
 
