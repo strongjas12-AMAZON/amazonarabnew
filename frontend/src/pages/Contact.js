@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Mail, MapPin, Clock, Send, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import api from '../lib/api';
 
 const Contact = () => {
   const [formData, setFormData] = useState({
@@ -10,28 +11,48 @@ const Contact = () => {
     message: ''
   });
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Create mailto link with form data
-    const mailtoLink = `mailto:support@arabshopping.org?subject=${encodeURIComponent(formData.subject)}&body=${encodeURIComponent(
-      `Name: ${formData.name}\nEmail: ${formData.email}\n\nMessage:\n${formData.message}`
-    )}`;
-    
-    window.location.href = mailtoLink;
-    setSubmitted(true);
-    toast.success('Opening your email client...');
-    
-    // Reset form after 3 seconds
-    setTimeout(() => {
-      setFormData({ name: '', email: '', subject: '', message: '' });
-      setSubmitted(false);
-    }, 3000);
+    try {
+      setSubmitting(true);
+      
+      // Create FormData for the API request
+      const formDataToSend = new FormData();
+      formDataToSend.append('name', formData.name);
+      formDataToSend.append('email', formData.email);
+      formDataToSend.append('subject', formData.subject);
+      formDataToSend.append('message', formData.message);
+      
+      // Send to backend API
+      const response = await api.post('/contact', formDataToSend, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      
+      if (response.data.success) {
+        setSubmitted(true);
+        toast.success('Message sent successfully!');
+        
+        // Reset form after 5 seconds
+        setTimeout(() => {
+          setFormData({ name: '', email: '', subject: '', message: '' });
+          setSubmitted(false);
+        }, 5000);
+      }
+    } catch (error) {
+      console.error('Contact form error:', error);
+      toast.error(error.response?.data?.detail || 'Failed to send message. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
