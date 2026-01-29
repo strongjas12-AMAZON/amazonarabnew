@@ -56,7 +56,7 @@ const SellerDashboard = () => {
     setLoading(true);
     try {
       const [myProductsRes, ordersRes] = await Promise.all([
-        api.get('/products/my'),
+        api.get('/seller/store/products'),  // Use new store system endpoint
         api.get('/orders/my')
       ]);
       setMyProducts(myProductsRes.data.products || []);
