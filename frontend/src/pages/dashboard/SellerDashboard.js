@@ -56,7 +56,7 @@ const SellerDashboard = () => {
     setLoading(true);
     try {
       const [myProductsRes, ordersRes] = await Promise.all([
-        api.get('/products/my'),
+        api.get('/seller/store/products'),  // Use new store system endpoint
         api.get('/orders/my')
       ]);
       setMyProducts(myProductsRes.data.products || []);
@@ -65,7 +65,7 @@ const SellerDashboard = () => {
       // Fetch catalog if seller is verified
       if (user?.verificationStatus === 'verified') {
         try {
-          const catalogRes = await api.get('/catalog/products');
+          const catalogRes = await api.get('/seller/catalog/products');
           setCatalogProducts(catalogRes.data.products || []);
         } catch (err) {
           console.log('Catalog not available');
@@ -98,9 +98,15 @@ const SellerDashboard = () => {
     }
   };
 
-  const handleAddToStore = async (productId) => {
+  const handleAddToStore = async (product) => {
     try {
-      await api.post(`/seller/products/${productId}`);
+      // Backend expects form data with catalog_product_id, price, and stock
+      const formData = new FormData();
+      formData.append('catalog_product_id', product.id);
+      formData.append('price', product.basePrice || product.price || 0);
+      formData.append('stock', 10); // Default stock of 10
+      
+      await api.post('/seller/store/products', formData);
       toast.success('Product added to your store!');
       fetchData();
     } catch (error) {
@@ -111,7 +117,7 @@ const SellerDashboard = () => {
   const handleRemoveFromStore = async (productId) => {
     if (!window.confirm('Remove this product from your store?')) return;
     try {
-      await api.delete(`/seller/products/${productId}`);
+      await api.delete(`/seller/store/products/${productId}`);
       toast.success('Product removed from your store');
       fetchData();
     } catch (error) {
@@ -138,10 +144,10 @@ const SellerDashboard = () => {
     }
   };
 
-  // Filter catalog products
+  // Filter catalog products - use 'name' field from new store system
   const filteredCatalog = catalogProducts.filter(p => {
-    const matchesSearch = p.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          p.description?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = (p.name || p.title || '')?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (p.description || '')?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = !selectedCategory || p.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
@@ -508,7 +514,7 @@ const SellerDashboard = () => {
                     {product.images && product.images.length > 0 ? (
                       <img
                         src={product.images[0]}
-                        alt={product.title}
+                        alt={product.name || product.title}
                         className="w-full h-full object-cover"
                       />
                     ) : (
@@ -520,16 +526,17 @@ const SellerDashboard = () => {
                       <Check className="w-3 h-3" />
                       In Store
                     </span>
-                    {product.categoryName && (
+                    {product.category && (
                       <span className="absolute top-2 left-2 px-2 py-1 bg-black/70 text-[#D4AF37] rounded text-xs">
-                        {product.categoryIcon}
+                        {product.category}
                       </span>
                     )}
                   </div>
                   
                   <div className="p-4">
-                    <h3 className="font-semibold text-white mb-1 truncate">{product.title}</h3>
-                    <p className="text-[#D4AF37] font-bold">${product.price?.toFixed(2)}</p>
+                    <h3 className="font-semibold text-white mb-1 truncate">{product.name || product.title}</h3>
+                    <p className="text-[#D4AF37] font-bold">${(product.price || 0).toFixed(2)}</p>
+                    <p className="text-gray-400 text-sm">Stock: {product.stock || 0}</p>
                     
                     <button
                       onClick={() => handleRemoveFromStore(product.id)}
@@ -608,7 +615,7 @@ const SellerDashboard = () => {
                       {product.images && product.images.length > 0 ? (
                         <img
                           src={product.images[0]}
-                          alt={product.title}
+                          alt={product.name || product.title}
                           className="w-full h-full object-cover"
                         />
                       ) : (
@@ -630,9 +637,9 @@ const SellerDashboard = () => {
                     </div>
                     
                     <div className="p-3">
-                      <h3 className="font-semibold text-white text-sm mb-1 truncate">{product.title}</h3>
+                      <h3 className="font-semibold text-white text-sm mb-1 truncate">{product.name || product.title}</h3>
                       <p className="text-xs text-gray-400 mb-2 line-clamp-2">{product.description}</p>
-                      <p className="text-[#D4AF37] font-bold">${product.price?.toFixed(2)}</p>
+                      <p className="text-[#D4AF37] font-bold">${(product.basePrice || product.price || 0).toFixed(2)}</p>
                       
                       {product.isSelected ? (
                         <button
@@ -645,7 +652,7 @@ const SellerDashboard = () => {
                         </button>
                       ) : (
                         <button
-                          onClick={() => handleAddToStore(product.id)}
+                          onClick={() => handleAddToStore(product)}
                           className="w-full mt-2 p-2 bg-[rgba(212,175,55,0.1)] hover:bg-[rgba(212,175,55,0.2)] text-[#D4AF37] rounded-lg transition-colors text-sm flex items-center justify-center gap-1"
                           data-testid="add-to-store-btn"
                         >

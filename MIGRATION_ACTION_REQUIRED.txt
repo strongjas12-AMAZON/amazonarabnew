@@ -1,0 +1,75 @@
+╔══════════════════════════════════════════════════════════════════════╗
+║                   ORDER SYSTEM MIGRATION - ACTION REQUIRED          ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ STATUS: Ready for Database Migration                                │
+│ TIME REQUIRED: 30 seconds                                           │
+│ DOWNTIME: Minimal (only during SQL execution)                       │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ WHAT NEEDS TO BE DONE:                                              │
+│                                                                      │
+│ Execute this SQL in Supabase SQL Editor:                            │
+│ https://supabase.com/dashboard/project/dqqmzatrxmueilsxvlgb/sql    │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ COPY THIS SQL:                                                       │
+└─────────────────────────────────────────────────────────────────────┘
+
+-- Drop old foreign key
+ALTER TABLE order_items 
+DROP CONSTRAINT IF EXISTS order_items_product_id_fkey;
+
+-- Add new foreign key to store_products
+ALTER TABLE order_items 
+ADD CONSTRAINT order_items_product_id_fkey 
+FOREIGN KEY (product_id) 
+REFERENCES store_products(id) 
+ON DELETE RESTRICT;
+
+-- Add seller_id column
+ALTER TABLE orders 
+ADD COLUMN IF NOT EXISTS seller_id UUID REFERENCES users(id);
+
+-- Create indexes
+CREATE INDEX IF NOT EXISTS idx_order_items_product_id ON order_items(product_id);
+CREATE INDEX IF NOT EXISTS idx_orders_seller_id ON orders(seller_id);
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ EXPECTED RESULT:                                                     │
+│ "Success. No rows returned"                                          │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ WHAT THIS FIXES:                                                     │
+│                                                                      │
+│ ✅ Buyers can create orders                                         │
+│ ✅ Sellers can view orders in Order Center                          │
+│ ✅ Sellers can ship orders                                          │
+│ ✅ Complete order flow works end-to-end                             │
+│ ✅ Multi-seller marketplace support                                 │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ DETAILED DOCUMENTATION:                                              │
+│                                                                      │
+│ • Quick Guide:  /app/ORDER_MIGRATION_SUMMARY.md                     │
+│ • Full Details: /app/ORDER_MIGRATION_GUIDE.md                       │
+│ • SQL File:     /app/QUICK_MIGRATION.sql                            │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ AFTER MIGRATION:                                                     │
+│                                                                      │
+│ 1. ✓ Confirm SQL executed successfully                              │
+│ 2. ✓ Test order creation as buyer                                   │
+│ 3. ✓ Test Order Center as seller                                    │
+│ 4. ✓ Let me know - I'll run comprehensive tests                     │
+└─────────────────────────────────────────────────────────────────────┘
+
+╔══════════════════════════════════════════════════════════════════════╗
+║ READY TO PROCEED? Execute the SQL above and let me know!            ║
+╚══════════════════════════════════════════════════════════════════════╝

@@ -1264,51 +1264,60 @@ async def get_categories():
 
 @api_router.get("/products")
 async def get_products(category: Optional[str] = None, search: Optional[str] = None):
-    """Get marketplace products that sellers have added (buyer-facing)."""
+    """Get marketplace products from NEW store system that sellers have added (buyer-facing)."""
     try:
         search_term = (search or "").strip()
-        query = supabase_admin.table('seller_products') \
-            .select('*, products(*), users:users!seller_id(id, name, store_name, verification_status)') \
-            .eq('is_active', True)
+        
+        # Query store_products (NEW SYSTEM) with catalog and store info
+        query = supabase_admin.table('store_products') \
+            .select('*, product_catalog!inner(*), stores!inner(id, store_name, seller_id, status)') \
+            .eq('is_active', True) \
+            .eq('stores.status', 'active')
 
-        # Apply backend filter when possible (column exists)
-        if search_term:
-            try:
-                query = query.ilike('store_name', f"%{search_term}%")
-            except Exception:
-                # If store_name column is missing or ilike not supported, fallback to in-memory filter
-                pass
-
-        seller_products_result = query.order('added_at', desc=True).execute()
+        store_products_result = query.order('created_at', desc=True).execute()
 
         products = []
         search_lower = search_term.lower() if search_term else None
 
-        for sp in seller_products_result.data or []:
-            product_data = sp.get('products') or {}
-            if not product_data:
+        for sp in store_products_result.data or []:
+            catalog_product = sp.get('product_catalog') or {}
+            store_info = sp.get('stores') or {}
+            
+            if not catalog_product:
                 continue
-            if product_data.get('is_active') is False:
-                continue
-            if category and product_data.get('category') != category:
-                continue
-
-            seller_info = sp.get('users') or {}
-            store_name = (sp.get('store_name') or seller_info.get('store_name') or '').strip()
-
-            # Enforce case-insensitive partial match on store name
-            if search_lower and (not store_name or search_lower not in store_name.lower()):
+                
+            # Filter by category if provided
+            if category and catalog_product.get('category') != category:
                 continue
 
+            store_name = store_info.get('store_name', '').strip()
+            product_name = catalog_product.get('name', '')
+            product_desc = catalog_product.get('description', '')
+
+            # Search filter - check store name, product name, and description
+            if search_lower:
+                if search_lower not in store_name.lower() and \
+                   search_lower not in product_name.lower() and \
+                   search_lower not in product_desc.lower():
+                    continue
+
+            # Build product response
             merged_product = {
-                **product_data,
+                'id': sp.get('id'),  # store_product id
+                'title': catalog_product.get('name'),
+                'description': catalog_product.get('description'),
+                'price': sp.get('price'),  # Seller's custom price
+                'category': catalog_product.get('category'),
+                'images': catalog_product.get('images', []),
+                'stock': sp.get('stock_quantity', 0),
                 'store_name': store_name,
-                'is_seller_product': sp.get('is_seller_product', True),
-                'seller_id': sp.get('seller_id') or product_data.get('seller_id'),
-                'seller_name': seller_info.get('name'),
-                'seller_verification_status': seller_info.get('verification_status') or seller_info.get('verificationStatus')
+                'seller_id': store_info.get('seller_id'),
+                'store_id': store_info.get('id'),
+                'is_active': sp.get('is_active', True),
+                'added_at': sp.get('created_at'),
+                'catalog_product_id': sp.get('catalog_product_id')
             }
-            products.append(format_product_response(merged_product))
+            products.append(merged_product)
 
         return {"success": True, "products": products}
     except Exception as e:
@@ -1642,61 +1651,39 @@ async def delete_product(product_id: str, current_user: dict = Depends(get_curre
 
 @api_router.get("/admin/products")
 async def get_all_products_admin(current_user: dict = Depends(get_current_user)):
-    """Get all products for admin management"""
+    """Get all products from product_catalog for admin management"""
     if current_user['role'] != 'admin':
         raise HTTPException(status_code=403, detail="Admin access required")
     
     try:
-        # Admin catalog - get all products
-        products = supabase_admin.table('products').select('*').order('created_at', desc=True).execute()
-        return {"success": True, "products": [format_product_response(p) for p in products.data]}
+        # Admin catalog - get all products from product_catalog (NEW STORE SYSTEM)
+        products = supabase_admin.table('product_catalog').select('*').order('created_at', desc=True).execute()
+        # Format response to match expected frontend format
+        formatted_products = []
+        for p in products.data:
+            formatted_products.append({
+                'id': p.get('id'),
+                'title': p.get('name'),  # product_catalog uses 'name' field
+                'description': p.get('description'),
+                'price': p.get('base_price'),  # product_catalog uses 'base_price'
+                'category': p.get('category'),
+                'images': p.get('images', []),
+                'created_at': p.get('created_at'),
+                'is_active': p.get('is_active', True)
+            })
+        return {"success": True, "products": formatted_products}
     except Exception as e:
         logging.error(f"Get all products admin error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@api_router.post("/admin/seed-catalog")
-async def seed_product_catalog(current_user: dict = Depends(get_current_user)):
-    """Seed the product catalog with ~100 products from product_catalog.py"""
-    if current_user['role'] != 'admin':
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
-    try:
-        from product_catalog import PRODUCT_CATALOG
-        
-        # Check if catalog already has products
-        existing = supabase_admin.table('products').select('id').limit(5).execute()
-        if existing.data and len(existing.data) >= 5:
-            return {"success": False, "message": f"Catalog already has {len(existing.data)}+ products. Delete existing products first to reseed."}
-        
-        seeded_count = 0
-        
-        for product in PRODUCT_CATALOG:
-            product_data = {
-                'id': str(uuid.uuid4()),
-                'title': product['title'],
-                'description': product['description'],
-                'price': product['price'],
-                'category': product['category'],
-                'images': product.get('images', []),
-                'seller_id': None,
-                'created_at': datetime.now(timezone.utc).isoformat()
-            }
-            
-            supabase_admin.table('products').insert(product_data).execute()
-            seeded_count += 1
-        
-        return {"success": True, "message": f"Successfully seeded {seeded_count} products", "count": seeded_count}
-    except ImportError:
-        raise HTTPException(status_code=500, detail="Product catalog file not found")
-    except Exception as e:
-        logging.error(f"Seed catalog error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+# NOTE: seed-catalog endpoint moved to STORE SYSTEM section (line ~3794)
+# This endpoint now seeds to product_catalog table for the new store system
 
 
-@api_router.delete("/admin/clear-catalog")
-async def clear_product_catalog(current_user: dict = Depends(get_current_user)):
-    """Clear all products from catalog (admin only)"""
+@api_router.delete("/admin/clear-legacy-products")
+async def clear_legacy_products(current_user: dict = Depends(get_current_user)):
+    """Clear all products from legacy 'products' table (admin only)"""
     if current_user['role'] != 'admin':
         raise HTTPException(status_code=403, detail="Admin access required")
     
@@ -1724,10 +1711,10 @@ async def clear_product_catalog(current_user: dict = Depends(get_current_user)):
         
         return {
             "success": True, 
-            "message": f"Deleted {deleted} products, deactivated {deactivated} products with orders"
+            "message": f"Deleted {deleted} legacy products, deactivated {deactivated} products with orders"
         }
     except Exception as e:
-        logging.error(f"Clear catalog error: {str(e)}")
+        logging.error(f"Clear legacy products error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1918,21 +1905,79 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
 
 @api_router.get("/orders/my")
 async def get_my_orders(current_user: dict = Depends(get_current_user)):
-    """Get user's orders"""
+    """Get user's orders (updated for NEW store_products system)"""
     try:
         if current_user['role'] == 'buyer':
-            orders = supabase_admin.table('orders').select('*, order_items(*, products(*))').eq('buyer_id', current_user['id']).execute()
+            # Buyer sees their own orders with product details from store_products
+            orders = supabase_admin.table('orders')\
+                .select('*, order_items(*, store_products(*, product_catalog(*)))')\
+                .eq('buyer_id', current_user['id'])\
+                .execute()
+            
+            # Format product info from store_products
+            for order in orders.data:
+                for item in order.get('order_items', []):
+                    sp = item.get('store_products')
+                    if sp:
+                        catalog = sp.get('product_catalog', {})
+                        item['products'] = {
+                            'id': sp.get('id'),
+                            'title': catalog.get('name'),
+                            'description': catalog.get('description'),
+                            'images': catalog.get('images', []),
+                            'category': catalog.get('category'),
+                            'price': sp.get('price')
+                        }
+            
         elif current_user['role'] == 'seller':
-            orders = supabase_admin.table('orders').select('*, order_items(*, products(*))').execute()
+            # Seller sees orders containing their store products
+            orders = supabase_admin.table('orders')\
+                .select('*, order_items(*, store_products(*, product_catalog(*)))')\
+                .execute()
+            
             filtered_orders = []
             for order in orders.data:
-                seller_items = [item for item in order['order_items'] if item['products']['seller_id'] == current_user['id']]
+                seller_items = []
+                for item in order.get('order_items', []):
+                    sp = item.get('store_products')
+                    if sp and sp.get('seller_id') == current_user['id']:
+                        catalog = sp.get('product_catalog', {})
+                        item['products'] = {
+                            'id': sp.get('id'),
+                            'title': catalog.get('name'),
+                            'description': catalog.get('description'),
+                            'images': catalog.get('images', []),
+                            'category': catalog.get('category'),
+                            'price': sp.get('price')
+                        }
+                        seller_items.append(item)
+                
                 if seller_items:
                     order['order_items'] = seller_items
                     filtered_orders.append(order)
+            
             return {"success": True, "orders": [format_order_response(o) for o in filtered_orders]}
+            
         elif current_user['role'] == 'admin':
-            orders = supabase_admin.table('orders').select('*, order_items(*, products(*)), users!buyer_id(name, email)').execute()
+            # Admin sees all orders
+            orders = supabase_admin.table('orders')\
+                .select('*, order_items(*, store_products(*, product_catalog(*))), users!buyer_id(name, email)')\
+                .execute()
+            
+            # Format product info
+            for order in orders.data:
+                for item in order.get('order_items', []):
+                    sp = item.get('store_products')
+                    if sp:
+                        catalog = sp.get('product_catalog', {})
+                        item['products'] = {
+                            'id': sp.get('id'),
+                            'title': catalog.get('name'),
+                            'description': catalog.get('description'),
+                            'images': catalog.get('images', []),
+                            'category': catalog.get('category'),
+                            'price': sp.get('price')
+                        }
         else:
             raise HTTPException(status_code=403, detail="Unauthorized")
         
@@ -3021,35 +3066,46 @@ async def get_seller_order_center(
     status: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """Get seller's orders for Order Center with counts per status"""
+    """Get seller's orders for Order Center with counts per status (NEW STORE SYSTEM)"""
     if current_user['role'] != 'seller':
         raise HTTPException(status_code=403, detail="Only sellers can access Order Center")
     
     try:
-        # Get all orders where seller has products
+        # Get all orders with items
         all_orders_result = supabase_admin.table('orders')\
-            .select('*, order_items(*, products(*)), shipments(*), refunds(*), users!buyer_id(name, email)')\
+            .select('*, order_items(*), shipments(*), refunds(*), users!buyer_id(name, email)')\
             .execute()
         
-        # Filter orders that contain seller's products
+        # Filter orders that contain seller's products (NEW SYSTEM: check store_products)
         seller_orders = []
         for order in all_orders_result.data or []:
-            # Check if any order item belongs to seller's products
+            # Check if any order item belongs to seller's store products
             has_seller_item = False
             seller_items = []
             
             for item in order.get('order_items', []):
-                product = item.get('products')
-                if product:
-                    # Check if product is in seller's store via seller_products
-                    seller_product = supabase_admin.table('seller_products')\
-                        .select('id')\
+                product_id = item.get('product_id')
+                if product_id:
+                    # Check if this product_id is a store_product belonging to this seller
+                    store_product = supabase_admin.table('store_products')\
+                        .select('id, catalog_product_id, price, stock, product_catalog!inner(name, description, images, category)')\
                         .eq('seller_id', current_user['id'])\
-                        .eq('product_id', product.get('id'))\
+                        .eq('id', product_id)\
                         .eq('is_active', True)\
                         .execute()
                     
-                    if seller_product.data:
+                    if store_product.data:
+                        # Add product info to item
+                        sp = store_product.data[0]
+                        catalog_info = sp.get('product_catalog', {})
+                        item['products'] = {
+                            'id': sp['id'],
+                            'title': catalog_info.get('name'),
+                            'description': catalog_info.get('description'),
+                            'images': catalog_info.get('images', []),
+                            'category': catalog_info.get('category'),
+                            'price': sp.get('price')
+                        }
                         has_seller_item = True
                         seller_items.append(item)
             
@@ -3170,14 +3226,14 @@ async def get_seller_order_detail(order_id: str, current_user: dict = Depends(ge
 
 @api_router.post("/seller/orders/{order_id}/ship")
 async def ship_order(order_id: str, req: ShipOrderRequest, current_user: dict = Depends(get_current_user)):
-    """Seller ships an order - adds tracking info and updates status"""
+    """Seller ships an order - adds tracking info and updates status (NEW STORE SYSTEM)"""
     if current_user['role'] != 'seller':
         raise HTTPException(status_code=403, detail="Only sellers can ship orders")
     
     try:
-        # Verify order exists and seller has products in it
+        # Verify order exists
         order_result = supabase_admin.table('orders')\
-            .select('*, order_items(*, products(*))')\
+            .select('*, order_items(*)')\
             .eq('id', order_id)\
             .execute()
         
@@ -3186,19 +3242,20 @@ async def ship_order(order_id: str, req: ShipOrderRequest, current_user: dict = 
         
         order = order_result.data[0]
         
-        # Verify seller owns products in this order
+        # Verify seller owns products in this order (NEW SYSTEM: check store_products)
         has_seller_item = False
         for item in order.get('order_items', []):
-            product = item.get('products')
-            if product:
-                seller_product = supabase_admin.table('seller_products')\
+            product_id = item.get('product_id')
+            if product_id:
+                # Check if this product_id is a store_product belonging to this seller
+                store_product = supabase_admin.table('store_products')\
                     .select('id')\
                     .eq('seller_id', current_user['id'])\
-                    .eq('product_id', product.get('id'))\
+                    .eq('id', product_id)\
                     .eq('is_active', True)\
                     .execute()
                 
-                if seller_product.data:
+                if store_product.data:
                     has_seller_item = True
                     break
         
@@ -3602,12 +3659,10 @@ async def update_seller_order_status(order_id: str, status: str, current_user: d
 
 @api_router.get("/buyer/addresses")
 async def get_buyer_addresses(current_user: dict = Depends(get_current_user)):
-    """Get all addresses for the current buyer"""
+    """Get all addresses for the current user (any authenticated user can have addresses)"""
     try:
-        # Verify buyer role
-        if current_user.get('role') != 'buyer':
-            raise HTTPException(status_code=403, detail="Buyer access required")
-        
+        # Any authenticated user can have shipping addresses
+        # Removed strict buyer-only check to allow sellers/admins to also have addresses
         user_id = current_user['id']
         
         # Get all addresses for user
@@ -3645,12 +3700,10 @@ async def get_buyer_addresses(current_user: dict = Depends(get_current_user)):
 
 @api_router.post("/buyer/addresses")
 async def create_address(req: CreateAddressRequest, current_user: dict = Depends(get_current_user)):
-    """Create a new shipping address"""
+    """Create a new shipping address (any authenticated user)"""
     try:
-        # Verify buyer role
-        if current_user.get('role') != 'buyer':
-            raise HTTPException(status_code=403, detail="Buyer access required")
-        
+        # Any authenticated user can create shipping addresses
+        # Removed strict buyer-only check to allow sellers/admins to also create addresses
         user_id = current_user['id']
         
         # If this is set as default, we need to unset other defaults
@@ -3704,11 +3757,11 @@ async def create_address(req: CreateAddressRequest, current_user: dict = Depends
 
 @api_router.put("/buyer/addresses/{address_id}")
 async def update_address(address_id: str, req: UpdateAddressRequest, current_user: dict = Depends(get_current_user)):
-    """Update a shipping address"""
+    """Update a shipping address (any authenticated user)"""
     try:
-        # Verify buyer role
-        if current_user.get('role') != 'buyer':
-            raise HTTPException(status_code=403, detail="Buyer access required")
+        # Any authenticated user can update their own addresses
+        # Removed strict buyer-only check
+        user_id = current_user['id']
         
         user_id = current_user['id']
         
@@ -3758,12 +3811,10 @@ async def update_address(address_id: str, req: UpdateAddressRequest, current_use
 
 @api_router.delete("/buyer/addresses/{address_id}")
 async def delete_address(address_id: str, current_user: dict = Depends(get_current_user)):
-    """Delete a shipping address"""
+    """Delete a shipping address (any authenticated user)"""
     try:
-        # Verify buyer role
-        if current_user.get('role') != 'buyer':
-            raise HTTPException(status_code=403, detail="Buyer access required")
-        
+        # Any authenticated user can delete their own addresses
+        # Removed strict buyer-only check
         user_id = current_user['id']
         
         # Delete address (RLS ensures only own addresses)
@@ -3830,6 +3881,33 @@ async def seed_product_catalog(request: Request, current_user: dict = Depends(ge
         raise
     except Exception as e:
         logging.error(f"Seed catalog error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.delete("/admin/clear-catalog")
+@limiter.limit("5/hour")
+async def clear_product_catalog_new(request: Request, current_user: dict = Depends(get_current_user)):
+    """Admin-only: Clear product_catalog table (for re-seeding)"""
+    try:
+        # Check admin role
+        if current_user.get('role') != 'admin':
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        # First delete all store_products that reference catalog products
+        supabase_admin.table('store_products').delete().neq('id', '00000000-0000-0000-0000-000000000000').execute()
+        
+        # Then delete all catalog products
+        result = supabase_admin.table('product_catalog').delete().neq('id', '00000000-0000-0000-0000-000000000000').execute()
+        
+        return {
+            "success": True,
+            "message": f"Cleared product catalog and store products"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Clear catalog error: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
 
@@ -3926,7 +4004,8 @@ async def get_store_products(store_id: str, limit: int = 50, offset: int = 0, cu
     try:
         # Get store products with catalog info
         # IMPORTANT: Query starts from store_products, NOT product_catalog
-        result = supabase.table('store_products').select(
+        # Use admin client to bypass RLS for reading catalog info
+        result = supabase_admin.table('store_products').select(
             '''
             id,
             store_id,
@@ -3979,7 +4058,7 @@ async def get_store_products(store_id: str, limit: int = 50, offset: int = 0, cu
 async def get_catalog_products_for_seller(
     current_user: dict = Depends(get_current_user),
     category: Optional[str] = None,
-    limit: int = 50,
+    limit: int = 200,  # Increased to show more products
     offset: int = 0
 ):
     """
@@ -4042,13 +4121,26 @@ async def add_product_to_store(
         
         seller_id = current_user['id']
         
-        # Get seller's store
-        store_result = supabase_admin.table('stores').select('id').eq('seller_id', seller_id).single().execute()
+        # Get or create seller's store
+        store_result = supabase_admin.table('stores').select('id').eq('seller_id', seller_id).execute()
         
-        if not store_result.data:
-            raise HTTPException(status_code=404, detail="Store not found. Please contact support.")
-        
-        store_id = store_result.data['id']
+        if not store_result.data or len(store_result.data) == 0:
+            # Auto-create store if it doesn't exist
+            store_name = current_user.get('store_name') or current_user.get('name', 'Seller') + "'s Store"
+            
+            new_store = supabase_admin.table('stores').insert({
+                'seller_id': seller_id,
+                'store_name': store_name,
+                'status': 'active'
+            }).execute()
+            
+            if not new_store.data:
+                raise HTTPException(status_code=500, detail="Failed to create store")
+            
+            store_id = new_store.data[0]['id']
+            logging.info(f"Auto-created store for seller {seller_id}: {store_name}")
+        else:
+            store_id = store_result.data[0]['id']
         
         # Check if product already in store
         existing = supabase_admin.table('store_products').select('id').eq('store_id', store_id).eq('catalog_product_id', catalog_product_id).execute()
