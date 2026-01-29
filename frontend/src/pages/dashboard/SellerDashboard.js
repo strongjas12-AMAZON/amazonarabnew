@@ -65,7 +65,7 @@ const SellerDashboard = () => {
       // Fetch catalog if seller is verified
       if (user?.verificationStatus === 'verified') {
         try {
-          const catalogRes = await api.get('/catalog/products');
+          const catalogRes = await api.get('/seller/catalog/products');
           setCatalogProducts(catalogRes.data.products || []);
         } catch (err) {
           console.log('Catalog not available');
