@@ -248,6 +248,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "FIXED: Seller add product to store now working correctly. POST /api/seller/store/products successfully adds products from product_catalog to store_products table with form data (catalog_product_id, price: $25.99, stock: 10). Foreign key constraints resolved."
+      - working: true
+        agent: "testing"
+        comment: "COMPREHENSIVE TESTING: Successfully added multiple products to seller store. Added 3 different products with varying prices ($29.99, $19.99, $39.99) and stock levels (15, 20, 8). All products added successfully using FormData with catalog_product_id from product_catalog table."
 
   - task: "Seller Manage Store Products APIs"
     implemented: true
