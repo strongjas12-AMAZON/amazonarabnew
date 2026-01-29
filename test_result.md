@@ -185,7 +185,7 @@ backend:
 
   - task: "Seller Browse Catalog API"
     implemented: true
-    working: false
+    working: true
     file: "backend/server.py"
     stuck_count: 1
     priority: "medium"
@@ -197,6 +197,9 @@ backend:
       - working: false
         agent: "testing"
         comment: "API endpoint works but product_catalog table is empty (0 products). This is due to the catalog seeding issue - products are in 'products' table but seller catalog API looks at 'product_catalog' table."
+      - working: true
+        agent: "testing"
+        comment: "FIXED: Seller catalog browsing now working correctly. GET /api/seller/catalog/products returns 50 products from product_catalog table. Sellers can successfully browse the master catalog to select products for their store."
 
   - task: "Seller Add Product to Store API"
     implemented: true
