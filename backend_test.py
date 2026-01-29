@@ -29,6 +29,7 @@ class APITester:
         self.buyer_token = None
         self.test_results = []
         self.store_id = None
+        self.seller_store_id = None  # Track seller's specific store ID
         self.catalog_product_id = None
         
     def log_test(self, test_name: str, success: bool, details: str = "", response_data: Any = None):
