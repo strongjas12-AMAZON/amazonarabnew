@@ -469,10 +469,15 @@ class APITester:
                             {"store_id": store_id, "store_name": store_name, "seller_id": seller_id}
                         )
                     else:
+                        missing_info = []
+                        if not store_id: missing_info.append("id")
+                        if not store_name: missing_info.append("store_name/storeName")
+                        if not seller_id: missing_info.append("seller_id/sellerId")
+                        
                         self.log_test(
                             "GET /api/stores/{store_id}", 
                             False, 
-                            f"Store missing required fields: {missing_fields}",
+                            f"Store missing required fields: {missing_info}",
                             data
                         )
                 else:
