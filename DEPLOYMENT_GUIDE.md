@@ -67,7 +67,7 @@ Before you begin, ensure you have:
 ### Method 1: Using cURL (Recommended)
 
 ```bash
-curl -X POST https://clone-wizard-33.preview.emergentagent.com/api/setup-admin
+curl -X POST https://clone-source-3.preview.emergentagent.com/api/setup-admin
 ```
 
 ### Method 2: Using Browser Console
@@ -76,7 +76,7 @@ curl -X POST https://clone-wizard-33.preview.emergentagent.com/api/setup-admin
 2. Open Browser Console (F12)
 3. Run:
 ```javascript
-fetch('https://clone-wizard-33.preview.emergentagent.com/api/setup-admin', { 
+fetch('https://clone-source-3.preview.emergentagent.com/api/setup-admin', { 
   method: 'POST' 
 })
 .then(r => r.json())
@@ -105,7 +105,7 @@ fetch('https://clone-wizard-33.preview.emergentagent.com/api/setup-admin', {
 
 ### 3.1 Test Admin Login
 
-1. Go to: https://clone-wizard-33.preview.emergentagent.com/login
+1. Go to: https://clone-source-3.preview.emergentagent.com/login
 2. Login with admin credentials
 3. You should be redirected to Admin Dashboard
 4. Verify you see:
