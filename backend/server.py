@@ -3642,12 +3642,10 @@ async def get_buyer_addresses(current_user: dict = Depends(get_current_user)):
 
 @api_router.post("/buyer/addresses")
 async def create_address(req: CreateAddressRequest, current_user: dict = Depends(get_current_user)):
-    """Create a new shipping address"""
+    """Create a new shipping address (any authenticated user)"""
     try:
-        # Verify buyer role
-        if current_user.get('role') != 'buyer':
-            raise HTTPException(status_code=403, detail="Buyer access required")
-        
+        # Any authenticated user can create shipping addresses
+        # Removed strict buyer-only check to allow sellers/admins to also create addresses
         user_id = current_user['id']
         
         # If this is set as default, we need to unset other defaults
