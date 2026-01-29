@@ -269,6 +269,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "FIXED: Seller store management APIs now working correctly. GET /api/seller/store/products returns 1 product after seller successfully added a product to their store. Store inventory management is functional."
+      - working: true
+        agent: "testing"
+        comment: "COMPREHENSIVE TESTING: GET /api/seller/store/products now returns 3 products after seller added multiple products to their store. Seller can successfully view all products they've added with proper product details from product_catalog joins."
 
 frontend:
   - task: "Store Search Page"
