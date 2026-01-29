@@ -361,8 +361,7 @@ metadata:
 test_plan:
   current_focus:
     - "Seller Order Center - Complete Order Flow"
-  stuck_tasks:
-    - "Seller Order Center - Complete Order Flow"
+  stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
