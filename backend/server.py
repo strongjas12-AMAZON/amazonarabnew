@@ -3994,7 +3994,7 @@ async def get_store_products(store_id: str, limit: int = 50, offset: int = 0, cu
 async def get_catalog_products_for_seller(
     current_user: dict = Depends(get_current_user),
     category: Optional[str] = None,
-    limit: int = 50,
+    limit: int = 200,  # Increased to show more products
     offset: int = 0
 ):
     """
