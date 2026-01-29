@@ -105,6 +105,21 @@
 user_problem_statement: Build a Buyer Store Search & Store Detail system connected to Supabase, with STRICT access control so buyers can ONLY see products that a seller has explicitly added to their store. Buyers must NOT see the master product catalog.
 
 backend:
+  - task: "Shipping Address Endpoints - Fix 'Buyer access required' Error"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Fixed 'Buyer access required' error by removing strict buyer-only role check from address endpoints. Now ANY authenticated user can manage their shipping addresses."
+      - working: true
+        agent: "testing"
+        comment: "✅ FIXED: Address endpoints working correctly after fix. All CRUD operations successful for all user roles. ✅ Buyer can create/read/update/delete addresses without errors ✅ Seller can create/read/update/delete addresses without 'Buyer access required' error (this was the main issue) ✅ Admin can create addresses without errors ✅ RLS protection working - users can only access their OWN addresses ✅ No 'Buyer access required' errors detected. Minor: Checkout test failed due to shipping information format validation (not related to address access control). The core fix is verified and working."
+
   - task: "Seller Order Center - Complete Order Flow"
     implemented: true
     working: false
