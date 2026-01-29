@@ -863,7 +863,7 @@ class APITester:
         """Test POST /api/seller/store/products - Add product from catalog to store with form data"""
         if not self.seller_token:
             self.log_test(
-                "POST /api/seller/store/products", 
+                "POST /api/seller/store/products (Product 1)", 
                 False, 
                 "No seller auth token available - seller login failed",
                 None
@@ -872,7 +872,7 @@ class APITester:
             
         if not self.catalog_product_id:
             self.log_test(
-                "POST /api/seller/store/products", 
+                "POST /api/seller/store/products (Product 1)", 
                 False, 
                 "No catalog product ID available - catalog browsing failed",
                 None
@@ -883,8 +883,8 @@ class APITester:
             headers = {"Authorization": f"Bearer {self.seller_token}"}
             form_data = {
                 "catalog_product_id": self.catalog_product_id,
-                "price": "25.99",
-                "stock": "10"
+                "price": "29.99",
+                "stock": "15"
             }
             
             response = self.session.post(f"{self.base_url}/seller/store/products", headers=headers, data=form_data)
@@ -899,14 +899,14 @@ class APITester:
                         self.seller_store_id = store_product["store_id"]
                     
                     self.log_test(
-                        "POST /api/seller/store/products", 
+                        "POST /api/seller/store/products (Product 1)", 
                         True, 
-                        f"Product added to store successfully: {store_product.get('id', 'Unknown ID')} with price $25.99 and stock 10",
-                        {"store_product_id": store_product.get("id"), "catalog_product_id": self.catalog_product_id, "price": "25.99", "stock": "10", "store_id": store_product.get("store_id")}
+                        f"Product 1 added to store successfully: {store_product.get('id', 'Unknown ID')} with price $29.99 and stock 15",
+                        {"store_product_id": store_product.get("id"), "catalog_product_id": self.catalog_product_id, "price": "29.99", "stock": "15", "store_id": store_product.get("store_id")}
                     )
                 else:
                     self.log_test(
-                        "POST /api/seller/store/products", 
+                        "POST /api/seller/store/products (Product 1)", 
                         False, 
                         "Response missing success=true",
                         data
@@ -915,35 +915,35 @@ class APITester:
                 # Check if it's a duplicate product error (acceptable)
                 if "already exists" in response.text.lower():
                     self.log_test(
-                        "POST /api/seller/store/products", 
+                        "POST /api/seller/store/products (Product 1)", 
                         True, 
                         "Product already exists in store (expected behavior)",
                         response.text
                     )
                 else:
                     self.log_test(
-                        "POST /api/seller/store/products", 
+                        "POST /api/seller/store/products (Product 1)", 
                         False, 
                         f"Bad request: {response.text}",
                         None
                     )
             elif response.status_code == 403:
                 self.log_test(
-                    "POST /api/seller/store/products", 
+                    "POST /api/seller/store/products (Product 1)", 
                     False, 
                     "Access forbidden - check if user has seller role",
                     response.text
                 )
             elif response.status_code == 401:
                 self.log_test(
-                    "POST /api/seller/store/products", 
+                    "POST /api/seller/store/products (Product 1)", 
                     False, 
                     "Unauthorized - check if auth token is valid",
                     response.text
                 )
             else:
                 self.log_test(
-                    "POST /api/seller/store/products", 
+                    "POST /api/seller/store/products (Product 1)", 
                     False, 
                     f"HTTP {response.status_code}: {response.text}",
                     None
@@ -951,7 +951,111 @@ class APITester:
                 
         except Exception as e:
             self.log_test(
-                "POST /api/seller/store/products", 
+                "POST /api/seller/store/products (Product 1)", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_seller_add_multiple_products(self):
+        """Test adding 2-3 different products to seller store"""
+        if not self.seller_token:
+            self.log_test(
+                "POST /api/seller/store/products (Multiple Products)", 
+                False, 
+                "No seller auth token available - seller login failed",
+                None
+            )
+            return
+            
+        # First get available catalog products
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            catalog_response = self.session.get(f"{self.base_url}/seller/catalog/products", headers=headers)
+            
+            if catalog_response.status_code != 200:
+                self.log_test(
+                    "POST /api/seller/store/products (Multiple Products)", 
+                    False, 
+                    "Cannot get catalog products for multiple product test",
+                    None
+                )
+                return
+                
+            catalog_data = catalog_response.json()
+            catalog_products = catalog_data.get("products", [])
+            
+            if len(catalog_products) < 3:
+                self.log_test(
+                    "POST /api/seller/store/products (Multiple Products)", 
+                    False, 
+                    f"Not enough catalog products available. Found {len(catalog_products)}, need at least 3",
+                    None
+                )
+                return
+            
+            # Add 2 more products (we already added 1 in previous test)
+            products_to_add = [
+                {"id": catalog_products[1].get("id"), "price": "19.99", "stock": "20"},
+                {"id": catalog_products[2].get("id"), "price": "39.99", "stock": "8"}
+            ]
+            
+            success_count = 0
+            for i, product_info in enumerate(products_to_add, 2):  # Start from product 2
+                form_data = {
+                    "catalog_product_id": product_info["id"],
+                    "price": product_info["price"],
+                    "stock": product_info["stock"]
+                }
+                
+                response = self.session.post(f"{self.base_url}/seller/store/products", headers=headers, data=form_data)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get("success"):
+                        success_count += 1
+                        store_product = data.get("store_product", {})
+                        self.log_test(
+                            f"POST /api/seller/store/products (Product {i})", 
+                            True, 
+                            f"Product {i} added successfully: price ${product_info['price']}, stock {product_info['stock']}",
+                            {"store_product_id": store_product.get("id"), "catalog_product_id": product_info["id"]}
+                        )
+                elif response.status_code == 400 and "already exists" in response.text.lower():
+                    success_count += 1
+                    self.log_test(
+                        f"POST /api/seller/store/products (Product {i})", 
+                        True, 
+                        f"Product {i} already exists in store (expected behavior)",
+                        None
+                    )
+                else:
+                    self.log_test(
+                        f"POST /api/seller/store/products (Product {i})", 
+                        False, 
+                        f"Failed to add product {i}: HTTP {response.status_code} - {response.text}",
+                        None
+                    )
+            
+            # Overall result
+            if success_count == 2:
+                self.log_test(
+                    "POST /api/seller/store/products (Multiple Products)", 
+                    True, 
+                    f"Successfully added {success_count + 1} different products to seller store (including first product)",
+                    {"total_products_added": success_count + 1}
+                )
+            else:
+                self.log_test(
+                    "POST /api/seller/store/products (Multiple Products)", 
+                    False, 
+                    f"Only {success_count} out of 2 additional products were added successfully",
+                    {"successful_additions": success_count}
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "POST /api/seller/store/products (Multiple Products)", 
                 False, 
                 f"Exception: {str(e)}",
                 None
