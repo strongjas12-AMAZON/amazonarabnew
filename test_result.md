@@ -270,12 +270,15 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Database Migration - Create store system tables"
-    - "Store Search API"
-    - "Store Detail API"
-    - "Store Products API (Buyer View)"
     - "Admin Seed Catalog API"
-  stuck_tasks: []
+    - "Seller Browse Catalog API" 
+    - "Seller Add Product to Store API"
+    - "Seller Manage Store Products APIs"
+  stuck_tasks:
+    - "Admin Seed Catalog API"
+    - "Seller Browse Catalog API"
+    - "Seller Add Product to Store API"
+    - "Seller Manage Store Products APIs"
   test_all: false
   test_priority: "high_first"
 
@@ -284,3 +287,5 @@ agent_communication:
     message: "Implemented complete Buyer Store Search & Store Detail system with strict access control. CRITICAL SECURITY: Buyers can ONLY query store_products table, NOT product_catalog. RLS policies enforce this at database level. Created migration SQL, 8 backend APIs, and 2 frontend pages. IMPORTANT: User MUST run the migration SQL in Supabase before testing. Please test backend APIs first: 1) POST /api/admin/seed-catalog (admin auth required to seed 100 products), 2) GET /api/stores/search (public), 3) GET /api/stores/{id} (public), 4) GET /api/stores/{id}/products (public - this is the CRITICAL endpoint that enforces buyer access control). Test credentials: admin - support@arabshopping.org, testseller_new@test.com / TestPass123!, testbuyer@test.com / TestPass123!"
   - agent: "main"
     message: "Starting comprehensive backend testing. Fixed missing 'deprecated' python dependency. Backend and frontend services are running. Testing all Store System APIs with focus on: 1) Auth flows (login/register), 2) Store Search API, 3) Store Detail API, 4) Store Products API (buyer view - critical security check), 5) Seller catalog browsing, 6) Seller add/manage store products. Test credentials as above."
+  - agent: "testing"
+    message: "TESTING COMPLETE - CRITICAL DATABASE SCHEMA ISSUE FOUND: The system has two conflicting product tables: 'products' (old) and 'product_catalog' (new). The seed-catalog endpoint has duplicate implementations - one seeds 'products' table, another seeds 'product_catalog' table. Seller APIs expect 'product_catalog' but products are being created in 'products' table, causing foreign key constraint violations. SECURITY TEST PASSED: Buyers can only access store_products, not master catalog. Store search/detail APIs working correctly. Main agent needs to fix the catalog seeding issue by ensuring products are created in the correct 'product_catalog' table."
