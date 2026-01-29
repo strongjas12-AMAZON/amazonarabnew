@@ -2215,6 +2215,11 @@ class APITester:
         self.test_store_products_specific_store()
         print()
         
+        # Comprehensive Order Center Tests
+        print("\n📋 COMPREHENSIVE ORDER CENTER TESTS")
+        print("-" * 40)
+        self.test_seller_order_center_comprehensive()
+        
         # Summary
         print("=" * 80)
         print("TEST SUMMARY - SELLER CATALOG & ADD PRODUCT FIXES")
