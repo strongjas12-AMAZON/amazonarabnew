@@ -137,6 +137,36 @@ backend:
       - working: true
         agent: "testing"
         comment: "FIXED: Duplicate seed-catalog endpoint removed. POST /api/admin/seed-catalog now correctly seeds product_catalog table. Tested complete flow: 1) Admin login ✅ 2) Clear catalog ✅ 3) Seed catalog ✅ (50 products seeded) 4) Seller login ✅ 5) Seller browse catalog ✅ (50 products available) 6) Seller add product to store ✅ (price $25.99, stock 10) 7) Seller view store products ✅ (1 product) 8) Buyer login ✅ 9) Store search ✅ (13 stores) 10) Store products security test ✅ (buyers only see store products, not master catalog)."
+      - working: true
+        agent: "testing"
+        comment: "COMPREHENSIVE TESTING COMPLETE: Full product catalog and marketplace flow verified after user-reported fixes. ✅ Admin login and seed catalog (100 products to product_catalog table) ✅ GET /api/admin/products returns products from product_catalog with required fields ✅ Seller login and browse catalog (50 products available) ✅ Seller add multiple products to store (3 products with different prices/stock) ✅ Seller view store products (3 products) ✅ Buyer login ✅ GET /api/products returns products from store_products table with proper joins ✅ Store search (13 stores) ✅ Store detail and store products APIs. FIXED: Column reference issue (added_at → created_at) in GET /api/products endpoint. All 16 tests passing - complete marketplace flow working correctly."
+
+  - task: "Admin View Products API"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "GET /api/admin/products working correctly after fixes. Returns 100 products from product_catalog table with required fields: title, description, price, category, images. Admin can see catalog products after seeding as expected."
+
+  - task: "Products Page API (Buyer View)"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "testing"
+        comment: "CRITICAL ISSUE: GET /api/products failing with column 'store_products.added_at does not exist' error. Code trying to order by non-existent column."
+      - working: true
+        agent: "testing"
+        comment: "FIXED: Changed 'added_at' to 'created_at' in query ordering and response formatting. GET /api/products now returns 3 products from store_products table with proper joins to product_catalog and stores. Response includes expected fields: id, title, description, price, category, images, store_name, seller_id, stock. Products page shows what sellers added correctly."
 
   - task: "Store Search API"
     implemented: true
