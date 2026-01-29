@@ -144,10 +144,10 @@ const SellerDashboard = () => {
     }
   };
 
-  // Filter catalog products
+  // Filter catalog products - use 'name' field from new store system
   const filteredCatalog = catalogProducts.filter(p => {
-    const matchesSearch = p.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          p.description?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = (p.name || p.title || '')?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (p.description || '')?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = !selectedCategory || p.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
