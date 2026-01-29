@@ -3918,7 +3918,8 @@ async def get_store_products(store_id: str, limit: int = 50, offset: int = 0, cu
     try:
         # Get store products with catalog info
         # IMPORTANT: Query starts from store_products, NOT product_catalog
-        result = supabase.table('store_products').select(
+        # Use admin client to bypass RLS for reading catalog info
+        result = supabase_admin.table('store_products').select(
             '''
             id,
             store_id,
