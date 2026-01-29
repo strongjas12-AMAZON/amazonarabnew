@@ -193,11 +193,21 @@ const Contact = () => {
 
                 <button
                   type="submit"
-                  className="btn-gold w-full flex items-center justify-center gap-2"
+                  disabled={submitting}
+                  className="btn-gold w-full flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   data-testid="contact-submit-btn"
                 >
-                  <Send className="w-5 h-5" />
-                  Send Message
+                  {submitting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-[#0a0a0a]"></div>
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-5 h-5" />
+                      Send Message
+                    </>
+                  )}
                 </button>
               </form>
             )}
