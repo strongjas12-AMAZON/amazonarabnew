@@ -1274,7 +1274,7 @@ async def get_products(category: Optional[str] = None, search: Optional[str] = N
             .eq('is_active', True) \
             .eq('stores.status', 'active')
 
-        store_products_result = query.order('added_at', desc=True).execute()
+        store_products_result = query.order('created_at', desc=True).execute()
 
         products = []
         search_lower = search_term.lower() if search_term else None
