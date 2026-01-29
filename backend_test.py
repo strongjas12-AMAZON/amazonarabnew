@@ -791,11 +791,15 @@ class APITester:
                 if data.get("success"):
                     store_product = data.get("store_product", {})
                     
+                    # Try to extract seller's store ID from the response
+                    if "store_id" in store_product:
+                        self.seller_store_id = store_product["store_id"]
+                    
                     self.log_test(
                         "POST /api/seller/store/products", 
                         True, 
                         f"Product added to store successfully: {store_product.get('id', 'Unknown ID')} with price $25.99 and stock 10",
-                        {"store_product_id": store_product.get("id"), "catalog_product_id": self.catalog_product_id, "price": "25.99", "stock": "10"}
+                        {"store_product_id": store_product.get("id"), "catalog_product_id": self.catalog_product_id, "price": "25.99", "stock": "10", "store_id": store_product.get("store_id")}
                     )
                 else:
                     self.log_test(
