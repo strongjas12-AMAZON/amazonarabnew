@@ -263,6 +263,27 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleCancelOrder = async (orderId) => {
+    if (!window.confirm('Are you sure you want to cancel this order?')) return;
+    try {
+      await api.put(`/orders/${orderId}/status`, { status: 'cancelled' });
+      toast.success('Order cancelled successfully');
+      fetchData();
+    } catch (error) {
+      toast.error('Failed to cancel order');
+    }
+  };
+
+  const handleCompleteOrder = async (orderId) => {
+    try {
+      await api.put(`/orders/${orderId}/status`, { status: 'completed' });
+      toast.success('✅ Order marked as completed!');
+      fetchData();
+    } catch (error) {
+      toast.error('Failed to complete order');
+    }
+  };
+
   // Filter products
   const filteredProducts = products.filter(p => {
     const matchesSearch = p.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -337,6 +358,178 @@ const AdminDashboard = () => {
         ))}
       </div>
 
+      {/* Product Form Modal */}
+      {(showProductForm || editingProduct) && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#1a1a1a] rounded-lg border border-[rgba(212,175,55,0.3)] max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white">
+                  {editingProduct ? 'Edit Product' : 'Add New Product'}
+                </h2>
+                <button
+                  onClick={() => {
+                    setShowProductForm(false);
+                    setEditingProduct(null);
+                    resetProductForm();
+                  }}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <form onSubmit={editingProduct ? handleUpdateProduct : handleCreateProduct} className="space-y-4">
+                {/* Product Title */}
+                <div>
+                  <label className="block text-gray-300 mb-2 font-medium">
+                    Product Title <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={productForm.title}
+                    onChange={(e) => setProductForm({ ...productForm, title: e.target.value })}
+                    placeholder="Enter product title"
+                    className="luxury-input w-full"
+                    data-testid="product-title-input"
+                  />
+                </div>
+
+                {/* Product Description */}
+                <div>
+                  <label className="block text-gray-300 mb-2 font-medium">
+                    Description <span className="text-red-400">*</span>
+                  </label>
+                  <textarea
+                    required
+                    value={productForm.description}
+                    onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
+                    placeholder="Enter product description"
+                    rows={4}
+                    className="luxury-input w-full resize-none"
+                    data-testid="product-description-input"
+                  />
+                </div>
+
+                {/* Price and Category Row */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Price */}
+                  <div>
+                    <label className="block text-gray-300 mb-2 font-medium">
+                      Price (USD) <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      step="0.01"
+                      value={productForm.price}
+                      onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
+                      placeholder="0.00"
+                      className="luxury-input w-full"
+                      data-testid="product-price-input"
+                    />
+                  </div>
+
+                  {/* Category */}
+                  <div>
+                    <label className="block text-gray-300 mb-2 font-medium">
+                      Category <span className="text-red-400">*</span>
+                    </label>
+                    <select
+                      required
+                      value={productForm.category}
+                      onChange={(e) => setProductForm({ ...productForm, category: e.target.value })}
+                      className="luxury-input w-full"
+                      data-testid="product-category-select"
+                    >
+                      <option value="">Select Category</option>
+                      {categories.map((cat) => (
+                        <option key={cat.id} value={cat.id}>
+                          {cat.icon} {cat.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Image URL Input */}
+                <div>
+                  <label className="block text-gray-300 mb-2 font-medium">
+                    Product Images
+                  </label>
+                  <div className="space-y-2">
+                    {productForm.images.map((img, index) => (
+                      <div key={index} className="flex gap-2">
+                        <input
+                          type="url"
+                          value={img}
+                          onChange={(e) => {
+                            const newImages = [...productForm.images];
+                            newImages[index] = e.target.value;
+                            setProductForm({ ...productForm, images: newImages });
+                          }}
+                          placeholder="https://example.com/image.jpg"
+                          className="luxury-input flex-1"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newImages = productForm.images.filter((_, i) => i !== index);
+                            setProductForm({ ...productForm, images: newImages });
+                          }}
+                          className="px-3 py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProductForm({ ...productForm, images: [...productForm.images, ''] });
+                      }}
+                      className="w-full px-4 py-2 bg-[rgba(212,175,55,0.1)] text-[#D4AF37] rounded-lg hover:bg-[rgba(212,175,55,0.2)] transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Image URL
+                    </button>
+                  </div>
+                  <p className="text-sm text-gray-500 mt-2">
+                    Add URLs to product images. You can add multiple images.
+                  </p>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-3 pt-4">
+                  <button
+                    type="submit"
+                    className="flex-1 btn-gold flex items-center justify-center gap-2"
+                    data-testid="submit-product-btn"
+                  >
+                    <Save className="w-4 h-4" />
+                    {editingProduct ? 'Update Product' : 'Create Product'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowProductForm(false);
+                      setEditingProduct(null);
+                      resetProductForm();
+                    }}
+                    className="flex-1 px-4 py-2 bg-[rgba(30,30,30,0.6)] text-gray-300 rounded-lg hover:bg-[rgba(30,30,30,0.8)] transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+
       {/* Overview Tab */}
       {activeTab === 'overview' && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -371,6 +564,115 @@ const AdminDashboard = () => {
           <div className="luxury-card">
             <p className="text-gray-400 text-sm mb-1">Pending Payouts</p>
             <p className="text-3xl font-bold text-yellow-400">{stats.pendingPayouts}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Product Form Modal */}
+      {(showProductForm || editingProduct) && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#1a1a1a] rounded-lg border border-[rgba(212,175,55,0.3)] max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="font-['Playfair_Display'] text-xl font-bold text-white">
+                  {editingProduct ? 'Edit Product' : 'Add New Product'}
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowProductForm(false);
+                    setEditingProduct(null);
+                    resetProductForm();
+                  }}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <form onSubmit={editingProduct ? handleUpdateProduct : handleCreateProduct} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Product Title
+                  </label>
+                  <input
+                    type="text"
+                    value={productForm.title}
+                    onChange={(e) => setProductForm({ ...productForm, title: e.target.value })}
+                    className="luxury-input w-full"
+                    placeholder="Enter product title"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Description
+                  </label>
+                  <textarea
+                    value={productForm.description}
+                    onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
+                    className="luxury-input w-full h-24 resize-none"
+                    placeholder="Enter product description"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Price ($)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={productForm.price}
+                    onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
+                    className="luxury-input w-full"
+                    placeholder="0.00"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Category
+                  </label>
+                  <select
+                    value={productForm.category}
+                    onChange={(e) => setProductForm({ ...productForm, category: e.target.value })}
+                    className="luxury-input w-full"
+                  >
+                    <option value="">Select a category</option>
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.icon} {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowProductForm(false);
+                      setEditingProduct(null);
+                      resetProductForm();
+                    }}
+                    className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 btn-gold flex items-center justify-center gap-2"
+                  >
+                    <Save className="w-4 h-4" />
+                    {editingProduct ? 'Update Product' : 'Create Product'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}

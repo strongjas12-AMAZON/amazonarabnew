@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Mail, MapPin, Clock, Send, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import api from '../lib/api';
 
 const Contact = () => {
   const [formData, setFormData] = useState({
@@ -10,28 +11,48 @@ const Contact = () => {
     message: ''
   });
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Create mailto link with form data
-    const mailtoLink = `mailto:support@arabshopping.org?subject=${encodeURIComponent(formData.subject)}&body=${encodeURIComponent(
-      `Name: ${formData.name}\nEmail: ${formData.email}\n\nMessage:\n${formData.message}`
-    )}`;
-    
-    window.location.href = mailtoLink;
-    setSubmitted(true);
-    toast.success('Opening your email client...');
-    
-    // Reset form after 3 seconds
-    setTimeout(() => {
-      setFormData({ name: '', email: '', subject: '', message: '' });
-      setSubmitted(false);
-    }, 3000);
+    try {
+      setSubmitting(true);
+      
+      // Create FormData for the API request
+      const formDataToSend = new FormData();
+      formDataToSend.append('name', formData.name);
+      formDataToSend.append('email', formData.email);
+      formDataToSend.append('subject', formData.subject);
+      formDataToSend.append('message', formData.message);
+      
+      // Send to backend API
+      const response = await api.post('/contact', formDataToSend, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      
+      if (response.data.success) {
+        setSubmitted(true);
+        toast.success('Message sent successfully!');
+        
+        // Reset form after 5 seconds
+        setTimeout(() => {
+          setFormData({ name: '', email: '', subject: '', message: '' });
+          setSubmitted(false);
+        }, 5000);
+      }
+    } catch (error) {
+      console.error('Contact form error:', error);
+      toast.error(error.response?.data?.detail || 'Failed to send message. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -88,7 +109,7 @@ const Contact = () => {
               <div className="text-center py-12" data-testid="contact-success-message">
                 <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-4" />
                 <h3 className="text-2xl font-bold text-white mb-2">Message Sent!</h3>
-                <p className="text-gray-400">Your email client should open shortly. We'll get back to you soon.</p>
+                <p className="text-gray-400">Thank you for contacting us! We've received your message and will respond to you at {formData.email} within 24 hours.</p>
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-6">
@@ -172,11 +193,21 @@ const Contact = () => {
 
                 <button
                   type="submit"
-                  className="btn-gold w-full flex items-center justify-center gap-2"
+                  disabled={submitting}
+                  className="btn-gold w-full flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   data-testid="contact-submit-btn"
                 >
-                  <Send className="w-5 h-5" />
-                  Send Message
+                  {submitting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-[#0a0a0a]"></div>
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-5 h-5" />
+                      Send Message
+                    </>
+                  )}
                 </button>
               </form>
             )}

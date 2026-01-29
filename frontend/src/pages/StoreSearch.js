@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Store, ChevronRight, ShoppingBag } from 'lucide-react';
 import { toast } from 'sonner';
@@ -7,21 +7,65 @@ import api from '../lib/api';
 export default function StoreSearch() {
   const navigate = useNavigate();
   const [stores, setStores] = useState([]);
+  const [allStores, setAllStores] = useState([]); // Store all stores for filtering
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
+  const debounceTimer = useRef(null);
 
-  // Fetch stores on mount
+  // Fetch all stores on mount
   useEffect(() => {
-    fetchStores();
+    fetchAllStores();
   }, []);
+
+  // Real-time search with debouncing
+  useEffect(() => {
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+    }
+
+    debounceTimer.current = setTimeout(() => {
+      if (searchQuery.trim()) {
+        fetchStores(searchQuery);
+      } else {
+        // Show all stores when search is empty
+        setStores(allStores);
+      }
+    }, 300); // 300ms debounce delay
+
+    return () => {
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+    };
+  }, [searchQuery, allStores]);
+
+  const fetchAllStores = async () => {
+    try {
+      setLoading(true);
+      const response = await api.get('/stores/search?limit=100');
+      const data = response.data;
+
+      if (data.success) {
+        setStores(data.stores || []);
+        setAllStores(data.stores || []); // Save all stores
+      } else {
+        toast.error('Failed to load stores');
+      }
+    } catch (error) {
+      console.error('Fetch stores error:', error);
+      toast.error('Failed to load stores');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchStores = async (query = '') => {
     try {
       setSearching(true);
       const url = query 
-        ? `/stores/search?query=${encodeURIComponent(query)}&limit=50`
-        : `/stores/search?limit=50`;
+        ? `/stores/search?query=${encodeURIComponent(query)}&limit=100`
+        : `/stores/search?limit=100`;
       
       const response = await api.get(url);
       const data = response.data;
@@ -35,14 +79,13 @@ export default function StoreSearch() {
       console.error('Fetch stores error:', error);
       toast.error('Failed to load stores');
     } finally {
-      setLoading(false);
       setSearching(false);
     }
   };
 
   const handleSearch = (e) => {
     e.preventDefault();
-    fetchStores(searchQuery);
+    // Search is already handled by the useEffect with debouncing
   };
 
   const handleStoreClick = (storeId) => {
@@ -70,16 +113,23 @@ export default function StoreSearch() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search stores by name..."
+              placeholder="Search stores by name... (real-time)"
               className="luxury-input w-full pl-14 pr-32"
             />
-            <button
-              type="submit"
-              disabled={searching}
-              className="absolute right-2 top-1/2 transform -translate-y-1/2 px-6 py-2 bg-gradient-to-r from-[#D4AF37] to-[#F4E4B0] text-[#0a0a0a] font-semibold rounded-lg hover:from-[#F4E4B0] hover:to-[#D4AF37] transition-all disabled:opacity-50 text-sm"
-            >
-              {searching ? 'Searching...' : 'Search'}
-            </button>
+            {searching && (
+              <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-[#D4AF37]"></div>
+              </div>
+            )}
+            {!searching && searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 transform -translate-y-1/2 px-4 py-2 text-gray-400 hover:text-white transition-colors text-sm"
+              >
+                Clear
+              </button>
+            )}
           </div>
         </form>
 
