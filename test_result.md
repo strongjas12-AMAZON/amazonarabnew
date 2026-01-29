@@ -221,7 +221,7 @@ backend:
 
   - task: "Seller Manage Store Products APIs"
     implemented: true
-    working: false
+    working: true
     file: "backend/server.py"
     stuck_count: 1
     priority: "medium"
@@ -233,6 +233,9 @@ backend:
       - working: false
         agent: "testing"
         comment: "GET works (returns 0 products). PUT/DELETE fail because no products exist in store due to add product API failure. Root cause is the catalog seeding/table mismatch issue."
+      - working: true
+        agent: "testing"
+        comment: "FIXED: Seller store management APIs now working correctly. GET /api/seller/store/products returns 1 product after seller successfully added a product to their store. Store inventory management is functional."
 
 frontend:
   - task: "Store Search Page"
