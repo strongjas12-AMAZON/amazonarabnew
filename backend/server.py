@@ -1642,14 +1642,27 @@ async def delete_product(product_id: str, current_user: dict = Depends(get_curre
 
 @api_router.get("/admin/products")
 async def get_all_products_admin(current_user: dict = Depends(get_current_user)):
-    """Get all products for admin management"""
+    """Get all products from product_catalog for admin management"""
     if current_user['role'] != 'admin':
         raise HTTPException(status_code=403, detail="Admin access required")
     
     try:
-        # Admin catalog - get all products
-        products = supabase_admin.table('products').select('*').order('created_at', desc=True).execute()
-        return {"success": True, "products": [format_product_response(p) for p in products.data]}
+        # Admin catalog - get all products from product_catalog (NEW STORE SYSTEM)
+        products = supabase_admin.table('product_catalog').select('*').order('created_at', desc=True).execute()
+        # Format response to match expected frontend format
+        formatted_products = []
+        for p in products.data:
+            formatted_products.append({
+                'id': p.get('id'),
+                'title': p.get('name'),  # product_catalog uses 'name' field
+                'description': p.get('description'),
+                'price': p.get('base_price'),  # product_catalog uses 'base_price'
+                'category': p.get('category'),
+                'images': p.get('images', []),
+                'created_at': p.get('created_at'),
+                'is_active': p.get('is_active', True)
+            })
+        return {"success": True, "products": formatted_products}
     except Exception as e:
         logging.error(f"Get all products admin error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
