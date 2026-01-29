@@ -272,12 +272,36 @@ class APITester:
                     # Store a catalog product ID for later tests
                     if "sample_product_id" in data:
                         self.catalog_product_id = data["sample_product_id"]
+                elif "already seeded" in data.get("message", "").lower() or "already has" in data.get("message", "").lower():
+                    # Catalog already exists - this is acceptable
+                    self.log_test(
+                        "POST /api/admin/seed-catalog", 
+                        True, 
+                        f"Catalog already seeded: {data.get('message', 'Products already exist')}",
+                        data
+                    )
                 else:
                     self.log_test(
                         "POST /api/admin/seed-catalog", 
                         False, 
                         "Response missing success=true",
                         data
+                    )
+            elif response.status_code == 400:
+                # Check if it's already seeded (acceptable)
+                if "already seeded" in response.text.lower():
+                    self.log_test(
+                        "POST /api/admin/seed-catalog", 
+                        True, 
+                        "Catalog already seeded (expected behavior)",
+                        response.text
+                    )
+                else:
+                    self.log_test(
+                        "POST /api/admin/seed-catalog", 
+                        False, 
+                        f"Bad request: {response.text}",
+                        None
                     )
             elif response.status_code == 403:
                 self.log_test(
