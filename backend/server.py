@@ -1905,21 +1905,79 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
 
 @api_router.get("/orders/my")
 async def get_my_orders(current_user: dict = Depends(get_current_user)):
-    """Get user's orders"""
+    """Get user's orders (updated for NEW store_products system)"""
     try:
         if current_user['role'] == 'buyer':
-            orders = supabase_admin.table('orders').select('*, order_items(*, products(*))').eq('buyer_id', current_user['id']).execute()
+            # Buyer sees their own orders with product details from store_products
+            orders = supabase_admin.table('orders')\
+                .select('*, order_items(*, store_products(*, product_catalog(*)))')\
+                .eq('buyer_id', current_user['id'])\
+                .execute()
+            
+            # Format product info from store_products
+            for order in orders.data:
+                for item in order.get('order_items', []):
+                    sp = item.get('store_products')
+                    if sp:
+                        catalog = sp.get('product_catalog', {})
+                        item['products'] = {
+                            'id': sp.get('id'),
+                            'title': catalog.get('name'),
+                            'description': catalog.get('description'),
+                            'images': catalog.get('images', []),
+                            'category': catalog.get('category'),
+                            'price': sp.get('price')
+                        }
+            
         elif current_user['role'] == 'seller':
-            orders = supabase_admin.table('orders').select('*, order_items(*, products(*))').execute()
+            # Seller sees orders containing their store products
+            orders = supabase_admin.table('orders')\
+                .select('*, order_items(*, store_products(*, product_catalog(*)))')\
+                .execute()
+            
             filtered_orders = []
             for order in orders.data:
-                seller_items = [item for item in order['order_items'] if item['products']['seller_id'] == current_user['id']]
+                seller_items = []
+                for item in order.get('order_items', []):
+                    sp = item.get('store_products')
+                    if sp and sp.get('seller_id') == current_user['id']:
+                        catalog = sp.get('product_catalog', {})
+                        item['products'] = {
+                            'id': sp.get('id'),
+                            'title': catalog.get('name'),
+                            'description': catalog.get('description'),
+                            'images': catalog.get('images', []),
+                            'category': catalog.get('category'),
+                            'price': sp.get('price')
+                        }
+                        seller_items.append(item)
+                
                 if seller_items:
                     order['order_items'] = seller_items
                     filtered_orders.append(order)
+            
             return {"success": True, "orders": [format_order_response(o) for o in filtered_orders]}
+            
         elif current_user['role'] == 'admin':
-            orders = supabase_admin.table('orders').select('*, order_items(*, products(*)), users!buyer_id(name, email)').execute()
+            # Admin sees all orders
+            orders = supabase_admin.table('orders')\
+                .select('*, order_items(*, store_products(*, product_catalog(*))), users!buyer_id(name, email)')\
+                .execute()
+            
+            # Format product info
+            for order in orders.data:
+                for item in order.get('order_items', []):
+                    sp = item.get('store_products')
+                    if sp:
+                        catalog = sp.get('product_catalog', {})
+                        item['products'] = {
+                            'id': sp.get('id'),
+                            'title': catalog.get('name'),
+                            'description': catalog.get('description'),
+                            'images': catalog.get('images', []),
+                            'category': catalog.get('category'),
+                            'price': sp.get('price')
+                        }
         else:
             raise HTTPException(status_code=403, detail="Unauthorized")
         
