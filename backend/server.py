@@ -3934,8 +3934,6 @@ async def get_store_products(store_id: str, limit: int = 50, offset: int = 0, cu
             '''
         ).eq('store_id', store_id).eq('is_active', True).range(offset, offset + limit - 1).order('created_at', desc=True).execute()
         
-        logging.info(f"Store products query result: {result}")
-        
         # Format response
         products = []
         for item in result.data:
