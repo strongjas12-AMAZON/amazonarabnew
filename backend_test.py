@@ -34,6 +34,7 @@ class APITester:
         self.store_product_id = None  # For order testing
         self.store_product_price = None  # For order testing
         self.test_order_id = None  # Track created order for testing
+        self.buyer_address_id = None  # Track buyer address for order testing
         
     def log_test(self, test_name: str, success: bool, details: str = "", response_data: Any = None):
         """Log test result"""
