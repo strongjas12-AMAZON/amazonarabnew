@@ -240,8 +240,55 @@ class APITester:
                 None
             )
 
+    def test_admin_clear_catalog(self):
+        """Test DELETE /api/admin/clear-catalog - Clear catalog for clean state"""
+        if not self.admin_token:
+            self.log_test(
+                "DELETE /api/admin/clear-catalog", 
+                False, 
+                "No admin auth token available - admin login failed",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.admin_token}"}
+            response = self.session.delete(f"{self.base_url}/admin/clear-catalog", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    self.log_test(
+                        "DELETE /api/admin/clear-catalog", 
+                        True, 
+                        f"Catalog cleared successfully: {data.get('message', 'Cleared')}",
+                        data
+                    )
+                else:
+                    self.log_test(
+                        "DELETE /api/admin/clear-catalog", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            else:
+                self.log_test(
+                    "DELETE /api/admin/clear-catalog", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "DELETE /api/admin/clear-catalog", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
     def test_admin_seed_catalog(self):
-        """Test POST /api/admin/seed-catalog - Seed 100 products to catalog"""
+        """Test POST /api/admin/seed-catalog - Seed 100 products to product_catalog table"""
         if not self.admin_token:
             self.log_test(
                 "POST /api/admin/seed-catalog", 
@@ -265,7 +312,7 @@ class APITester:
                     self.log_test(
                         "POST /api/admin/seed-catalog", 
                         True, 
-                        f"Catalog seeded successfully. Created: {products_created}, Skipped: {products_skipped}, Total: {total_products}",
+                        f"Catalog seeded to product_catalog table. Created: {products_created}, Skipped: {products_skipped}, Total: {total_products}",
                         {"products_created": products_created, "products_skipped": products_skipped, "total_products": total_products}
                     )
                     
