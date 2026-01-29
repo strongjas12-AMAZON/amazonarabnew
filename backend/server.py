@@ -1264,51 +1264,60 @@ async def get_categories():
 
 @api_router.get("/products")
 async def get_products(category: Optional[str] = None, search: Optional[str] = None):
-    """Get marketplace products that sellers have added (buyer-facing)."""
+    """Get marketplace products from NEW store system that sellers have added (buyer-facing)."""
     try:
         search_term = (search or "").strip()
-        query = supabase_admin.table('seller_products') \
-            .select('*, products(*), users:users!seller_id(id, name, store_name, verification_status)') \
-            .eq('is_active', True)
+        
+        # Query store_products (NEW SYSTEM) with catalog and store info
+        query = supabase_admin.table('store_products') \
+            .select('*, product_catalog!inner(*), stores!inner(id, store_name, seller_id, status)') \
+            .eq('is_active', True) \
+            .eq('stores.status', 'active')
 
-        # Apply backend filter when possible (column exists)
-        if search_term:
-            try:
-                query = query.ilike('store_name', f"%{search_term}%")
-            except Exception:
-                # If store_name column is missing or ilike not supported, fallback to in-memory filter
-                pass
-
-        seller_products_result = query.order('added_at', desc=True).execute()
+        store_products_result = query.order('added_at', desc=True).execute()
 
         products = []
         search_lower = search_term.lower() if search_term else None
 
-        for sp in seller_products_result.data or []:
-            product_data = sp.get('products') or {}
-            if not product_data:
+        for sp in store_products_result.data or []:
+            catalog_product = sp.get('product_catalog') or {}
+            store_info = sp.get('stores') or {}
+            
+            if not catalog_product:
                 continue
-            if product_data.get('is_active') is False:
-                continue
-            if category and product_data.get('category') != category:
-                continue
-
-            seller_info = sp.get('users') or {}
-            store_name = (sp.get('store_name') or seller_info.get('store_name') or '').strip()
-
-            # Enforce case-insensitive partial match on store name
-            if search_lower and (not store_name or search_lower not in store_name.lower()):
+                
+            # Filter by category if provided
+            if category and catalog_product.get('category') != category:
                 continue
 
+            store_name = store_info.get('store_name', '').strip()
+            product_name = catalog_product.get('name', '')
+            product_desc = catalog_product.get('description', '')
+
+            # Search filter - check store name, product name, and description
+            if search_lower:
+                if search_lower not in store_name.lower() and \
+                   search_lower not in product_name.lower() and \
+                   search_lower not in product_desc.lower():
+                    continue
+
+            # Build product response
             merged_product = {
-                **product_data,
+                'id': sp.get('id'),  # store_product id
+                'title': catalog_product.get('name'),
+                'description': catalog_product.get('description'),
+                'price': sp.get('price'),  # Seller's custom price
+                'category': catalog_product.get('category'),
+                'images': catalog_product.get('images', []),
+                'stock': sp.get('stock_quantity', 0),
                 'store_name': store_name,
-                'is_seller_product': sp.get('is_seller_product', True),
-                'seller_id': sp.get('seller_id') or product_data.get('seller_id'),
-                'seller_name': seller_info.get('name'),
-                'seller_verification_status': seller_info.get('verification_status') or seller_info.get('verificationStatus')
+                'seller_id': store_info.get('seller_id'),
+                'store_id': store_info.get('id'),
+                'is_active': sp.get('is_active', True),
+                'added_at': sp.get('added_at'),
+                'catalog_product_id': sp.get('catalog_product_id')
             }
-            products.append(format_product_response(merged_product))
+            products.append(merged_product)
 
         return {"success": True, "products": products}
     except Exception as e:
