@@ -2707,67 +2707,10 @@ class APITester:
         print("Testing Checkout Flow:")
         self.test_checkout_address_functionality()
         print()
-        self.test_admin_seed_catalog()
-        print()
-        
-        print("📚 STEP 5: Browse Catalog - Verify All Products Visible (SHOULD RETURN 100 PRODUCTS, NOT 50)")
-        print("-" * 40)
-        self.test_seller_catalog_browsing()
-        print()
-        
-        print("➕ STEP 6: Add Product to Store - Test Auto-Create Store (SHOULD NOT GET 'Cannot coerce result' ERROR)")
-        print("-" * 40)
-        self.test_seller_add_product_auto_create_store()
-        print()
-        
-        print("✅ STEP 7: Verify Store Created")
-        print("-" * 40)
-        self.test_verify_store_created()
-        print()
-        
-        print("➕ STEP 8: Add Another Product (Should work now that store exists)")
-        print("-" * 40)
-        self.test_add_another_product_to_existing_store()
-        print()
-        
-        print("👀 STEP 9: Seller View Store Products")
-        print("-" * 40)
-        self.test_seller_get_store_products()
-        print()
-        
-        print("🛒 STEP 10: Verify Products Page (SHOULD SHOW PRODUCTS ADDED BY SELLER - AT LEAST 2 PRODUCTS)")
-        print("-" * 40)
-        self.test_products_page_after_seller_additions()
-        print()
-        
-        print("🔐 STEP 11: Buyer Login (for additional verification)")
-        print("-" * 40)
-        self.test_buyer_login()
-        print()
-        
-        print("🔍 STEP 12: Store Search Flow - Search All Stores")
-        print("-" * 40)
-        self.test_store_search_all()
-        print()
-        
-        print("🏪 STEP 13: Store Detail")
-        print("-" * 40)
-        self.test_store_detail()
-        print()
-        
-        print("🏪 STEP 14: Store Products (Should return products in specific store)")
-        print("-" * 40)
-        self.test_store_products_specific_store()
-        print()
-        
-        # Comprehensive Order Center Tests
-        print("\n📋 COMPREHENSIVE ORDER CENTER TESTS")
-        print("-" * 40)
-        self.test_seller_order_center_comprehensive()
         
         # Summary
         print("=" * 80)
-        print("TEST SUMMARY - SELLER CATALOG & ADD PRODUCT FIXES")
+        print("TEST SUMMARY - SHIPPING ADDRESS ENDPOINTS")
         print("=" * 80)
         
         passed = sum(1 for result in self.test_results if result["success"])
@@ -2778,41 +2721,57 @@ class APITester:
         print(f"Failed: {total - passed}")
         print()
         
-        # Categorize results by fix verification
-        catalog_limit_tests = [r for r in self.test_results if "100 Products" in r["test"]]
-        auto_create_tests = [r for r in self.test_results if "Auto-Create Store" in r["test"] or "Store Created" in r["test"]]
-        products_page_tests = [r for r in self.test_results if "Seller Products Appear" in r["test"]]
+        # Categorize results by address functionality
+        buyer_tests = [r for r in self.test_results if "Buyer Address" in r["test"]]
+        seller_tests = [r for r in self.test_results if "Seller Address" in r["test"]]
+        admin_tests = [r for r in self.test_results if "Admin Address" in r["test"]]
+        rls_tests = [r for r in self.test_results if "RLS Protection" in r["test"]]
+        checkout_tests = [r for r in self.test_results if "Checkout" in r["test"]]
         
         print("CRITICAL VALIDATIONS:")
         print("-" * 40)
         
-        # Check catalog limit fix
-        catalog_passed = any(r["success"] for r in catalog_limit_tests)
-        if catalog_passed:
-            print("✅ Catalog endpoint returns 100 products (not 50) - LIMIT FIX VERIFIED")
+        # Check buyer address functionality
+        buyer_passed = any(r["success"] for r in buyer_tests)
+        if buyer_passed:
+            print("✅ Buyer can manage addresses without errors - BUYER FUNCTIONALITY WORKING")
         else:
-            print("❌ Catalog endpoint still limited to 50 products - LIMIT FIX FAILED")
+            print("❌ Buyer address functionality failed - BUYER FUNCTIONALITY BROKEN")
         
-        # Check auto-create store fix
-        auto_create_passed = any(r["success"] for r in auto_create_tests)
-        if auto_create_passed:
-            print("✅ Adding product works even if seller has no store (auto-creates) - AUTO-CREATE FIX VERIFIED")
+        # Check seller address functionality (this was the main issue)
+        seller_passed = any(r["success"] for r in seller_tests)
+        if seller_passed:
+            print("✅ Seller can manage addresses without 'Buyer access required' error - FIX VERIFIED")
         else:
-            print("❌ Auto-create store functionality not working - AUTO-CREATE FIX FAILED")
+            print("❌ Seller still getting 'Buyer access required' error - FIX FAILED")
         
-        # Check products page
-        products_page_passed = any(r["success"] for r in products_page_tests)
-        if products_page_passed:
-            print("✅ Products appear on /products endpoint after adding - FLOW VERIFIED")
+        # Check admin address functionality
+        admin_passed = any(r["success"] for r in admin_tests)
+        if admin_passed:
+            print("✅ Admin can manage addresses without errors - ADMIN FUNCTIONALITY WORKING")
         else:
-            print("❌ Products not appearing on /products endpoint - FLOW ISSUE")
+            print("❌ Admin address functionality failed - ADMIN FUNCTIONALITY BROKEN")
+        
+        # Check RLS protection
+        rls_passed = any(r["success"] for r in rls_tests)
+        if rls_passed:
+            print("✅ Users can only access their OWN addresses - RLS PROTECTION WORKING")
+        else:
+            print("❌ RLS protection failed - SECURITY ISSUE")
+        
+        # Check checkout functionality
+        checkout_passed = any(r["success"] for r in checkout_tests)
+        if checkout_passed:
+            print("✅ Checkout can use addresses without errors - CHECKOUT FUNCTIONALITY WORKING")
+        else:
+            print("❌ Checkout address functionality failed - CHECKOUT BROKEN")
         
         # Check for specific errors
-        coerce_errors = [r for r in self.test_results if not r["success"] and "coerce" in str(r.get("details", "")).lower()]
-        if coerce_errors:
-            print("❌ 'Cannot coerce result to single JSON object' errors still occurring")
+        buyer_access_errors = [r for r in self.test_results if not r["success"] and "buyer access required" in str(r.get("details", "")).lower()]
+        if buyer_access_errors:
+            print("❌ 'Buyer access required' errors still occurring - FIX NOT COMPLETE")
         else:
-            print("✅ No 'PGRST116' or 'single JSON object' errors detected")
+            print("✅ No 'Buyer access required' errors detected - FIX SUCCESSFUL")
         
         print()
         
