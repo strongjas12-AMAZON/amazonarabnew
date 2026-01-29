@@ -234,7 +234,7 @@ class OrderCenterTester:
             admin_headers = {"Authorization": f"Bearer {self.admin_token}"}
             confirm_data = {"status": "paid"}
             
-            response = self.session.put(f"{self.base_url}/admin/orders/{self.test_order_id}/payment-status", 
+            response = self.session.put(f"{self.base_url}/orders/{self.test_order_id}/status", 
                                       headers=admin_headers, json=confirm_data)
             
             if response.status_code == 200:
