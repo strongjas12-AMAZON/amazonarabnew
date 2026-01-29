@@ -218,7 +218,7 @@ backend:
     working: true
     file: "backend/server.py"
     stuck_count: 1
-    priority: "medium"
+    priority: "high"
     needs_retesting: false
     status_history:
       - working: "NA"
@@ -230,6 +230,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "FIXED: Seller catalog browsing now working correctly. GET /api/seller/catalog/products returns 50 products from product_catalog table. Sellers can successfully browse the master catalog to select products for their store."
+      - working: true
+        agent: "testing"
+        comment: "USER REPORTED FIX VERIFIED: ✅ FIXED - Seller can see 100 products in catalog (not limited to 50). Limit increased from 50 to 200 as reported. GET /api/seller/catalog/products now returns 100 products from product_catalog table. The user-reported issue 'Seller can only see 50 products in catalog (should see 100)' has been successfully resolved."
 
   - task: "Seller Add Product to Store API"
     implemented: true
