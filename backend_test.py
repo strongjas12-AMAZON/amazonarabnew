@@ -1546,71 +1546,75 @@ class APITester:
             )
 
     def run_all_tests(self):
-        """Run all tests in the specific sequence requested"""
+        """Run all tests in the specific sequence requested for seller catalog and add product fixes"""
         print("=" * 80)
-        print("BACKEND API TESTING - COMPLETE PRODUCT CATALOG AND MARKETPLACE FLOW")
+        print("BACKEND API TESTING - SELLER CATALOG & ADD PRODUCT FIXES VERIFICATION")
         print("=" * 80)
         print(f"Base URL: {self.base_url}")
         print(f"Admin Email: {ADMIN_EMAIL}")
-        print(f"Seller Email: {SELLER_EMAIL}")
+        print(f"Seller Email: {SELLER_EMAIL} (testseller_new@test.com)")
         print(f"Buyer Email: {BUYER_EMAIL}")
+        print()
+        print("TESTING USER REPORTED FIXES:")
+        print("1. Seller can only see 50 products in catalog (should see 100) - FIXED: Increased limit from 50 to 200")
+        print("2. Error when adding product to store 'Cannot coerce result to single JSON object' - FIXED: Auto-create store if it doesn't exist")
         print("=" * 80)
         print()
         
         # Test Flow as requested in review:
-        print("🔐 STEP 1: Admin Login & Seed Catalog")
-        print("-" * 40)
-        self.test_admin_login()
-        print()
-        
-        print("🧹 STEP 2: Clear Catalog First (Clean State)")
-        print("-" * 40)
-        self.test_admin_clear_catalog()
-        print()
-        
-        print("🌱 STEP 3: Seed Product Catalog (100 products to product_catalog table)")
-        print("-" * 40)
-        self.test_admin_seed_catalog()
-        print()
-        
-        print("📋 STEP 4: Admin View Products (VERIFY: Should return products from product_catalog table)")
-        print("-" * 40)
-        self.test_admin_get_products()
-        print()
-        
-        print("🔐 STEP 5: Seller Flow - Login")
+        print("🔐 STEP 1: Seller Login")
         print("-" * 40)
         self.test_seller_login()
         print()
         
-        print("📚 STEP 6: Seller Browse Catalog (VERIFY: Should show product_catalog items available to add)")
+        print("🔐 STEP 2: Admin Login & Setup (for catalog seeding)")
+        print("-" * 40)
+        self.test_admin_login()
+        print()
+        
+        print("🧹 STEP 3: Clear Catalog First (Clean State)")
+        print("-" * 40)
+        self.test_admin_clear_catalog()
+        print()
+        
+        print("🌱 STEP 4: Seed Product Catalog (100 products to product_catalog table)")
+        print("-" * 40)
+        self.test_admin_seed_catalog()
+        print()
+        
+        print("📚 STEP 5: Browse Catalog - Verify All Products Visible (SHOULD RETURN 100 PRODUCTS, NOT 50)")
         print("-" * 40)
         self.test_seller_catalog_browsing()
         print()
         
-        print("➕ STEP 7: Seller Add Product to Store (FormData: catalog_product_id, price: 29.99, stock: 15)")
+        print("➕ STEP 6: Add Product to Store - Test Auto-Create Store (SHOULD NOT GET 'Cannot coerce result' ERROR)")
         print("-" * 40)
-        self.test_seller_add_product_to_store()
+        self.test_seller_add_product_auto_create_store()
         print()
         
-        print("➕ STEP 8: Seller Add Multiple Products (Add 2-3 different products)")
+        print("✅ STEP 7: Verify Store Created")
         print("-" * 40)
-        self.test_seller_add_multiple_products()
+        self.test_verify_store_created()
         print()
         
-        print("👀 STEP 9: Seller View Store Products (VERIFY: Should show products added to seller's store)")
+        print("➕ STEP 8: Add Another Product (Should work now that store exists)")
+        print("-" * 40)
+        self.test_add_another_product_to_existing_store()
+        print()
+        
+        print("👀 STEP 9: Seller View Store Products")
         print("-" * 40)
         self.test_seller_get_store_products()
         print()
         
-        print("🔐 STEP 10: Buyer Login")
+        print("🛒 STEP 10: Verify Products Page (SHOULD SHOW PRODUCTS ADDED BY SELLER - AT LEAST 2 PRODUCTS)")
         print("-" * 40)
-        self.test_buyer_login()
+        self.test_products_page_after_seller_additions()
         print()
         
-        print("🛒 STEP 11: Products Page (VERIFY: Should return products from store_products table)")
+        print("🔐 STEP 11: Buyer Login (for additional verification)")
         print("-" * 40)
-        self.test_products_page_buyer_view()
+        self.test_buyer_login()
         print()
         
         print("🔍 STEP 12: Store Search Flow - Search All Stores")
@@ -1630,7 +1634,7 @@ class APITester:
         
         # Summary
         print("=" * 80)
-        print("TEST SUMMARY")
+        print("TEST SUMMARY - SELLER CATALOG & ADD PRODUCT FIXES")
         print("=" * 80)
         
         passed = sum(1 for result in self.test_results if result["success"])
@@ -1641,21 +1645,50 @@ class APITester:
         print(f"Failed: {total - passed}")
         print()
         
+        # Categorize results by fix verification
+        catalog_limit_tests = [r for r in self.test_results if "100 Products" in r["test"]]
+        auto_create_tests = [r for r in self.test_results if "Auto-Create Store" in r["test"] or "Store Created" in r["test"]]
+        products_page_tests = [r for r in self.test_results if "Seller Products Appear" in r["test"]]
+        
+        print("CRITICAL VALIDATIONS:")
+        print("-" * 40)
+        
+        # Check catalog limit fix
+        catalog_passed = any(r["success"] for r in catalog_limit_tests)
+        if catalog_passed:
+            print("✅ Catalog endpoint returns 100 products (not 50) - LIMIT FIX VERIFIED")
+        else:
+            print("❌ Catalog endpoint still limited to 50 products - LIMIT FIX FAILED")
+        
+        # Check auto-create store fix
+        auto_create_passed = any(r["success"] for r in auto_create_tests)
+        if auto_create_passed:
+            print("✅ Adding product works even if seller has no store (auto-creates) - AUTO-CREATE FIX VERIFIED")
+        else:
+            print("❌ Auto-create store functionality not working - AUTO-CREATE FIX FAILED")
+        
+        # Check products page
+        products_page_passed = any(r["success"] for r in products_page_tests)
+        if products_page_passed:
+            print("✅ Products appear on /products endpoint after adding - FLOW VERIFIED")
+        else:
+            print("❌ Products not appearing on /products endpoint - FLOW ISSUE")
+        
+        # Check for specific errors
+        coerce_errors = [r for r in self.test_results if not r["success"] and "coerce" in str(r.get("details", "")).lower()]
+        if coerce_errors:
+            print("❌ 'Cannot coerce result to single JSON object' errors still occurring")
+        else:
+            print("✅ No 'PGRST116' or 'single JSON object' errors detected")
+        
+        print()
+        
         if total - passed > 0:
             print("FAILED TESTS:")
             for result in self.test_results:
                 if not result["success"]:
                     print(f"❌ {result['test']}: {result['details']}")
             print()
-        
-        # Key verification points from review request
-        print("KEY VERIFICATION POINTS:")
-        print("✓ Admin can see catalog after seeding (product_catalog table)")
-        print("✓ Seller can browse catalog and add to store")
-        print("✓ Products page shows what sellers added (not empty)")
-        print("✓ Data flows correctly: product_catalog → store_products → /products endpoint")
-        print("✓ No references to old 'products' or 'seller_products' tables")
-        print()
         
         print("=" * 80)
         
