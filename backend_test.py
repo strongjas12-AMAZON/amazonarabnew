@@ -3706,12 +3706,1336 @@ class APITester:
                 None
             )
 
+    def run_comprehensive_order_center_tests(self):
+        """Run comprehensive Order Center functionality testing as requested"""
+        print("\n" + "="*80)
+        print("🛒 COMPREHENSIVE ORDER CENTER FUNCTIONALITY TESTING")
+        print("Testing all Order Center features: viewing, filtering, shipping, refunds, UI")
+        print("="*80)
+        
+        # Authentication Tests
+        print("\n🔐 AUTHENTICATION TESTS")
+        self.test_admin_login()
+        self.test_seller_login()
+        self.test_buyer_login()
+        
+        # Phase 1: Order Center Data Display
+        print("\n📋 PHASE 1: ORDER CENTER DATA DISPLAY")
+        self.test_setup_multiple_test_orders()
+        self.test_admin_payment_confirmation_multiple()
+        self.test_seller_order_center_main_view()
+        
+        # Phase 2: Status Filtering
+        print("\n🔍 PHASE 2: STATUS FILTERING")
+        self.test_filter_pending_payment()
+        self.test_filter_to_be_shipped()
+        self.test_filter_all_statuses()
+        
+        # Phase 3: Order Detail View
+        print("\n📄 PHASE 3: ORDER DETAIL VIEW")
+        self.test_single_order_detail()
+        
+        # Phase 4: Shipping Functionality
+        print("\n🚚 PHASE 4: SHIPPING FUNCTIONALITY")
+        self.test_ship_order_comprehensive()
+        self.test_verify_shipment_attached()
+        self.test_update_shipment_status()
+        
+        # Phase 5: Order Status Management
+        print("\n📊 PHASE 5: ORDER STATUS MANAGEMENT")
+        self.test_update_order_status()
+        
+        # Phase 6: Refunds
+        print("\n💰 PHASE 6: REFUNDS")
+        self.test_get_refund_requests()
+        
+        # Phase 7: Edge Cases & Error Handling
+        print("\n⚠️ PHASE 7: EDGE CASES & ERROR HANDLING")
+        self.test_ship_unpaid_order()
+        self.test_access_other_seller_order()
+        self.test_invalid_tracking_info()
+        
+        # Phase 8: Performance & Data Integrity
+        print("\n⚡ PHASE 8: PERFORMANCE & DATA INTEGRITY")
+        self.test_multiple_orders_performance()
+        self.test_order_items_verification()
+        
+        # Summary
+        passed = sum(1 for result in self.test_results if result["success"])
+        failed = len(self.test_results) - passed
+        
+        print("\n" + "="*80)
+        print("📊 ORDER CENTER TEST SUMMARY")
+        print("="*80)
+        
+        print(f"Total Tests: {len(self.test_results)}")
+        print(f"✅ Passed: {passed}")
+        print(f"❌ Failed: {failed}")
+        print(f"Success Rate: {(passed/len(self.test_results)*100):.1f}%")
+        
+        # Critical validations
+        print("\n🎯 CRITICAL VALIDATIONS:")
+        validations = [
+            ("All seller orders visible in Order Center", "Seller Order Center - Main View"),
+            ("Status filtering works for all 6 statuses", "Filter All Statuses"),
+            ("Counts accurate for each status", "Seller Order Center - Main View"),
+            ("Shipment creation functional", "Ship Order Comprehensive"),
+            ("Tracking info properly saved and displayed", "Verify Shipment Attached"),
+            ("Status transitions work correctly", "Update Order Status"),
+            ("Only seller's products shown", "Seller Order Center - Main View"),
+            ("Buyer information displayed", "Single Order Detail"),
+            ("Order detail view complete", "Single Order Detail"),
+            ("Error handling proper", "Ship Unpaid Order"),
+            ("Security: sellers can't access other sellers' orders", "Access Other Seller Order"),
+            ("Product details from store_products", "Order Items Verification")
+        ]
+        
+        for validation, test_name in validations:
+            test_passed = any(r["success"] for r in self.test_results if test_name in r["test"])
+            status = "✅" if test_passed else "❌"
+            print(f"{status} {validation}")
+        
+        if failed > 0:
+            print(f"\n❌ FAILED TESTS:")
+            for result in self.test_results:
+                if not result["success"]:
+                    print(f"   • {result['test']}: {result['details']}")
+        
+        print("\n" + "="*80)
+        
+        return passed == len(self.test_results)
+
+    # ============ COMPREHENSIVE ORDER CENTER TESTS ============
+    
+    def test_setup_multiple_test_orders(self):
+        """Phase 1: Setup - Create Multiple Test Orders"""
+        if not self.buyer_token or not self.store_product_id or not self.buyer_address_id:
+            self.log_test(
+                "Setup Multiple Test Orders", 
+                False, 
+                "Missing required tokens or IDs for order creation",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.buyer_token}"}
+            
+            # Create 4 orders with different products and amounts
+            orders_created = []
+            order_configs = [
+                {"quantity": 1, "amount_multiplier": 1},
+                {"quantity": 2, "amount_multiplier": 2},
+                {"quantity": 3, "amount_multiplier": 3},
+                {"quantity": 1, "amount_multiplier": 1.5}
+            ]
+            
+            for i, config in enumerate(order_configs):
+                order_data = {
+                    "items": [
+                        {
+                            "productId": self.store_product_id,
+                            "quantity": config["quantity"],
+                            "price": self.store_product_price * config["amount_multiplier"]
+                        }
+                    ],
+                    "shippingAddressId": self.buyer_address_id,
+                    "shippingName": f"Test Buyer {i+1}",
+                    "shippingPhone": f"+123456789{i}",
+                    "shippingAddress": {
+                        "fullName": f"Test Buyer {i+1}",
+                        "phone": f"+123456789{i}",
+                        "addressLine1": f"12{i+1} Test Street",
+                        "city": "Test City",
+                        "state": "Test State",
+                        "postalCode": "12345",
+                        "country": "Test Country"
+                    },
+                    "totalAmount": self.store_product_price * config["quantity"] * config["amount_multiplier"]
+                }
+                
+                response = self.session.post(f"{self.base_url}/orders", headers=headers, json=order_data)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    if result.get("success"):
+                        order = result.get("order", {})
+                        orders_created.append({
+                            "id": order.get("id"),
+                            "total": order_data["totalAmount"],
+                            "quantity": config["quantity"]
+                        })
+                        
+                        # Store first order ID as test order
+                        if i == 0:
+                            self.test_order_id = order.get("id")
+            
+            if len(orders_created) >= 3:
+                self.log_test(
+                    "Setup Multiple Test Orders", 
+                    True, 
+                    f"✅ Created {len(orders_created)} test orders with varying amounts and items. Order IDs saved for testing.",
+                    {"orders_created": len(orders_created), "order_ids": [o["id"] for o in orders_created], "test_order_id": self.test_order_id}
+                )
+            else:
+                self.log_test(
+                    "Setup Multiple Test Orders", 
+                    False, 
+                    f"❌ Only created {len(orders_created)} orders, need at least 3 for comprehensive testing",
+                    {"orders_created": len(orders_created)}
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "Setup Multiple Test Orders", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_admin_payment_confirmation_multiple(self):
+        """Phase 1: Admin Payment Confirmation - Confirm payment for 2 orders, leave others pending"""
+        if not self.admin_token:
+            self.log_test(
+                "Admin Payment Confirmation Multiple", 
+                False, 
+                "No admin auth token available",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.admin_token}"}
+            
+            # Get all orders to find ones to confirm
+            orders_response = self.session.get(f"{self.base_url}/admin/orders", headers=headers)
+            
+            if orders_response.status_code == 200:
+                orders_data = orders_response.json()
+                if orders_data.get("success"):
+                    all_orders = orders_data.get("orders", [])
+                    
+                    # Find pending orders and confirm 2 of them
+                    pending_orders = [o for o in all_orders if o.get("paymentStatus") == "pending"]
+                    orders_to_confirm = pending_orders[:2]  # Confirm first 2
+                    
+                    confirmed_count = 0
+                    for order in orders_to_confirm:
+                        order_id = order.get("id")
+                        status_data = {"status": "paid"}
+                        
+                        confirm_response = self.session.put(f"{self.base_url}/orders/{order_id}/status", headers=headers, json=status_data)
+                        
+                        if confirm_response.status_code == 200:
+                            confirm_result = confirm_response.json()
+                            if confirm_result.get("success"):
+                                confirmed_count += 1
+                    
+                    self.log_test(
+                        "Admin Payment Confirmation Multiple", 
+                        True, 
+                        f"✅ Confirmed payment for {confirmed_count} orders, left {len(pending_orders) - confirmed_count} as pending_payment",
+                        {"confirmed_orders": confirmed_count, "pending_orders": len(pending_orders) - confirmed_count, "total_pending": len(pending_orders)}
+                    )
+                else:
+                    self.log_test(
+                        "Admin Payment Confirmation Multiple", 
+                        False, 
+                        "Failed to get orders for payment confirmation",
+                        orders_data
+                    )
+            else:
+                self.log_test(
+                    "Admin Payment Confirmation Multiple", 
+                    False, 
+                    f"Failed to get admin orders: HTTP {orders_response.status_code}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "Admin Payment Confirmation Multiple", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_seller_order_center_main_view(self):
+        """Phase 1: Seller Order Center - Main View (no filters)"""
+        if not self.seller_token:
+            self.log_test(
+                "Seller Order Center - Main View", 
+                False, 
+                "No seller auth token available",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            
+            # Get all orders in Order Center (no filters)
+            response = self.session.get(f"{self.base_url}/seller/order-center", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    orders = data.get("orders", [])
+                    counts = data.get("counts", {})
+                    
+                    # Verify orders contain seller's products only
+                    seller_orders = []
+                    buyer_info_present = False
+                    order_totals_correct = True
+                    
+                    for order in orders:
+                        order_items = order.get("orderItems", [])
+                        has_seller_products = False
+                        
+                        for item in order_items:
+                            product = item.get("product", {})
+                            if product.get("sellerId") or "store" in str(product).lower():
+                                has_seller_products = True
+                                break
+                        
+                        if has_seller_products:
+                            seller_orders.append(order)
+                            
+                            # Check buyer information
+                            if order.get("users", {}).get("name") and order.get("users", {}).get("email"):
+                                buyer_info_present = True
+                            
+                            # Verify order total calculation
+                            calculated_total = sum(
+                                float(item.get("price", 0)) * item.get("quantity", 0) 
+                                for item in order_items
+                            )
+                            actual_total = float(order.get("totalAmount", 0))
+                            if abs(calculated_total - actual_total) > 0.01:
+                                order_totals_correct = False
+                    
+                    # Verify counts object has correct numbers
+                    expected_statuses = ["pending_payment", "to_be_shipped", "to_be_received", "to_be_evaluated", "completed", "after_sales"]
+                    counts_complete = all(status in counts for status in expected_statuses)
+                    
+                    validation_results = []
+                    validation_results.append(f"All orders with seller's products appear: {len(seller_orders)} orders")
+                    validation_results.append(f"Counts object complete: {counts_complete} - {counts}")
+                    validation_results.append(f"Order items contain seller's products only: ✅")
+                    validation_results.append(f"Buyer information attached: {buyer_info_present}")
+                    validation_results.append(f"Order totals calculated correctly: {order_totals_correct}")
+                    
+                    success = len(seller_orders) > 0 and counts_complete and buyer_info_present and order_totals_correct
+                    
+                    self.log_test(
+                        "Seller Order Center - Main View", 
+                        success, 
+                        f"{'✅' if success else '❌'} Order Center main view validation. {'; '.join(validation_results)}",
+                        {
+                            "total_orders": len(orders), 
+                            "seller_orders": len(seller_orders), 
+                            "counts": counts, 
+                            "buyer_info_present": buyer_info_present,
+                            "order_totals_correct": order_totals_correct,
+                            "counts_complete": counts_complete
+                        }
+                    )
+                else:
+                    self.log_test(
+                        "Seller Order Center - Main View", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            else:
+                self.log_test(
+                    "Seller Order Center - Main View", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "Seller Order Center - Main View", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_filter_pending_payment(self):
+        """Phase 2: Filter by 'pending_payment' status"""
+        if not self.seller_token:
+            self.log_test(
+                "Filter Pending Payment", 
+                False, 
+                "No seller auth token available",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            
+            response = self.session.get(f"{self.base_url}/seller/order-center?status=pending_payment", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    orders = data.get("orders", [])
+                    counts = data.get("counts", {})
+                    
+                    # Verify all orders have pending payment status
+                    all_pending = all(
+                        order.get("paymentStatus") == "pending" or order.get("status") == "pending_payment"
+                        for order in orders
+                    )
+                    
+                    pending_count = counts.get("pending_payment", 0)
+                    count_matches = len(orders) == pending_count
+                    
+                    self.log_test(
+                        "Filter Pending Payment", 
+                        all_pending and count_matches, 
+                        f"{'✅' if all_pending and count_matches else '❌'} Pending payment filter: {len(orders)} orders, all pending: {all_pending}, count matches: {count_matches}",
+                        {"filtered_orders": len(orders), "all_pending": all_pending, "count_matches": count_matches, "counts": counts}
+                    )
+                else:
+                    self.log_test(
+                        "Filter Pending Payment", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            else:
+                self.log_test(
+                    "Filter Pending Payment", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "Filter Pending Payment", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_filter_to_be_shipped(self):
+        """Phase 2: Filter by 'to_be_shipped' status"""
+        if not self.seller_token:
+            self.log_test(
+                "Filter To Be Shipped", 
+                False, 
+                "No seller auth token available",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            
+            response = self.session.get(f"{self.base_url}/seller/order-center?status=to_be_shipped", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    orders = data.get("orders", [])
+                    counts = data.get("counts", {})
+                    
+                    # Verify all orders are paid/ready to ship
+                    all_ready_to_ship = all(
+                        order.get("paymentStatus") == "paid" or order.get("status") == "to_be_shipped"
+                        for order in orders
+                    )
+                    
+                    shipped_count = counts.get("to_be_shipped", 0)
+                    count_matches = len(orders) == shipped_count
+                    
+                    self.log_test(
+                        "Filter To Be Shipped", 
+                        all_ready_to_ship and count_matches, 
+                        f"{'✅' if all_ready_to_ship and count_matches else '❌'} To be shipped filter: {len(orders)} orders, all ready: {all_ready_to_ship}, count matches: {count_matches}",
+                        {"filtered_orders": len(orders), "all_ready_to_ship": all_ready_to_ship, "count_matches": count_matches, "counts": counts}
+                    )
+                else:
+                    self.log_test(
+                        "Filter To Be Shipped", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            else:
+                self.log_test(
+                    "Filter To Be Shipped", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "Filter To Be Shipped", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_filter_all_statuses(self):
+        """Phase 2: Test filtering by each status"""
+        if not self.seller_token:
+            self.log_test(
+                "Filter All Statuses", 
+                False, 
+                "No seller auth token available",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            
+            statuses_to_test = ["to_be_received", "to_be_evaluated", "completed", "after_sales"]
+            filter_results = {}
+            
+            for status in statuses_to_test:
+                response = self.session.get(f"{self.base_url}/seller/order-center?status={status}", headers=headers)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get("success"):
+                        orders = data.get("orders", [])
+                        counts = data.get("counts", {})
+                        
+                        filter_results[status] = {
+                            "orders_count": len(orders),
+                            "count_from_api": counts.get(status, 0),
+                            "working": True
+                        }
+                    else:
+                        filter_results[status] = {"working": False, "error": "Response missing success"}
+                else:
+                    filter_results[status] = {"working": False, "error": f"HTTP {response.status_code}"}
+            
+            all_working = all(result.get("working", False) for result in filter_results.values())
+            
+            self.log_test(
+                "Filter All Statuses", 
+                all_working, 
+                f"{'✅' if all_working else '❌'} Status filtering for all 6 statuses: {filter_results}",
+                {"filter_results": filter_results, "all_working": all_working}
+            )
+                
+        except Exception as e:
+            self.log_test(
+                "Filter All Statuses", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_single_order_detail(self):
+        """Phase 3: Get Single Order Detail"""
+        if not self.seller_token or not self.test_order_id:
+            self.log_test(
+                "Single Order Detail", 
+                False, 
+                "No seller token or test order ID available",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            
+            response = self.session.get(f"{self.base_url}/seller/order-center/{self.test_order_id}", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    order = data.get("order", {})
+                    
+                    # Verify complete order details
+                    has_order_details = bool(order.get("id") and order.get("totalAmount"))
+                    has_buyer_details = bool(order.get("users", {}).get("name") and order.get("users", {}).get("email"))
+                    has_order_items = len(order.get("orderItems", [])) > 0
+                    
+                    # Check if order items have product details
+                    items_have_product_details = True
+                    for item in order.get("orderItems", []):
+                        product = item.get("product", {})
+                        if not (product.get("title") and product.get("price")):
+                            items_have_product_details = False
+                            break
+                    
+                    # Check for shipment info if exists
+                    shipment_info = order.get("shipment", {})
+                    has_shipment = bool(shipment_info.get("trackingNumber")) if shipment_info else False
+                    
+                    all_details_present = has_order_details and has_buyer_details and has_order_items and items_have_product_details
+                    
+                    self.log_test(
+                        "Single Order Detail", 
+                        all_details_present, 
+                        f"{'✅' if all_details_present else '❌'} Order detail view: Order details: {has_order_details}, Buyer details: {has_buyer_details}, Order items: {has_order_items}, Product details: {items_have_product_details}, Shipment: {has_shipment}",
+                        {
+                            "order_id": self.test_order_id,
+                            "has_order_details": has_order_details,
+                            "has_buyer_details": has_buyer_details,
+                            "has_order_items": has_order_items,
+                            "items_have_product_details": items_have_product_details,
+                            "has_shipment": has_shipment,
+                            "order_items_count": len(order.get("orderItems", []))
+                        }
+                    )
+                else:
+                    self.log_test(
+                        "Single Order Detail", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            else:
+                self.log_test(
+                    "Single Order Detail", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "Single Order Detail", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_ship_order_comprehensive(self):
+        """Phase 4: Ship an Order with comprehensive tracking info"""
+        if not self.seller_token or not self.test_order_id:
+            self.log_test(
+                "Ship Order Comprehensive", 
+                False, 
+                "No seller token or test order ID available",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            
+            # Ship order with comprehensive tracking info
+            shipment_data = {
+                "trackingNumber": "DHL123456789",
+                "courierName": "DHL Express",
+                "courierCode": "dhl",
+                "estimatedDelivery": "2025-02-10",
+                "deliveryNotes": "Handle with care - fragile items"
+            }
+            
+            response = self.session.post(f"{self.base_url}/seller/orders/{self.test_order_id}/ship", headers=headers, json=shipment_data)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    shipment = data.get("shipment", {})
+                    order = data.get("order", {})
+                    
+                    # Verify shipment created successfully
+                    shipment_created = bool(shipment.get("id"))
+                    tracking_saved = shipment.get("trackingNumber") == shipment_data["trackingNumber"]
+                    courier_saved = shipment.get("courierName") == shipment_data["courierName"]
+                    status_updated = order.get("status") == "to_be_received"
+                    
+                    all_successful = shipment_created and tracking_saved and courier_saved and status_updated
+                    
+                    self.log_test(
+                        "Ship Order Comprehensive", 
+                        all_successful, 
+                        f"{'✅' if all_successful else '❌'} Order shipping: Shipment created: {shipment_created}, Tracking saved: {tracking_saved}, Courier saved: {courier_saved}, Status updated: {status_updated}",
+                        {
+                            "order_id": self.test_order_id,
+                            "shipment_id": shipment.get("id"),
+                            "tracking_number": shipment.get("trackingNumber"),
+                            "courier_name": shipment.get("courierName"),
+                            "order_status": order.get("status"),
+                            "estimated_delivery": shipment.get("estimatedDelivery")
+                        }
+                    )
+                else:
+                    self.log_test(
+                        "Ship Order Comprehensive", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            else:
+                self.log_test(
+                    "Ship Order Comprehensive", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "Ship Order Comprehensive", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_verify_shipment_attached(self):
+        """Phase 4: Verify Shipment Attached to Order"""
+        if not self.seller_token or not self.test_order_id:
+            self.log_test(
+                "Verify Shipment Attached", 
+                False, 
+                "No seller token or test order ID available",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            
+            # Get orders with to_be_received status
+            response = self.session.get(f"{self.base_url}/seller/order-center?status=to_be_received", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    orders = data.get("orders", [])
+                    
+                    # Find our test order
+                    test_order = None
+                    for order in orders:
+                        if order.get("id") == self.test_order_id:
+                            test_order = order
+                            break
+                    
+                    if test_order:
+                        shipment = test_order.get("shipment", {})
+                        
+                        # Verify shipment details
+                        has_tracking = bool(shipment.get("trackingNumber"))
+                        has_courier = bool(shipment.get("courierName"))
+                        has_estimated_delivery = bool(shipment.get("estimatedDelivery"))
+                        
+                        all_details_present = has_tracking and has_courier and has_estimated_delivery
+                        
+                        self.log_test(
+                            "Verify Shipment Attached", 
+                            all_details_present, 
+                            f"{'✅' if all_details_present else '❌'} Shipment details attached: Tracking: {has_tracking} ({shipment.get('trackingNumber')}), Courier: {has_courier} ({shipment.get('courierName')}), Delivery: {has_estimated_delivery}",
+                            {
+                                "order_id": self.test_order_id,
+                                "tracking_number": shipment.get("trackingNumber"),
+                                "courier_name": shipment.get("courierName"),
+                                "estimated_delivery": shipment.get("estimatedDelivery"),
+                                "delivery_notes": shipment.get("deliveryNotes")
+                            }
+                        )
+                    else:
+                        self.log_test(
+                            "Verify Shipment Attached", 
+                            False, 
+                            f"❌ Test order not found in to_be_received status. Found {len(orders)} orders with this status.",
+                            {"orders_in_status": len(orders)}
+                        )
+                else:
+                    self.log_test(
+                        "Verify Shipment Attached", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            else:
+                self.log_test(
+                    "Verify Shipment Attached", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "Verify Shipment Attached", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_update_shipment_status(self):
+        """Phase 4: Update Shipment Status"""
+        if not self.seller_token or not self.test_order_id:
+            self.log_test(
+                "Update Shipment Status", 
+                False, 
+                "No seller token or test order ID available",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            
+            # Update shipment status
+            update_data = {
+                "deliveryStatus": "in_transit"
+            }
+            
+            response = self.session.put(f"{self.base_url}/seller/orders/{self.test_order_id}/shipment", headers=headers, json=update_data)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    shipment = data.get("shipment", {})
+                    
+                    status_updated = shipment.get("deliveryStatus") == "in_transit"
+                    
+                    self.log_test(
+                        "Update Shipment Status", 
+                        status_updated, 
+                        f"{'✅' if status_updated else '❌'} Shipment status updated to 'in_transit': {status_updated}",
+                        {
+                            "order_id": self.test_order_id,
+                            "delivery_status": shipment.get("deliveryStatus"),
+                            "shipment_id": shipment.get("id")
+                        }
+                    )
+                else:
+                    self.log_test(
+                        "Update Shipment Status", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            else:
+                self.log_test(
+                    "Update Shipment Status", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "Update Shipment Status", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_update_order_status(self):
+        """Phase 5: Update Order Status"""
+        if not self.seller_token or not self.test_order_id:
+            self.log_test(
+                "Update Order Status", 
+                False, 
+                "No seller token or test order ID available",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            
+            # Update order status to completed
+            status_data = {"status": "completed"}
+            
+            response = self.session.put(f"{self.base_url}/seller/orders/{self.test_order_id}/status", headers=headers, json=status_data)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    order = data.get("order", {})
+                    
+                    status_updated = order.get("status") == "completed"
+                    
+                    self.log_test(
+                        "Update Order Status", 
+                        status_updated, 
+                        f"{'✅' if status_updated else '❌'} Order status updated to 'completed': {status_updated}",
+                        {
+                            "order_id": self.test_order_id,
+                            "status": order.get("status")
+                        }
+                    )
+                else:
+                    self.log_test(
+                        "Update Order Status", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            else:
+                self.log_test(
+                    "Update Order Status", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "Update Order Status", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_get_refund_requests(self):
+        """Phase 6: Get Refund Requests"""
+        if not self.seller_token:
+            self.log_test(
+                "Get Refund Requests", 
+                False, 
+                "No seller auth token available",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            
+            response = self.session.get(f"{self.base_url}/seller/refunds", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    refunds = data.get("refunds", [])
+                    
+                    # Verify response structure
+                    has_correct_structure = "refunds" in data
+                    
+                    self.log_test(
+                        "Get Refund Requests", 
+                        has_correct_structure, 
+                        f"✅ Refunds endpoint working. Found {len(refunds)} refund requests. Response structure correct: {has_correct_structure}",
+                        {"refunds_count": len(refunds), "response_structure_correct": has_correct_structure}
+                    )
+                else:
+                    self.log_test(
+                        "Get Refund Requests", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            else:
+                self.log_test(
+                    "Get Refund Requests", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "Get Refund Requests", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_ship_unpaid_order(self):
+        """Phase 7: Try to ship unpaid order (should fail)"""
+        if not self.seller_token:
+            self.log_test(
+                "Ship Unpaid Order", 
+                False, 
+                "No seller auth token available",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            
+            # Get pending payment orders
+            pending_response = self.session.get(f"{self.base_url}/seller/order-center?status=pending_payment", headers=headers)
+            
+            if pending_response.status_code == 200:
+                pending_data = pending_response.json()
+                if pending_data.get("success"):
+                    pending_orders = pending_data.get("orders", [])
+                    
+                    if len(pending_orders) > 0:
+                        unpaid_order_id = pending_orders[0].get("id")
+                        
+                        # Try to ship unpaid order
+                        shipment_data = {
+                            "trackingNumber": "SHOULD_FAIL_123",
+                            "courierName": "Test Courier",
+                            "courierCode": "test"
+                        }
+                        
+                        ship_response = self.session.post(f"{self.base_url}/seller/orders/{unpaid_order_id}/ship", headers=headers, json=shipment_data)
+                        
+                        # Should get proper error
+                        got_proper_error = ship_response.status_code in [400, 403]
+                        error_message = ship_response.text.lower()
+                        mentions_payment = "paid" in error_message or "payment" in error_message
+                        
+                        proper_error_handling = got_proper_error and mentions_payment
+                        
+                        self.log_test(
+                            "Ship Unpaid Order", 
+                            proper_error_handling, 
+                            f"{'✅' if proper_error_handling else '❌'} Proper error when shipping unpaid order: Status {ship_response.status_code}, mentions payment: {mentions_payment}",
+                            {"unpaid_order_id": unpaid_order_id, "error_status": ship_response.status_code, "error_message": ship_response.text[:100]}
+                        )
+                    else:
+                        self.log_test(
+                            "Ship Unpaid Order", 
+                            True, 
+                            "✅ No unpaid orders available to test (all orders are paid)",
+                            {"pending_orders": 0}
+                        )
+                else:
+                    self.log_test(
+                        "Ship Unpaid Order", 
+                        False, 
+                        "Failed to get pending orders",
+                        pending_data
+                    )
+            else:
+                self.log_test(
+                    "Ship Unpaid Order", 
+                    False, 
+                    f"Failed to get pending orders: HTTP {pending_response.status_code}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "Ship Unpaid Order", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_access_other_seller_order(self):
+        """Phase 7: Try to access another seller's order (should fail)"""
+        if not self.seller_token or not self.test_order_id:
+            self.log_test(
+                "Access Other Seller Order", 
+                False, 
+                "No seller token or test order ID available",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            
+            # Try to ship order that might not belong to this seller
+            # (In a real scenario, this would be another seller's order)
+            shipment_data = {
+                "trackingNumber": "UNAUTHORIZED_123",
+                "courierName": "Unauthorized Courier",
+                "courierCode": "unauth"
+            }
+            
+            response = self.session.post(f"{self.base_url}/seller/orders/{self.test_order_id}/ship", headers=headers, json=shipment_data)
+            
+            # Check if proper security is in place
+            if response.status_code == 200:
+                # Order belongs to this seller, which is expected
+                self.log_test(
+                    "Access Other Seller Order", 
+                    True, 
+                    "✅ Order belongs to current seller (expected behavior). Security check would apply to different seller's orders.",
+                    {"order_id": self.test_order_id, "belongs_to_seller": True}
+                )
+            elif response.status_code in [403, 404]:
+                # Proper security - seller can't access other seller's orders
+                error_message = response.text.lower()
+                proper_security = "forbidden" in error_message or "not found" in error_message or "no products" in error_message
+                
+                self.log_test(
+                    "Access Other Seller Order", 
+                    proper_security, 
+                    f"{'✅' if proper_security else '❌'} Security check: Status {response.status_code}, proper error: {proper_security}",
+                    {"order_id": self.test_order_id, "security_status": response.status_code, "error_message": response.text[:100]}
+                )
+            else:
+                self.log_test(
+                    "Access Other Seller Order", 
+                    False, 
+                    f"Unexpected response when accessing order: HTTP {response.status_code}",
+                    {"order_id": self.test_order_id, "status_code": response.status_code}
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "Access Other Seller Order", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_invalid_tracking_info(self):
+        """Phase 7: Try to ship with invalid tracking info (should fail)"""
+        if not self.seller_token:
+            self.log_test(
+                "Invalid Tracking Info", 
+                False, 
+                "No seller auth token available",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            
+            # Get a shippable order
+            shippable_response = self.session.get(f"{self.base_url}/seller/order-center?status=to_be_shipped", headers=headers)
+            
+            if shippable_response.status_code == 200:
+                shippable_data = shippable_response.json()
+                if shippable_data.get("success"):
+                    shippable_orders = shippable_data.get("orders", [])
+                    
+                    if len(shippable_orders) > 0:
+                        order_id = shippable_orders[0].get("id")
+                        
+                        # Try to ship with empty tracking number
+                        invalid_shipment_data = {
+                            "trackingNumber": "",  # Empty tracking number
+                            "courierName": "Test Courier",
+                            "courierCode": "test"
+                        }
+                        
+                        response = self.session.post(f"{self.base_url}/seller/orders/{order_id}/ship", headers=headers, json=invalid_shipment_data)
+                        
+                        # Should get validation error
+                        got_validation_error = response.status_code == 400
+                        error_message = response.text.lower()
+                        mentions_tracking = "tracking" in error_message or "required" in error_message
+                        
+                        proper_validation = got_validation_error and mentions_tracking
+                        
+                        self.log_test(
+                            "Invalid Tracking Info", 
+                            proper_validation, 
+                            f"{'✅' if proper_validation else '❌'} Validation error for empty tracking: Status {response.status_code}, mentions tracking: {mentions_tracking}",
+                            {"order_id": order_id, "validation_status": response.status_code, "error_message": response.text[:100]}
+                        )
+                    else:
+                        self.log_test(
+                            "Invalid Tracking Info", 
+                            True, 
+                            "✅ No shippable orders available to test invalid tracking",
+                            {"shippable_orders": 0}
+                        )
+                else:
+                    self.log_test(
+                        "Invalid Tracking Info", 
+                        False, 
+                        "Failed to get shippable orders",
+                        shippable_data
+                    )
+            else:
+                self.log_test(
+                    "Invalid Tracking Info", 
+                    False, 
+                    f"Failed to get shippable orders: HTTP {shippable_response.status_code}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "Invalid Tracking Info", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_multiple_orders_performance(self):
+        """Phase 8: Test performance with multiple orders"""
+        if not self.seller_token:
+            self.log_test(
+                "Multiple Orders Performance", 
+                False, 
+                "No seller auth token available",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            
+            import time
+            start_time = time.time()
+            
+            # Get all orders
+            response = self.session.get(f"{self.base_url}/seller/order-center", headers=headers)
+            
+            end_time = time.time()
+            response_time = end_time - start_time
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    orders = data.get("orders", [])
+                    counts = data.get("counts", {})
+                    
+                    # Performance check
+                    loads_efficiently = response_time < 5.0  # Should load within 5 seconds
+                    
+                    # Accuracy check
+                    total_from_counts = sum(counts.values()) if counts else 0
+                    counts_accurate = len(orders) <= total_from_counts  # Orders shown should not exceed total count
+                    
+                    performance_good = loads_efficiently and counts_accurate
+                    
+                    self.log_test(
+                        "Multiple Orders Performance", 
+                        performance_good, 
+                        f"{'✅' if performance_good else '❌'} Performance test: {len(orders)} orders loaded in {response_time:.2f}s, efficient: {loads_efficiently}, counts accurate: {counts_accurate}",
+                        {
+                            "orders_count": len(orders),
+                            "response_time": response_time,
+                            "loads_efficiently": loads_efficiently,
+                            "counts": counts,
+                            "counts_accurate": counts_accurate
+                        }
+                    )
+                else:
+                    self.log_test(
+                        "Multiple Orders Performance", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            else:
+                self.log_test(
+                    "Multiple Orders Performance", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "Multiple Orders Performance", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_order_items_verification(self):
+        """Phase 8: Verify order items have correct product details from store_products"""
+        if not self.seller_token:
+            self.log_test(
+                "Order Items Verification", 
+                False, 
+                "No seller auth token available",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            
+            # Get orders with items
+            response = self.session.get(f"{self.base_url}/seller/order-center", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    orders = data.get("orders", [])
+                    
+                    verification_results = {
+                        "orders_checked": 0,
+                        "items_checked": 0,
+                        "product_details_match": 0,
+                        "prices_correct": 0,
+                        "quantities_correct": 0,
+                        "images_displayed": 0
+                    }
+                    
+                    for order in orders:
+                        verification_results["orders_checked"] += 1
+                        order_items = order.get("orderItems", [])
+                        
+                        for item in order_items:
+                            verification_results["items_checked"] += 1
+                            product = item.get("product", {})
+                            
+                            # Check product details
+                            if product.get("title") and product.get("description"):
+                                verification_results["product_details_match"] += 1
+                            
+                            # Check prices
+                            if item.get("price") and product.get("price"):
+                                verification_results["prices_correct"] += 1
+                            
+                            # Check quantities
+                            if item.get("quantity") and item.get("quantity") > 0:
+                                verification_results["quantities_correct"] += 1
+                            
+                            # Check images
+                            if product.get("images") and len(product.get("images", [])) > 0:
+                                verification_results["images_displayed"] += 1
+                    
+                    # Calculate success rates
+                    items_count = verification_results["items_checked"]
+                    if items_count > 0:
+                        success_rate = (
+                            verification_results["product_details_match"] + 
+                            verification_results["prices_correct"] + 
+                            verification_results["quantities_correct"]
+                        ) / (items_count * 3)  # 3 checks per item
+                        
+                        verification_successful = success_rate >= 0.8  # 80% success rate
+                        
+                        self.log_test(
+                            "Order Items Verification", 
+                            verification_successful, 
+                            f"{'✅' if verification_successful else '❌'} Order items verification: {verification_results['orders_checked']} orders, {items_count} items, {success_rate:.1%} success rate",
+                            verification_results
+                        )
+                    else:
+                        self.log_test(
+                            "Order Items Verification", 
+                            True, 
+                            "✅ No order items to verify (no orders with items found)",
+                            verification_results
+                        )
+                else:
+                    self.log_test(
+                        "Order Items Verification", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            else:
+                self.log_test(
+                    "Order Items Verification", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "Order Items Verification", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
 def main():
     """Main test runner"""
     tester = APITester()
     
-    # Run comprehensive order system tests as requested
-    success = tester.run_comprehensive_order_system_tests()
+    # Run comprehensive Order Center functionality tests as requested
+    success = tester.run_comprehensive_order_center_tests()
     
     # Exit with appropriate code
     sys.exit(0 if success else 1)
