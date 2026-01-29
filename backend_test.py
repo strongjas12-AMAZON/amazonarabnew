@@ -381,6 +381,90 @@ class APITester:
                 None
             )
 
+    def test_admin_get_products(self):
+        """Test GET /api/admin/products - VERIFY: Should return products from product_catalog table"""
+        if not self.admin_token:
+            self.log_test(
+                "GET /api/admin/products", 
+                False, 
+                "No admin auth token available - admin login failed",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.admin_token}"}
+            response = self.session.get(f"{self.base_url}/admin/products", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    products = data.get("products", [])
+                    
+                    if len(products) > 0:
+                        # Check if products have expected fields from product_catalog
+                        sample_product = products[0]
+                        required_fields = ['title', 'description', 'price', 'category', 'images']
+                        missing_fields = [field for field in required_fields if field not in sample_product]
+                        
+                        if not missing_fields:
+                            self.log_test(
+                                "GET /api/admin/products", 
+                                True, 
+                                f"Admin can see {len(products)} products from product_catalog table with required fields: {required_fields}",
+                                {"products_count": len(products), "sample_product_fields": list(sample_product.keys())}
+                            )
+                        else:
+                            self.log_test(
+                                "GET /api/admin/products", 
+                                False, 
+                                f"Products missing required fields: {missing_fields}",
+                                {"products_count": len(products), "missing_fields": missing_fields, "available_fields": list(sample_product.keys())}
+                            )
+                    else:
+                        self.log_test(
+                            "GET /api/admin/products", 
+                            False, 
+                            "No products found in admin products endpoint - catalog may not be seeded properly",
+                            {"products_count": 0}
+                        )
+                else:
+                    self.log_test(
+                        "GET /api/admin/products", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            elif response.status_code == 403:
+                self.log_test(
+                    "GET /api/admin/products", 
+                    False, 
+                    "Access forbidden - check if user has admin role",
+                    response.text
+                )
+            elif response.status_code == 401:
+                self.log_test(
+                    "GET /api/admin/products", 
+                    False, 
+                    "Unauthorized - check if auth token is valid",
+                    response.text
+                )
+            else:
+                self.log_test(
+                    "GET /api/admin/products", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "GET /api/admin/products", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
     def test_store_search_all(self):
         """Test GET /api/stores/search - Search all stores"""
         if not self.buyer_token:
