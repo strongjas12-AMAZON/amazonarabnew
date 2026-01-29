@@ -203,7 +203,7 @@ backend:
 
   - task: "Seller Add Product to Store API"
     implemented: true
-    working: false
+    working: true
     file: "backend/server.py"
     stuck_count: 1
     priority: "medium"
@@ -215,6 +215,9 @@ backend:
       - working: false
         agent: "testing"
         comment: "API fails with foreign key constraint error. Trying to reference product from 'products' table but store_products table expects catalog_product_id from 'product_catalog' table. Database schema mismatch."
+      - working: true
+        agent: "testing"
+        comment: "FIXED: Seller add product to store now working correctly. POST /api/seller/store/products successfully adds products from product_catalog to store_products table with form data (catalog_product_id, price: $25.99, stock: 10). Foreign key constraints resolved."
 
   - task: "Seller Manage Store Products APIs"
     implemented: true
