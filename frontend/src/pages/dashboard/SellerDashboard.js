@@ -514,7 +514,7 @@ const SellerDashboard = () => {
                     {product.images && product.images.length > 0 ? (
                       <img
                         src={product.images[0]}
-                        alt={product.title}
+                        alt={product.name || product.title}
                         className="w-full h-full object-cover"
                       />
                     ) : (
@@ -526,16 +526,17 @@ const SellerDashboard = () => {
                       <Check className="w-3 h-3" />
                       In Store
                     </span>
-                    {product.categoryName && (
+                    {product.category && (
                       <span className="absolute top-2 left-2 px-2 py-1 bg-black/70 text-[#D4AF37] rounded text-xs">
-                        {product.categoryIcon}
+                        {product.category}
                       </span>
                     )}
                   </div>
                   
                   <div className="p-4">
-                    <h3 className="font-semibold text-white mb-1 truncate">{product.title}</h3>
-                    <p className="text-[#D4AF37] font-bold">${product.price?.toFixed(2)}</p>
+                    <h3 className="font-semibold text-white mb-1 truncate">{product.name || product.title}</h3>
+                    <p className="text-[#D4AF37] font-bold">${(product.price || 0).toFixed(2)}</p>
+                    <p className="text-gray-400 text-sm">Stock: {product.stock || 0}</p>
                     
                     <button
                       onClick={() => handleRemoveFromStore(product.id)}
