@@ -3115,7 +3115,15 @@ class APITester:
                             "shippingAddressId": self.buyer_address_id,
                             "shippingName": "Test Buyer",
                             "shippingPhone": "+1234567890",
-                            "shippingAddress": "123 Test St, Test City",
+                            "shippingAddress": {
+                                "fullName": "Test Buyer",
+                                "phone": "+1234567890",
+                                "addressLine1": "123 Test Street",
+                                "city": "Test City",
+                                "state": "Test State",
+                                "postalCode": "12345",
+                                "country": "Test Country"
+                            },
                             "totalAmount": self.store_product_price * 2
                         }
                         
