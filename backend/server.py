@@ -3168,14 +3168,14 @@ async def get_seller_order_detail(order_id: str, current_user: dict = Depends(ge
 
 @api_router.post("/seller/orders/{order_id}/ship")
 async def ship_order(order_id: str, req: ShipOrderRequest, current_user: dict = Depends(get_current_user)):
-    """Seller ships an order - adds tracking info and updates status"""
+    """Seller ships an order - adds tracking info and updates status (NEW STORE SYSTEM)"""
     if current_user['role'] != 'seller':
         raise HTTPException(status_code=403, detail="Only sellers can ship orders")
     
     try:
-        # Verify order exists and seller has products in it
+        # Verify order exists
         order_result = supabase_admin.table('orders')\
-            .select('*, order_items(*, products(*))')\
+            .select('*, order_items(*)')\
             .eq('id', order_id)\
             .execute()
         
@@ -3184,19 +3184,20 @@ async def ship_order(order_id: str, req: ShipOrderRequest, current_user: dict = 
         
         order = order_result.data[0]
         
-        # Verify seller owns products in this order
+        # Verify seller owns products in this order (NEW SYSTEM: check store_products)
         has_seller_item = False
         for item in order.get('order_items', []):
-            product = item.get('products')
-            if product:
-                seller_product = supabase_admin.table('seller_products')\
+            product_id = item.get('product_id')
+            if product_id:
+                # Check if this product_id is a store_product belonging to this seller
+                store_product = supabase_admin.table('store_products')\
                     .select('id')\
                     .eq('seller_id', current_user['id'])\
-                    .eq('product_id', product.get('id'))\
+                    .eq('id', product_id)\
                     .eq('is_active', True)\
                     .execute()
                 
-                if seller_product.data:
+                if store_product.data:
                     has_seller_item = True
                     break
         
