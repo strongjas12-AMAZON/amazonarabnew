@@ -327,9 +327,9 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Frontend Store Search Page"
-    - "Frontend Store Detail Page" 
-    - "Frontend Navigation Updates"
+    - "Seller Browse Catalog API - Verify 100 Products Fix"
+    - "Seller Add Product to Store API - Auto-Create Store Fix" 
+    - "Products Page API - Verify Seller Products Appear"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
