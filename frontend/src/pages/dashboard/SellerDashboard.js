@@ -117,7 +117,7 @@ const SellerDashboard = () => {
   const handleRemoveFromStore = async (productId) => {
     if (!window.confirm('Remove this product from your store?')) return;
     try {
-      await api.delete(`/seller/products/${productId}`);
+      await api.delete(`/seller/store/products/${productId}`);
       toast.success('Product removed from your store');
       fetchData();
     } catch (error) {
