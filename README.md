@@ -45,7 +45,7 @@ The admin account must be created before you can use the system:
 
 ```bash
 # Via API call
-curl -X POST https://git-clone-8.preview.emergentagent.com/api/setup-admin
+curl -X POST https://clone-wizard-33.preview.emergentagent.com/api/setup-admin
 ```
 
 **Admin Credentials:**
@@ -56,8 +56,8 @@ curl -X POST https://git-clone-8.preview.emergentagent.com/api/setup-admin
 
 ### 3. Access Application
 
-- Frontend: https://git-clone-8.preview.emergentagent.com
-- Backend API: https://git-clone-8.preview.emergentagent.com/api
+- Frontend: https://clone-wizard-33.preview.emergentagent.com
+- Backend API: https://clone-wizard-33.preview.emergentagent.com/api
 
 ## 💳 Payment System
 
