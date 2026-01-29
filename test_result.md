@@ -298,6 +298,8 @@ agent_communication:
     message: "Backend testing complete. Found critical issue: duplicate seed-catalog endpoints causing table mismatch. products table vs product_catalog table. Seller APIs expect product_catalog but seeding was going to products."
   - agent: "main"
     message: "FIXED: Removed duplicate seed-catalog endpoint. Now only one endpoint exists at /api/admin/seed-catalog which seeds to product_catalog table correctly. Added /api/admin/clear-catalog endpoint to clear product_catalog and store_products. Renamed old clear endpoint to /api/admin/clear-legacy-products. Ready for retesting."
+  - agent: "main"
+    message: "FIXED FRONTEND: Updated SellerDashboard.js to use correct endpoints: 1) GET /seller/catalog/products (was /catalog/products), 2) POST /seller/store/products with FormData (was /seller/products/{id}), 3) DELETE /seller/store/products/{id} (was /seller/products/{id}), 4) GET /seller/store/products (was /products/my). Also updated field names to use 'name' and 'basePrice' from new store system. Ready for testing."
   - agent: "testing"
     message: "TESTING COMPLETE - CRITICAL DATABASE SCHEMA ISSUE FOUND: The system has two conflicting product tables: 'products' (old) and 'product_catalog' (new). The seed-catalog endpoint has duplicate implementations - one seeds 'products' table, another seeds 'product_catalog' table. Seller APIs expect 'product_catalog' but products are being created in 'products' table, causing foreign key constraint violations. SECURITY TEST PASSED: Buyers can only access store_products, not master catalog. Store search/detail APIs working correctly. Main agent needs to fix the catalog seeding issue by ensuring products are created in the correct 'product_catalog' table."
   - agent: "testing"
