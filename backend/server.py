@@ -3442,9 +3442,9 @@ async def respond_to_refund(refund_id: str, req: RefundActionRequest, current_us
         
         refund = refund_result.data[0]
         
-        # Verify seller owns products in the order
+        # Verify seller owns products in the order (NEW SYSTEM: use store_products)
         order_result = supabase_admin.table('orders')\
-            .select('*, order_items(*, products(*))')\
+            .select('*, order_items(*)')\
             .eq('id', refund['order_id'])\
             .execute()
         
@@ -3453,15 +3453,16 @@ async def respond_to_refund(refund_id: str, req: RefundActionRequest, current_us
         
         has_seller_item = False
         for item in order_result.data[0].get('order_items', []):
-            product = item.get('products')
-            if product:
-                seller_product = supabase_admin.table('seller_products')\
+            product_id = item.get('product_id')  # This is now store_product_id
+            if product_id:
+                # Check if this store_product belongs to the seller
+                store_product = supabase_admin.table('store_products')\
                     .select('id')\
                     .eq('seller_id', current_user['id'])\
-                    .eq('product_id', product.get('id'))\
+                    .eq('id', product_id)\
                     .eq('is_active', True)\
                     .execute()
-                if seller_product.data:
+                if store_product.data:
                     has_seller_item = True
                     break
         
