@@ -20,6 +20,7 @@ const AdminDashboard = () => {
   const [storeNameRequests, setStoreNameRequests] = useState([]);
   const [payoutRequests, setPayoutRequests] = useState([]);
   const [rechargeRequests, setRechargeRequests] = useState([]);
+  const [sellerRechargeRequests, setSellerRechargeRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
