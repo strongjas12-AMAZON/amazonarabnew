@@ -3027,6 +3027,72 @@ class APITester:
         # Summary
         self.print_summary()
 
+    def print_summary(self):
+        """Print test summary for wallet balance tests"""
+        print("=" * 80)
+        print("TEST SUMMARY - SELLER WALLET BALANCE ENDPOINT")
+        print("=" * 80)
+        
+        passed = sum(1 for result in self.test_results if result["success"])
+        total = len(self.test_results)
+        
+        print(f"Total Tests: {total}")
+        print(f"Passed: {passed}")
+        print(f"Failed: {total - passed}")
+        print()
+        
+        # Categorize results by wallet functionality
+        wallet_tests = [r for r in self.test_results if "wallet" in r["test"].lower()]
+        recharge_tests = [r for r in self.test_results if "recharge" in r["test"].lower()]
+        
+        print("CRITICAL VALIDATIONS:")
+        print("-" * 40)
+        
+        # Check wallet balance endpoint
+        balance_tests = [r for r in wallet_tests if "balance" in r["test"].lower()]
+        balance_passed = any(r["success"] for r in balance_tests)
+        if balance_passed:
+            print("✅ GET /api/seller/wallet/balance endpoint working - ALL REQUIRED FIELDS PRESENT")
+        else:
+            print("❌ GET /api/seller/wallet/balance endpoint failed - MISSING FIELDS OR ERROR")
+        
+        # Check recharge request functionality
+        recharge_create_tests = [r for r in recharge_tests if "new $75 request" in r["test"].lower()]
+        recharge_create_passed = any(r["success"] for r in recharge_create_tests)
+        if recharge_create_passed:
+            print("✅ POST /api/seller/wallet/recharge working - NEW RECHARGE REQUEST CREATED")
+        else:
+            print("❌ POST /api/seller/wallet/recharge failed - CANNOT CREATE RECHARGE REQUESTS")
+        
+        # Check pending recharges update
+        pending_tests = [r for r in self.test_results if "after recharge" in r["test"].lower()]
+        pending_passed = any(r["success"] for r in pending_tests)
+        if pending_passed:
+            print("✅ Wallet balance updates correctly - PENDING RECHARGES INCREASED BY $75")
+        else:
+            print("❌ Wallet balance not updating - PENDING RECHARGES DID NOT INCREASE")
+        
+        # Check recharge history
+        history_tests = [r for r in recharge_tests if "history" in r["test"].lower() or "verify new request" in r["test"].lower()]
+        history_passed = any(r["success"] for r in history_tests)
+        if history_passed:
+            print("✅ GET /api/seller/wallet/recharge-requests working - NEW REQUEST APPEARS IN HISTORY")
+        else:
+            print("❌ Recharge history not working - NEW REQUEST NOT FOUND IN HISTORY")
+        
+        print()
+        
+        if total - passed > 0:
+            print("FAILED TESTS:")
+            for result in self.test_results:
+                if not result["success"]:
+                    print(f"❌ {result['test']}: {result['details']}")
+            print()
+        
+        print("=" * 80)
+        
+        return passed == total
+
     def run_comprehensive_order_system_tests(self):
         """Run comprehensive Order System testing after migration - END-TO-END FLOW"""
         print("\n" + "="*80)
