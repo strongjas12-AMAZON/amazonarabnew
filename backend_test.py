@@ -5896,31 +5896,14 @@ class APITester:
             return False
 
 def main():
-    """Main test runner"""
+    """Main test runner for seller wallet balance endpoint testing"""
     tester = APITester()
     
-    # Test the seller wallet recharge request flow as requested
-    recharge_success = tester.test_seller_wallet_recharge_flow()
-    
-    # Test other high-priority backend tasks that need retesting
-    earnings_success = tester.test_seller_earnings_calculation()
-    order_completion_success = tester.test_admin_mark_order_completed()
-    payout_success = tester.test_seller_payout_with_trc20_wallet()
-    
-    # Overall success
-    overall_success = recharge_success and earnings_success and order_completion_success and payout_success
-    
-    print("\n" + "="*80)
-    print("BACKEND TESTING SUMMARY")
-    print("="*80)
-    print(f"Seller Wallet Recharge Flow: {'✅ PASS' if recharge_success else '❌ FAIL'}")
-    print(f"Seller Earnings Calculation: {'✅ PASS' if earnings_success else '❌ FAIL'}")
-    print(f"Admin Mark Order Completed: {'✅ PASS' if order_completion_success else '❌ FAIL'}")
-    print(f"Seller Payout with TRC20: {'✅ PASS' if payout_success else '❌ FAIL'}")
-    print("="*80)
+    # Run the new seller wallet balance endpoint tests as requested in review
+    success = tester.run_all_tests()
     
     # Exit with appropriate code
-    sys.exit(0 if overall_success else 1)
+    sys.exit(0 if success else 1)
 
 if __name__ == "__main__":
     main()
