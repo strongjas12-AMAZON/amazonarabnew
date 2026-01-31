@@ -6203,18 +6203,148 @@ class APITester:
             )
             return False
 
+    def test_create_order_for_testing(self):
+        """Create a new order for testing the status update flow"""
+        if not self.buyer_token:
+            self.log_test(
+                "Create Order for Testing", 
+                False, 
+                "No buyer auth token available",
+                None
+            )
+            return None
+            
+        try:
+            # First get available products from the seller
+            headers = {"Authorization": f"Bearer {self.buyer_token}"}
+            products_response = self.session.get(f"{self.base_url}/products", headers=headers)
+            
+            if products_response.status_code != 200:
+                self.log_test(
+                    "Create Order for Testing", 
+                    False, 
+                    f"Cannot get products: HTTP {products_response.status_code}",
+                    None
+                )
+                return None
+                
+            products_data = products_response.json()
+            products = products_data.get("products", [])
+            
+            if not products:
+                self.log_test(
+                    "Create Order for Testing", 
+                    False, 
+                    "No products available for order creation",
+                    None
+                )
+                return None
+            
+            # Use first available product
+            product = products[0]
+            product_id = product.get("id")
+            product_price = product.get("price", 25.99)
+            quantity = 1
+            
+            # Create order
+            order_data = {
+                "items": [
+                    {
+                        "product_id": product_id,
+                        "quantity": quantity,
+                        "price": product_price
+                    }
+                ],
+                "totalAmount": product_price * quantity,
+                "useWallet": False,
+                "shippingName": "Test Buyer",
+                "shippingPhone": "+1234567890",
+                "shippingAddress": {
+                    "fullName": "Test Buyer",
+                    "phone": "+1234567890",
+                    "addressLine1": "123 Test Street",
+                    "city": "Test City",
+                    "state": "Test State",
+                    "postalCode": "12345",
+                    "country": "Test Country"
+                }
+            }
+            
+            response = self.session.post(f"{self.base_url}/orders", headers=headers, json=order_data)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    order = data.get("order", {})
+                    order_id = order.get("id")
+                    
+                    self.log_test(
+                        "Create Order for Testing", 
+                        True, 
+                        f"✅ Order created successfully: {order_id} with product {product_id} (${product_price})",
+                        {"order_id": order_id, "product_id": product_id, "total_amount": product_price * quantity}
+                    )
+                    return order_id
+                else:
+                    self.log_test(
+                        "Create Order for Testing", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+                    return None
+            else:
+                self.log_test(
+                    "Create Order for Testing", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                return None
+                
+        except Exception as e:
+            self.log_test(
+                "Create Order for Testing", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+            return None
+
     def test_order_status_update_flow(self):
         """Test complete order status update flow when admin marks orders as completed"""
         print("🔄 ORDER STATUS UPDATE FLOW TEST")
         print("-" * 40)
         
-        # Step 1: Get list of orders as admin
+        # Step 1: Try to get existing orders first
         order_result = self.test_admin_get_orders()
-        if not order_result:
-            print("❌ Cannot proceed with order status update flow - no suitable orders found")
-            return
+        order_id = None
+        current_payment_status = None
         
-        order_id, current_payment_status = order_result
+        if order_result:
+            order_id, current_payment_status = order_result
+            
+            # Check if this order belongs to our test seller by checking seller order center
+            if self.seller_token:
+                headers = {"Authorization": f"Bearer {self.seller_token}"}
+                seller_response = self.session.get(f"{self.base_url}/seller/order-center", headers=headers)
+                if seller_response.status_code == 200:
+                    seller_data = seller_response.json()
+                    seller_orders = seller_data.get("orders", [])
+                    order_belongs_to_seller = any(o.get("id") == order_id for o in seller_orders)
+                    
+                    if not order_belongs_to_seller:
+                        print(f"ℹ️  Order {order_id} doesn't belong to test seller. Creating new order...")
+                        order_id = None
+        
+        # Step 1b: Create new order if needed
+        if not order_id:
+            print("📝 Creating new order for testing...")
+            order_id = self.test_create_order_for_testing()
+            if not order_id:
+                print("❌ Cannot proceed with order status update flow - failed to create test order")
+                return
+            current_payment_status = 'pending_payment'
         
         # Step 2: Mark order as paid if it's pending_payment
         if current_payment_status == 'pending_payment':
