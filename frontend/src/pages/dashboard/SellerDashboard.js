@@ -848,6 +848,13 @@ const SellerDashboard = () => {
         <div className="luxury-card mb-8">
           <div className="flex justify-between items-center mb-6">
             <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white">Payouts & Earnings</h2>
+            <button
+              onClick={() => setShowRechargeModal(true)}
+              className="luxury-button flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Recharge Wallet
+            </button>
           </div>
 
           {!earnings ? (
