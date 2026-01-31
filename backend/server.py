@@ -2099,6 +2099,86 @@ async def create_payout_request(req: CreatePayoutRequest, current_user: dict = D
 
 @api_router.get("/seller/payout-requests")
 async def get_seller_payout_requests(current_user: dict = Depends(get_current_user)):
+    """Seller views their payout request history"""
+    if current_user["role"] != "seller":
+        raise HTTPException(status_code=403, detail="Only sellers can view payout requests")
+
+    try:
+        # Get all payout requests for this seller
+        payouts_result = (
+            supabase_admin.table("payout_requests")
+            .select("*")
+            .eq("sellerId", current_user["id"])
+            .order("requestDate", desc=True)
+            .execute()
+        )
+
+        payouts = [format_payout_request_response(p) for p in (payouts_result.data or [])]
+
+        return {"success": True, "payoutRequests": payouts}
+    except Exception as e:
+        logging.error(f"Get payout requests error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/seller/wallet/recharge")
+async def request_seller_wallet_recharge(req: WalletRechargeRequest, current_user: dict = Depends(get_current_user)):
+    """Seller requests wallet recharge with USDT TRC20 (requires admin approval)"""
+    if current_user['role'] != 'seller':
+        raise HTTPException(status_code=403, detail="Only sellers can recharge wallet")
+    
+    if req.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than zero")
+    
+    # USDT TRC20 wallet address for payments
+    ADMIN_USDT_WALLET = "TY8Z91NMCjREyZVj9NjDsF8hVjyqfxFFRU"
+    
+    try:
+        recharge_data = {
+            'id': str(uuid.uuid4()),
+            'sellerId': current_user['id'],
+            'amount': req.amount,
+            'status': 'pending',
+            'paymentMethod': 'USDT_TRON',
+            'paymentWallet': ADMIN_USDT_WALLET,
+            'transactionHash': req.paymentWallet,  # User provides their transaction hash
+            'createdAt': datetime.now(timezone.utc).isoformat(),
+            'updatedAt': datetime.now(timezone.utc).isoformat()
+        }
+        
+        result = supabase_admin.table('seller_wallet_recharge_requests').insert(recharge_data).execute()
+        
+        return {
+            "success": True,
+            "message": "Recharge request submitted. Awaiting admin approval.",
+            "rechargeRequest": result.data[0] if result.data else recharge_data,
+            "paymentWallet": ADMIN_USDT_WALLET
+        }
+    except Exception as e:
+        logging.error(f"Seller wallet recharge error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/seller/wallet/recharge-requests")
+async def get_seller_recharge_requests(current_user: dict = Depends(get_current_user)):
+    """Get seller's wallet recharge request history"""
+    if current_user['role'] != 'seller':
+        raise HTTPException(status_code=403, detail="Only sellers can view recharge requests")
+    
+    try:
+        result = supabase_admin.table('seller_wallet_recharge_requests').select('*').eq('sellerId', current_user['id']).order('createdAt', desc=True).execute()
+        
+        return {
+            "success": True,
+            "rechargeRequests": result.data or []
+        }
+    except Exception as e:
+        logging.error(f"Get seller recharge requests error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/seller/payout-requests")
+async def get_seller_payout_requests(current_user: dict = Depends(get_current_user)):
     """Get all payout requests for the current seller."""
     if current_user["role"] != "seller":
         raise HTTPException(status_code=403, detail="Only sellers can view payout requests")
