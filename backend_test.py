@@ -5117,7 +5117,7 @@ class APITester:
             if response.status_code == 200:
                 data = response.json()
                 if data.get("success"):
-                    requests_list = data.get("requests", [])
+                    requests_list = data.get("rechargeRequests", [])  # Fixed: use correct key
                     found_request = any(req.get("id") == recharge_request_id for req in requests_list)
                     
                     if found_request:
