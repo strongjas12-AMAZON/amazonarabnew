@@ -107,39 +107,48 @@ user_problem_statement: Build a Buyer Store Search & Store Detail system connect
 backend:
   - task: "Seller Payout Request with USDT TRC20 Wallet Address"
     implemented: true
-    working: "NA"
+    working: true
     file: "backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Updated payout system to REQUIRE USDT TRC20 wallet address. Backend changes: 1) Made payoutWallet required (changed from Optional[str] to str), 2) Added validation for TRC20 format (must start with 'T', exactly 34 characters), 3) Clear error messages for invalid addresses. Frontend changes: 1) Added HTML5 validation (minLength, maxLength, pattern), 2) Added prominent info box explaining TRC20 requirements, 3) Updated payout history table to display wallet addresses, 4) Added help text and visual indicators. Database migration required: ALTER TABLE payout_requests ADD COLUMN IF NOT EXISTS payoutWallet TEXT (available in /app/backend/add_payout_wallet.sql). Complete documentation in /app/PAYOUT_WALLET_UPDATE.md"
+      - working: true
+        agent: "testing"
+        comment: "✅ COMPREHENSIVE PAYOUT TESTING COMPLETE: Seller payout request with USDT TRC20 wallet address functionality verified successfully. ✅ Valid TRC20 Wallet: Successfully created payout request with valid TRC20 address (TY8Z91NMCjREyZVj9NjDsF8hVjyqfxFFRU) for $50.0 ✅ TRC20 Validation: Invalid wallet addresses properly rejected with clear error message 'Invalid USDT TRC20 wallet address. Must start with 'T' and be 34 characters long' ✅ Required Field: payoutWallet field is required and properly validated ✅ Wallet Address Storage: Wallet addresses correctly saved and returned in response. All TRC20 wallet validation and payout request functionality is working correctly."
 
   - task: "Seller Earnings Calculation - Fix for Store Products System"
     implemented: true
-    working: "NA"
+    working: true
     file: "backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Fixed seller earnings calculation to work with NEW store_products system. ISSUE: Endpoint was joining order_items with old 'products' table which doesn't exist in new system. FIX: Updated query to join order_items with store_products table and check seller_id directly from store_products (not products). Now correctly calculates totalEarnings, availableBalance, and pendingWithdrawals for sellers. Backend restarted successfully."
+      - working: true
+        agent: "testing"
+        comment: "✅ SELLER EARNINGS CALCULATION VERIFIED: GET /api/seller/earnings working correctly with NEW store_products system. ✅ Earnings Display: Successfully calculated and returned seller earnings (Total: $374.91, Available: $374.91, Pending: $50.0) ✅ Store Products Integration: Endpoint correctly uses NEW store_products system instead of old products table ✅ Balance Calculation: Properly calculates totalEarnings, availableBalance, and pendingWithdrawals from completed orders. Seller earnings calculation is fully functional with the NEW store system."
 
   - task: "Admin Order Status Update - Mark as Completed Fix"
     implemented: true
-    working: "NA"
+    working: true
     file: "backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Fixed 'Mark as Completed' button not working in admin dashboard orders section. ISSUE: PUT /orders/{order_id}/status endpoint was joining order_items with old 'products' table when calculating seller earnings on order completion. This caused the endpoint to fail. FIX: Updated query to join order_items with store_products table (using !inner join) and retrieve seller_id from store_products instead of products. Now correctly updates order status to 'completed' and distributes earnings to seller wallets. Backend restarted successfully."
+      - working: true
+        agent: "testing"
+        comment: "✅ ADMIN ORDER COMPLETION VERIFIED: PUT /api/orders/{id}/status endpoint working correctly with NEW store_products system. ✅ Order Status Update: Admin can successfully mark orders as completed (updates paymentStatus to 'completed') ✅ Store Products Integration: Endpoint correctly uses NEW store_products system for seller earnings calculation ✅ Earnings Distribution: When orders are marked as completed, seller wallets are properly updated with earnings ✅ No Table Conflicts: Fixed issue with old 'products' table references. Admin order completion functionality is fully operational."
 
 backend:
   - task: "Shipping Address Endpoints - Fix 'Buyer access required' Error"
