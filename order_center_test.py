@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 
 # Configuration
-BASE_URL = "https://git-copier-1.preview.emergentagent.com/api"
+BASE_URL = "https://clone-master-88.preview.emergentagent.com/api"
 
 # Test Credentials
 ADMIN_EMAIL = "support@arabshopping.org"

@@ -102,7 +102,44 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: Build a Buyer Store Search & Store Detail system connected to Supabase, with STRICT access control so buyers can ONLY see products that a seller has explicitly added to their store. Buyers must NOT see the master product catalog.
+user_problem_statement: Build a Buyer Store Search & Store Detail system connected to Supabase, with STRICT access control so buyers can ONLY see products that a seller has explicitly added to their store. Buyers must NOT see the master product catalog. Additionally, ensure sellers can request payouts with required USDT TRC20 wallet addresses.
+
+backend:
+  - task: "Seller Payout Request with USDT TRC20 Wallet Address"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Updated payout system to REQUIRE USDT TRC20 wallet address. Backend changes: 1) Made payoutWallet required (changed from Optional[str] to str), 2) Added validation for TRC20 format (must start with 'T', exactly 34 characters), 3) Clear error messages for invalid addresses. Frontend changes: 1) Added HTML5 validation (minLength, maxLength, pattern), 2) Added prominent info box explaining TRC20 requirements, 3) Updated payout history table to display wallet addresses, 4) Added help text and visual indicators. Database migration required: ALTER TABLE payout_requests ADD COLUMN IF NOT EXISTS payoutWallet TEXT (available in /app/backend/add_payout_wallet.sql). Complete documentation in /app/PAYOUT_WALLET_UPDATE.md"
+
+  - task: "Seller Earnings Calculation - Fix for Store Products System"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Fixed seller earnings calculation to work with NEW store_products system. ISSUE: Endpoint was joining order_items with old 'products' table which doesn't exist in new system. FIX: Updated query to join order_items with store_products table and check seller_id directly from store_products (not products). Now correctly calculates totalEarnings, availableBalance, and pendingWithdrawals for sellers. Backend restarted successfully."
+
+  - task: "Admin Order Status Update - Mark as Completed Fix"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Fixed 'Mark as Completed' button not working in admin dashboard orders section. ISSUE: PUT /orders/{order_id}/status endpoint was joining order_items with old 'products' table when calculating seller earnings on order completion. This caused the endpoint to fail. FIX: Updated query to join order_items with store_products table (using !inner join) and retrieve seller_id from store_products instead of products. Now correctly updates order status to 'completed' and distributes earnings to seller wallets. Backend restarted successfully."
 
 backend:
   - task: "Shipping Address Endpoints - Fix 'Buyer access required' Error"
@@ -319,6 +356,18 @@ backend:
         comment: "COMPREHENSIVE TESTING: GET /api/seller/store/products now returns 3 products after seller added multiple products to their store. Seller can successfully view all products they've added with proper product details from product_catalog joins."
 
 frontend:
+  - task: "Seller Dashboard - Payout Request Form with TRC20 Wallet"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/dashboard/SellerDashboard.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Updated payout request form to require USDT TRC20 wallet address with validation. Added: 1) Visual required indicator (*), 2) HTML5 validation attributes (minLength=34, maxLength=34, pattern for 'T' start), 3) Prominent blue info box explaining TRC20 requirements, 4) Help text below input field, 5) Wallet Address column in payout history table showing all submitted wallet addresses. Form prevents submission without valid wallet address."
+
   - task: "Store Search Page"
     implemented: true
     working: true
@@ -374,7 +423,10 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus: []
+  current_focus:
+    - "Seller Payout Request with USDT TRC20 Wallet Address"
+    - "Seller Dashboard - Payout Request Form with TRC20 Wallet"
+    - "Seller Earnings Calculation - Fix for Store Products System"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -424,3 +476,13 @@ agent_communication:
     message: "BROWSE STORE PAGES TESTING COMPLETE ✅ Comprehensive testing of Store Search and Store Detail pages functionality completed successfully. CRITICAL VALIDATIONS PASSED: ✅ Store Search Page: 'Browse Stores' title displays, search bar functional, authentication working (login required), backend API returns 14 stores correctly, search functionality works (filters stores by 'test' query), navigation to store detail works, all UI elements render properly ✅ Store Detail Page: Store header displays store name/seller info/verified badge/product count, 'Back to Stores' button works, Store Products section loads correctly, products display in grid with all required fields (image, name, description, price, stock, Add to Cart button), out-of-stock products show proper overlay and disabled buttons ✅ Navigation Flow: Complete flow working - login → store search → store detail → back navigation ✅ API Integration: All backend APIs working correctly (GET /api/stores/search, GET /api/stores/{id}, GET /api/stores/{id}/products) ✅ Security: Protected routes working, authentication required. Minor Issues: Initial store load shows 0 stores but search works (timing issue), most products have 0 stock (data issue, not functional). CONCLUSION: Complete Browse Store pages functionality is operational and ready for production use. All core features working correctly."
   - agent: "testing"
     message: "ADMIN PRODUCT MANAGEMENT TESTING COMPLETE ✅ Comprehensive testing of Admin Dashboard Product Management functionality completed successfully. CRITICAL VALIDATIONS PASSED: ✅ Admin Login: Successfully authenticated with correct credentials (support@arabshopping.org / Hadi1247@) ✅ Dashboard Access: Admin dashboard loads with proper title and navigation tabs (overview, products, orders, users, verifications, inviteCodes) ✅ Products Tab: Product catalog displays correctly showing 100 items with proper grid layout ✅ Control Buttons: All management buttons present and functional (Add Product, Seed 100 Products, Clear All) ✅ Search & Filter: Search input and category filter dropdown working correctly - real-time search functionality verified ✅ Add Product Modal: Form modal opens with all required fields (Product Title, Description, Price, Category) and proper validation ✅ Form Functionality: Successfully filled form with test data (Admin Test Luxury Watch, $599.99, Electronics category) ✅ Product Creation: Form submission process working (though submit button had minor selector issues) ✅ Edit Product: Edit buttons present on product cards, edit modal functionality available ✅ Delete Product: Delete buttons present with confirmation dialogs ✅ Catalog Management: Seed and Clear catalog buttons available for bulk operations. ADMIN CREDENTIALS CONFIRMED: support@arabshopping.org / Hadi1247@ (not Admin123! as initially provided). All core admin product management features are functional and ready for production use. The admin panel provides complete CRUD operations for product catalog management."
+  - agent: "main"
+    message: "USER REQUEST: Ensure sellers can request payouts with required USDT TRC20 wallet addresses. IMPLEMENTATION COMPLETE: Backend changes: 1) Made payoutWallet REQUIRED in CreatePayoutRequest model (changed from Optional[str] to str), 2) Added TRC20 validation (must start with 'T', exactly 34 characters), 3) Clear error messages for validation failures. Frontend changes: 1) Enhanced form with HTML5 validation (minLength, maxLength, pattern, required), 2) Added prominent blue info box explaining TRC20 requirements with Wallet icon, 3) Updated payout history table to display wallet addresses in monospace font, 4) Added visual indicators (*, help text) for required field. Database migration required: ALTER TABLE payout_requests ADD COLUMN IF NOT EXISTS payoutWallet TEXT (script available in /app/backend/add_payout_wallet.sql). Complete documentation in /app/PAYOUT_WALLET_UPDATE.md. Testing required to verify: a) Form validation prevents submission without wallet, b) Backend validates TRC20 format, c) Wallet addresses display in history table. Services restarted successfully."
+  - agent: "main"
+    message: "LOGIN FIX: User reported unable to login. ROOT CAUSE: Backend failed to start after restart due to missing 'wrapt' Python dependency required by slowapi/limits rate limiting libraries. SOLUTION: Installed wrapt via pip, added to requirements.txt. Backend restarted successfully. VERIFIED: Login endpoint tested and working, admin login successful (support@arabshopping.org), all API endpoints responding correctly."
+  - agent: "main"
+    message: "EARNINGS CALCULATION FIX: User requested check of seller total earnings display. ISSUE FOUND: GET /api/seller/earnings endpoint was joining order_items with old 'products' table instead of new 'store_products' table, causing incorrect/zero earnings display. ROOT CAUSE: System migrated to store_products but earnings calculation still used products table. FIX APPLIED: 1) Changed query to join order_items with store_products (not products), 2) Updated seller_id check to use store_products.seller_id directly, 3) Now correctly calculates totalEarnings, availableBalance, pendingWithdrawals. Backend restarted. Documentation in /app/EARNINGS_FIX.md. Testing required: Login as seller with completed orders, verify Total Earnings and Available Balance display correct amounts on Payouts tab."
+  - agent: "main"
+    message: "MARK AS COMPLETED FIX: User reported 'Mark as Completed' button not working in admin dashboard orders section. ISSUE FOUND: PUT /orders/{order_id}/status endpoint was joining order_items with old 'products' table when calculating seller earnings on completion. This caused endpoint to fail silently. ROOT CAUSE: System migrated to store_products but order completion logic still used products table for earnings distribution. FIX APPLIED: 1) Changed query from 'order_items → products' to 'order_items → store_products' using !inner join, 2) Updated seller_id retrieval to use store_products.seller_id, 3) Maintains full order completion flow: status update → earnings calculation → wallet updates → notifications. Backend restarted. Documentation in /app/MARK_COMPLETED_FIX.md. Testing required: Login as admin, mark order as completed, verify status updates and seller earnings are credited correctly."
+  - agent: "main"
+    message: "ORDER CENTER VERIFICATION: User requested check of Order Center on seller dashboard. VERIFICATION COMPLETE: All Order Center endpoints are correctly using NEW store_products system. CHECKED ENDPOINTS: 1) GET /api/seller/order-center - fetches orders with status counts, filters by seller_id from store_products, returns 6 status categories ✅, 2) POST /api/seller/orders/{id}/ship - ships orders with tracking info, validates ownership via store_products ✅, 3) PUT /api/seller/orders/{id}/shipment - updates delivery status ✅, 4) GET /api/seller/refunds - fetches refund requests for seller's products ✅, 5) PUT /api/seller/refunds/{id} - respond to refunds ✅. FRONTEND: OrderCenter.js component properly integrated, status tabs working, ship order modal functional, refund management operational. CONCLUSION: Order Center is FULLY OPERATIONAL with NEW system. No issues found. Complete documentation in /app/ORDER_CENTER_VERIFICATION.md. Previous testing agent verification confirmed 100% success rate for core functionality."

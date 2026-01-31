@@ -123,7 +123,7 @@ class StoreNameChangeAdminAction(BaseModel):
 
 class CreatePayoutRequest(BaseModel):
     requestedAmount: float
-    payoutWallet: Optional[str] = None
+    payoutWallet: str  # Required: USDT TRC20 wallet address
 
 
 class UpdatePayoutStatusRequest(BaseModel):
@@ -1994,10 +1994,10 @@ async def get_seller_earnings(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Only sellers can view earnings")
 
     try:
-        # 1) Fetch all completed/paid orders with items & products for this seller
+        # 1) Fetch all completed/paid orders with items & store_products for this seller
         orders_result = (
             supabase_admin.table("orders")
-            .select("*, order_items(*, products(*))")
+            .select("*, order_items(*, store_products!inner(seller_id))")
             .in_("payment_status", ["paid", "completed"])
             .execute()
         )
@@ -2005,8 +2005,9 @@ async def get_seller_earnings(current_user: dict = Depends(get_current_user)):
         total_earnings = 0.0
         for order in orders_result.data or []:
             for item in order.get("order_items", []):
-                product = item.get("products") or {}
-                if product.get("seller_id") == current_user["id"]:
+                store_product = item.get("store_products") or {}
+                # Check if this product belongs to the current seller
+                if store_product.get("seller_id") == current_user["id"]:
                     total_earnings += float(item.get("price", 0)) * int(item.get("quantity", 0))
 
         # 2) Fetch payout requests for this seller
@@ -2057,6 +2058,15 @@ async def create_payout_request(req: CreatePayoutRequest, current_user: dict = D
 
     if req.requestedAmount <= 0:
         raise HTTPException(status_code=400, detail="Requested amount must be greater than zero")
+    
+    # Validate wallet address is provided
+    if not req.payoutWallet or not req.payoutWallet.strip():
+        raise HTTPException(status_code=400, detail="USDT TRC20 wallet address is required")
+    
+    # Basic TRC20 wallet validation (starts with 'T' and is 34 characters)
+    wallet_address = req.payoutWallet.strip()
+    if not wallet_address.startswith('T') or len(wallet_address) != 34:
+        raise HTTPException(status_code=400, detail="Invalid USDT TRC20 wallet address. Must start with 'T' and be 34 characters long")
 
     try:
         # Reuse earnings calculation to determine available balance
@@ -2070,7 +2080,7 @@ async def create_payout_request(req: CreatePayoutRequest, current_user: dict = D
             "sellerId": current_user["id"],
             "requestedAmount": req.requestedAmount,
             "status": "pending",
-            "payoutWallet": req.payoutWallet,
+            "payoutWallet": wallet_address,
             "requestDate": datetime.now(timezone.utc).isoformat(),
             "createdAt": datetime.now(timezone.utc).isoformat(),
             "updatedAt": datetime.now(timezone.utc).isoformat(),
@@ -2084,6 +2094,206 @@ async def create_payout_request(req: CreatePayoutRequest, current_user: dict = D
         raise
     except Exception as e:
         logging.error(f"Create payout request error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/seller/payout-requests")
+async def get_seller_payout_requests(current_user: dict = Depends(get_current_user)):
+    """Seller views their payout request history"""
+    if current_user["role"] != "seller":
+        raise HTTPException(status_code=403, detail="Only sellers can view payout requests")
+
+    try:
+        # Get all payout requests for this seller
+        payouts_result = (
+            supabase_admin.table("payout_requests")
+            .select("*")
+            .eq("sellerId", current_user["id"])
+            .order("requestDate", desc=True)
+            .execute()
+        )
+
+        payouts = [format_payout_request_response(p) for p in (payouts_result.data or [])]
+
+        return {"success": True, "payoutRequests": payouts}
+    except Exception as e:
+        logging.error(f"Get payout requests error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/seller/wallet/recharge")
+async def request_seller_wallet_recharge(req: WalletRechargeRequest, current_user: dict = Depends(get_current_user)):
+    """Seller requests wallet recharge with USDT TRC20 (requires admin approval)"""
+    if current_user['role'] != 'seller':
+        raise HTTPException(status_code=403, detail="Only sellers can recharge wallet")
+    
+    if req.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than zero")
+    
+    # USDT TRC20 wallet address for payments
+    ADMIN_USDT_WALLET = "TY8Z91NMCjREyZVj9NjDsF8hVjyqfxFFRU"
+    
+    try:
+        recharge_data = {
+            'id': str(uuid.uuid4()),
+            'sellerId': current_user['id'],
+            'amount': req.amount,
+            'status': 'pending',
+            'paymentMethod': 'USDT_TRON',
+            'paymentWallet': ADMIN_USDT_WALLET,
+            'transactionHash': req.paymentWallet,  # User provides their transaction hash
+            'createdAt': datetime.now(timezone.utc).isoformat(),
+            'updatedAt': datetime.now(timezone.utc).isoformat()
+        }
+        
+        result = supabase_admin.table('seller_wallet_recharge_requests').insert(recharge_data).execute()
+        
+        return {
+            "success": True,
+            "message": "Recharge request submitted. Awaiting admin approval.",
+            "rechargeRequest": result.data[0] if result.data else recharge_data,
+            "paymentWallet": ADMIN_USDT_WALLET
+        }
+    except Exception as e:
+        logging.error(f"Seller wallet recharge error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/seller/wallet/recharge-requests")
+async def get_seller_recharge_requests(current_user: dict = Depends(get_current_user)):
+    """Get seller's wallet recharge request history"""
+    if current_user['role'] != 'seller':
+        raise HTTPException(status_code=403, detail="Only sellers can view recharge requests")
+    
+    try:
+        result = supabase_admin.table('seller_wallet_recharge_requests').select('*').eq('sellerId', current_user['id']).order('createdAt', desc=True).execute()
+        
+        return {
+            "success": True,
+            "rechargeRequests": result.data or []
+        }
+    except Exception as e:
+        logging.error(f"Get seller recharge requests error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/admin/seller-wallet-recharge-requests")
+async def admin_get_seller_recharge_requests(current_user: dict = Depends(get_current_user)):
+    """Admin can view all seller wallet recharge requests"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        result = (
+            supabase_admin.table('seller_wallet_recharge_requests')
+            .select('*, users:sellerId(name, email)')
+            .order('createdAt', desc=True)
+            .execute()
+        )
+        
+        requests = []
+        for r in (result.data or []):
+            seller = r.get('users') or {}
+            payload = {
+                "id": r.get('id'),
+                "sellerId": r.get('sellerId'),
+                "sellerName": seller.get('name'),
+                "sellerEmail": seller.get('email'),
+                "amount": float(r.get('amount', 0)),
+                "status": r.get('status'),
+                "paymentMethod": r.get('paymentMethod'),
+                "paymentWallet": r.get('paymentWallet'),
+                "transactionHash": r.get('transactionHash'),
+                "adminNote": r.get('adminNote'),
+                "createdAt": r.get('createdAt'),
+                "updatedAt": r.get('updatedAt')
+            }
+            requests.append(payload)
+        
+        return {"success": True, "requests": requests}
+    except Exception as e:
+        logging.error(f"Admin get seller recharge requests error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/admin/seller-wallet-recharge-requests/{request_id}/status")
+async def admin_update_seller_recharge_status(
+    request_id: str,
+    req: UpdateRechargeStatusRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Admin approves or rejects seller wallet recharge request"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    if req.status not in ('approved', 'rejected'):
+        raise HTTPException(status_code=400, detail="Invalid status. Must be 'approved' or 'rejected'")
+    
+    try:
+        # Get the recharge request
+        recharge_result = supabase_admin.table('seller_wallet_recharge_requests').select('*').eq('id', request_id).execute()
+        
+        if not recharge_result.data:
+            raise HTTPException(status_code=404, detail="Recharge request not found")
+        
+        recharge = recharge_result.data[0]
+        seller_id = recharge['sellerId']
+        amount = float(recharge['amount'])
+        
+        # Update the recharge request status
+        update_data = {
+            'status': req.status,
+            'adminNote': req.adminNote,
+            'updatedAt': datetime.now(timezone.utc).isoformat()
+        }
+        
+        supabase_admin.table('seller_wallet_recharge_requests').update(update_data).eq('id', request_id).execute()
+        
+        # If approved, credit the seller's wallet
+        if req.status == 'approved':
+            # Get or create seller wallet
+            wallet_result = supabase_admin.table('seller_wallets').select('*').eq('userId', seller_id).execute()
+            
+            if wallet_result.data:
+                # Update existing wallet
+                current_balance = float(wallet_result.data[0].get('balance', 0))
+                new_balance = current_balance + amount
+                
+                supabase_admin.table('seller_wallets').update({
+                    'balance': new_balance,
+                    'updatedAt': datetime.now(timezone.utc).isoformat()
+                }).eq('userId', seller_id).execute()
+            else:
+                # Create new wallet
+                supabase_admin.table('seller_wallets').insert({
+                    'id': str(uuid.uuid4()),
+                    'userId': seller_id,
+                    'balance': amount,
+                    'totalEarnings': 0,
+                    'createdAt': datetime.now(timezone.utc).isoformat(),
+                    'updatedAt': datetime.now(timezone.utc).isoformat()
+                }).execute()
+            
+            # Create wallet transaction record
+            await create_wallet_transaction(
+                user_id=seller_id,
+                user_role='seller',
+                transaction_type='recharge',
+                amount=amount,
+                previous_balance=current_balance if wallet_result.data else 0,
+                new_balance=(current_balance if wallet_result.data else 0) + amount,
+                description=f"Wallet recharge approved: ${amount:.2f} (USDT TRC20)"
+            )
+        
+        return {
+            "success": True,
+            "message": f"Recharge request {req.status}",
+            "status": req.status
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Admin update seller recharge status error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -2237,14 +2447,14 @@ async def update_order_status(order_id: str, request: UpdateOrderStatusRequest, 
         # When order is completed, update seller wallets with earnings
         if result.data and request.status == 'completed':
             order_data = result.data[0]
-            # Fetch order items with products
-            order_items_result = supabase_admin.table('order_items').select('*, products(*)').eq('order_id', order_id).execute()
+            # Fetch order items with store_products (NEW system)
+            order_items_result = supabase_admin.table('order_items').select('*, store_products!inner(seller_id)').eq('order_id', order_id).execute()
             
             # Group earnings by seller
             seller_earnings = {}
             for item in (order_items_result.data or []):
-                product = item.get('products', {})
-                seller_id = product.get('seller_id')
+                store_product = item.get('store_products', {})
+                seller_id = store_product.get('seller_id')
                 if seller_id:
                     earnings = float(item.get('price', 0)) * int(item.get('quantity', 0))
                     seller_earnings[seller_id] = seller_earnings.get(seller_id, 0) + earnings
@@ -3913,6 +4123,66 @@ async def clear_product_catalog_new(request: Request, current_user: dict = Depen
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@api_router.post("/admin/cleanup-and-reseed-catalog")
+@limiter.limit("2/hour")
+async def cleanup_and_reseed_catalog(request: Request, current_user: dict = Depends(get_current_user)):
+    """
+    Admin-only: Intelligent catalog cleanup and reseed
+    1. Keeps catalog products already in seller stores
+    2. Deletes unused catalog products
+    3. Seeds 500 new unique products
+    """
+    try:
+        # Check admin role
+        if current_user.get('role') != 'admin':
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        #  Step 1: Find which catalog products are in use
+        store_products_result = supabase_admin.table('store_products').select('catalog_product_id').execute()
+        in_use_ids = set([sp['catalog_product_id'] for sp in (store_products_result.data or []) if sp.get('catalog_product_id')])
+        
+        # Step 2: Get all catalog products
+        all_catalog_result = supabase_admin.table('product_catalog').select('id').execute()
+        all_ids = [p['id'] for p in (all_catalog_result.data or [])]
+        
+        # Step 3: Delete unused products
+        to_delete = [pid for pid in all_ids if pid not in in_use_ids]
+        deleted_count = 0
+        if to_delete:
+            # Delete in batches of 100
+            for i in range(0, len(to_delete), 100):
+                batch = to_delete[i:i+100]
+                supabase_admin.table('product_catalog').delete().in_('id', batch).execute()
+                deleted_count += len(batch)
+        
+        # Step 4: Seed 150 new products (keeping it manageable, can be increased)
+        from new_catalog_500 import get_unique_products
+        new_products = get_unique_products(150)  # Get 150 unique products
+        
+        added_count = 0
+        for product in new_products:
+            try:
+                supabase_admin.table('product_catalog').insert(product).execute()
+                added_count += 1
+            except Exception as e:
+                logging.error(f"Error adding product {product['name']}: {str(e)}")
+        
+        return {
+            "success": True,
+            "kept": len(in_use_ids),
+            "deleted": deleted_count,
+            "added": added_count,
+            "total_catalog_size": len(in_use_ids) + added_count,
+            "message": f"Cleanup complete! Kept {len(in_use_ids)} products in use, deleted {deleted_count} unused products, added {added_count} new products"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Clear catalog error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @api_router.get("/stores/search")
 async def search_stores(query: Optional[str] = None, limit: int = 20, offset: int = 0, current_user: dict = Depends(get_current_user)):
     """Protected: Search stores by name (login required)"""
@@ -4066,11 +4336,16 @@ async def get_catalog_products_for_seller(
     """
     Seller-only: Browse product catalog to add products to their store
     Buyers CANNOT access this endpoint (enforced by RLS)
+    IMPORTANT: Filters out products already added by ANY seller to prevent duplicates
     """
     try:
         # Verify seller role
         if current_user.get('role') != 'seller':
             raise HTTPException(status_code=403, detail="Seller access required")
+        
+        # Get all catalog product IDs that are already in use by ANY seller
+        store_products_result = supabase_admin.table('store_products').select('catalog_product_id').execute()
+        used_catalog_ids = set([sp['catalog_product_id'] for sp in (store_products_result.data or []) if sp.get('catalog_product_id')])
         
         # Query catalog (RLS enforces seller-only access)
         query = supabase.table('product_catalog').select('*')
@@ -4078,12 +4353,17 @@ async def get_catalog_products_for_seller(
         if category:
             query = query.eq('category', category)
         
-        query = query.range(offset, offset + limit - 1).order('name')
+        # Get more products than needed since we'll filter some out
+        query = query.limit(limit * 3).order('name')
         result = query.execute()
         
-        # Format response
+        # Format response and filter out already-used products
         products = []
         for product in result.data:
+            # Skip products that are already in any seller's store
+            if product['id'] in used_catalog_ids:
+                continue
+                
             products.append({
                 'id': product['id'],
                 'name': product['name'],
@@ -4093,6 +4373,10 @@ async def get_catalog_products_for_seller(
                 'category': product['category'],
                 'createdAt': product['created_at']
             })
+            
+            # Stop when we have enough products
+            if len(products) >= limit:
+                break
         
         return {
             "success": True,

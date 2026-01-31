@@ -33,6 +33,13 @@ const SellerDashboard = () => {
   const [payoutAmount, setPayoutAmount] = useState('');
   const [payoutWallet, setPayoutWallet] = useState('');
   const [payoutSubmitting, setPayoutSubmitting] = useState(false);
+  
+  // Wallet recharge states
+  const [showRechargeModal, setShowRechargeModal] = useState(false);
+  const [rechargeAmount, setRechargeAmount] = useState('');
+  const [transactionHash, setTransactionHash] = useState('');
+  const [rechargeSubmitting, setRechargeSubmitting] = useState(false);
+  const [rechargeHistory, setRechargeHistory] = useState([]);
 
   useEffect(() => {
     if (user) {
@@ -40,6 +47,7 @@ const SellerDashboard = () => {
       fetchCategories();
       fetchStoreNameRequest();
       fetchEarnings();
+      fetchRechargeHistory();
     }
   }, [user]);
 
@@ -86,6 +94,48 @@ const SellerDashboard = () => {
     } catch (error) {
       // silently ignore for now; stats section will just not show payouts
       console.error('Failed to load earnings', error);
+    }
+  };
+
+  const fetchRechargeHistory = async () => {
+    try {
+      const res = await api.get('/seller/wallet/recharge-requests');
+      setRechargeHistory(res.data.rechargeRequests || []);
+    } catch (error) {
+      console.error('Failed to load recharge history', error);
+    }
+  };
+
+  const handleRechargeSubmit = async (e) => {
+    e.preventDefault();
+    const amount = parseFloat(rechargeAmount || '0');
+    
+    if (!amount || amount <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+    
+    if (!transactionHash || transactionHash.trim() === '') {
+      toast.error('Please enter your transaction hash');
+      return;
+    }
+    
+    try {
+      setRechargeSubmitting(true);
+      await api.post('/seller/wallet/recharge', {
+        amount: amount,
+        paymentMethod: 'USDT_TRON',
+        paymentWallet: transactionHash.trim() // Using this field for transaction hash
+      });
+      toast.success('Recharge request submitted successfully! Awaiting admin approval.');
+      setRechargeAmount('');
+      setTransactionHash('');
+      setShowRechargeModal(false);
+      await fetchRechargeHistory();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to submit recharge request');
+    } finally {
+      setRechargeSubmitting(false);
     }
   };
 
@@ -798,6 +848,13 @@ const SellerDashboard = () => {
         <div className="luxury-card mb-8">
           <div className="flex justify-between items-center mb-6">
             <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white">Payouts & Earnings</h2>
+            <button
+              onClick={() => setShowRechargeModal(true)}
+              className="luxury-button flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Recharge Wallet
+            </button>
           </div>
 
           {!earnings ? (
@@ -823,6 +880,15 @@ const SellerDashboard = () => {
               {/* Payout Request Form */}
               <div className="border-t border-[rgba(212,175,55,0.1)] pt-6">
                 <h3 className="text-lg font-semibold text-white mb-2">Request Payout</h3>
+                <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                  <p className="text-sm text-blue-300 flex items-start gap-2">
+                    <Wallet className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                    <span>
+                      <strong>Important:</strong> You must provide a valid USDT TRC20 wallet address to receive your payout. 
+                      TRC20 addresses start with 'T' and are exactly 34 characters long.
+                    </span>
+                  </p>
+                </div>
                 <p className="text-xs text-gray-500 mb-4">
                   Payouts are processed manually by admin. You can request a payout up to your available balance.
                 </p>
@@ -879,16 +945,23 @@ const SellerDashboard = () => {
                     </div>
                     <div className="flex-1">
                       <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Your Wallet Address (TRC20)
+                        USDT TRC20 Wallet Address <span className="text-red-400">*</span>
                       </label>
                       <input
                         type="text"
                         value={payoutWallet}
                         onChange={(e) => setPayoutWallet(e.target.value)}
                         className="luxury-input w-full font-mono text-sm"
-                        placeholder="Enter your TRC20 wallet address"
+                        placeholder="Enter your TRC20 wallet address (starts with T)"
+                        minLength={34}
+                        maxLength={34}
+                        pattern="T[A-Za-z0-9]{33}"
+                        title="Must be a valid TRC20 wallet address (34 characters, starts with T)"
                         required
                       />
+                      <p className="text-xs text-gray-500 mt-1">
+                        ⓘ Must be a valid USDT TRC20 wallet address (34 characters, starts with 'T')
+                      </p>
                     </div>
                   </div>
                   <button
@@ -913,6 +986,7 @@ const SellerDashboard = () => {
                         <tr className="text-left text-gray-400 border-b border-[rgba(212,175,55,0.1)]">
                           <th className="py-2 pr-4">Date</th>
                           <th className="py-2 pr-4">Amount</th>
+                          <th className="py-2 pr-4">Wallet Address</th>
                           <th className="py-2 pr-4">Status</th>
                           <th className="py-2 pr-4">Admin Note</th>
                         </tr>
@@ -931,6 +1005,15 @@ const SellerDashboard = () => {
                             </td>
                             <td className="py-2 pr-4 text-[#D4AF37] font-semibold">
                               ${p.requestedAmount?.toFixed(2)}
+                            </td>
+                            <td className="py-2 pr-4 font-mono text-xs text-gray-400">
+                              {p.payoutWallet ? (
+                                <span className="truncate max-w-[150px] inline-block" title={p.payoutWallet}>
+                                  {p.payoutWallet}
+                                </span>
+                              ) : (
+                                '—'
+                              )}
                             </td>
                             <td className="py-2 pr-4">
                               <span
@@ -965,6 +1048,162 @@ const SellerDashboard = () => {
       {/* Order Center Section */}
       {activeTab === 'orderCenter' && (
         <OrderCenter />
+      )}
+
+      {/* Wallet Recharge Modal */}
+      {showRechargeModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="luxury-card max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white">Recharge Wallet</h2>
+              <button
+                onClick={() => setShowRechargeModal(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              {/* Payment Instructions */}
+              <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                <p className="text-sm text-blue-300 mb-3">
+                  <strong>Payment Instructions:</strong>
+                </p>
+                <ol className="text-sm text-blue-200 space-y-2 list-decimal list-inside">
+                  <li>Send USDT (TRC20) to the wallet address below</li>
+                  <li>Scan the QR code or copy the wallet address</li>
+                  <li>After completing payment, enter the transaction hash</li>
+                  <li>Submit the recharge request for admin approval</li>
+                </ol>
+              </div>
+
+              {/* Wallet Address & QR Code */}
+              <div className="p-6 bg-[rgba(30,30,30,0.8)] rounded-lg border border-[rgba(212,175,55,0.3)]">
+                <div className="text-center space-y-4">
+                  <p className="text-gray-400 text-sm">USDT TRC20 Wallet Address</p>
+                  <div className="flex items-center justify-center gap-2 p-3 bg-[rgba(20,20,20,0.8)] rounded-lg">
+                    <code className="text-[#D4AF37] font-mono text-sm break-all">
+                      TY8Z91NMCjREyZVj9NjDsF8hVjyqfxFFRU
+                    </code>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText('TY8Z91NMCjREyZVj9NjDsF8hVjyqfxFFRU');
+                        toast.success('Wallet address copied!');
+                      }}
+                      className="text-[#D4AF37] hover:text-[#f4c542] flex-shrink-0"
+                      title="Copy address"
+                    >
+                      📋
+                    </button>
+                  </div>
+
+                  {/* QR Code */}
+                  <div className="flex justify-center my-6">
+                    <img 
+                      src="https://customer-assets.emergentagent.com/job_clone-master-88/artifacts/avpblbp4_Screenshot%202025-12-12%20at%201.41.52%E2%80%AFPM.png"
+                      alt="USDT TRC20 QR Code"
+                      className="w-64 h-64 rounded-lg border-2 border-[rgba(212,175,55,0.3)]"
+                    />
+                  </div>
+
+                  <p className="text-xs text-gray-500">
+                    Scan this QR code with your USDT TRC20 wallet app
+                  </p>
+                </div>
+              </div>
+
+              {/* Recharge Form */}
+              <form onSubmit={handleRechargeSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Recharge Amount (USD) <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="0.01"
+                    value={rechargeAmount}
+                    onChange={(e) => setRechargeAmount(e.target.value)}
+                    className="luxury-input w-full"
+                    placeholder="Enter amount in USD"
+                    required
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Enter the amount you sent in USD
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Transaction Hash <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={transactionHash}
+                    onChange={(e) => setTransactionHash(e.target.value)}
+                    className="luxury-input w-full font-mono text-sm"
+                    placeholder="Enter your transaction hash (TxID)"
+                    required
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    You can find this in your wallet app after sending USDT
+                  </p>
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowRechargeModal(false)}
+                    className="flex-1 px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={rechargeSubmitting}
+                    className="flex-1 luxury-button"
+                  >
+                    {rechargeSubmitting ? 'Submitting...' : 'Submit Request'}
+                  </button>
+                </div>
+              </form>
+
+              {/* Recharge History */}
+              {rechargeHistory.length > 0 && (
+                <div className="border-t border-[rgba(212,175,55,0.1)] pt-6">
+                  <h3 className="text-lg font-semibold text-white mb-4">Recent Recharge Requests</h3>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {rechargeHistory.slice(0, 5).map((req) => (
+                      <div 
+                        key={req.id} 
+                        className="p-3 bg-[rgba(20,20,20,0.6)] rounded-lg flex justify-between items-center"
+                      >
+                        <div>
+                          <p className="text-white font-medium">${req.amount.toFixed(2)}</p>
+                          <p className="text-xs text-gray-500">
+                            {new Date(req.createdAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <span
+                          className={`status-badge ${
+                            req.status === 'pending'
+                              ? 'status-pending'
+                              : req.status === 'approved'
+                              ? 'status-verified'
+                              : 'status-rejected'
+                          }`}
+                        >
+                          {req.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

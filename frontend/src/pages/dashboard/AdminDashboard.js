@@ -20,6 +20,7 @@ const AdminDashboard = () => {
   const [storeNameRequests, setStoreNameRequests] = useState([]);
   const [payoutRequests, setPayoutRequests] = useState([]);
   const [rechargeRequests, setRechargeRequests] = useState([]);
+  const [sellerRechargeRequests, setSellerRechargeRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -72,7 +73,8 @@ const AdminDashboard = () => {
       api.get('/admin/invite-codes').catch(err => ({ error: err })),
       api.get('/admin/store-name-requests').catch(err => ({ error: err })),
       api.get('/admin/payout-requests').catch(err => ({ error: err })),
-      api.get('/admin/wallet-recharge-requests').catch(err => ({ error: err }))
+      api.get('/admin/wallet-recharge-requests').catch(err => ({ error: err })),
+      api.get('/admin/seller-wallet-recharge-requests').catch(err => ({ error: err }))
     ]);
 
     // Handle each result independently
@@ -132,6 +134,13 @@ const AdminDashboard = () => {
         setRechargeRequests(results[7].value.data?.requests || []);
       } else {
         setRechargeRequests([]);
+      }
+
+      // Seller Recharge Requests (results[8])
+      if (results[8].status === 'fulfilled' && !results[8].value.error) {
+        setSellerRechargeRequests(results[8].value.data?.requests || []);
+      } else {
+        setSellerRechargeRequests([]);
       }
     } catch (error) {
       // Silently handle errors - individual requests already handled above
@@ -1935,6 +1944,111 @@ const AdminDashboard = () => {
                             ) : (
                               <div className="text-right text-xs text-gray-500">
                                 {req.adminActionTimestamp && `Processed: ${new Date(req.adminActionTimestamp).toLocaleDateString()}`}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Seller Wallet Recharge Requests */}
+            <div className="mb-8 border-t border-[rgba(212,175,55,0.2)] pt-8">
+              <h3 className="font-['Playfair_Display'] text-xl font-bold text-white mb-4">Seller Wallet Recharge Requests</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-[rgba(212,175,55,0.2)]">
+                      <th className="text-left p-3 text-gray-400 font-medium">Seller</th>
+                      <th className="text-left p-3 text-gray-400 font-medium hidden sm:table-cell">Email</th>
+                      <th className="text-left p-3 text-gray-400 font-medium">Amount</th>
+                      <th className="text-left p-3 text-gray-400 font-medium hidden md:table-cell">Transaction Hash</th>
+                      <th className="text-left p-3 text-gray-400 font-medium hidden md:table-cell">Request Date</th>
+                      <th className="text-left p-3 text-gray-400 font-medium">Status</th>
+                      <th className="text-left p-3 text-gray-400 font-medium text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sellerRechargeRequests.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="p-4 text-center text-gray-500 text-sm">
+                          No seller recharge requests yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      sellerRechargeRequests.map((req) => (
+                        <tr key={req.id} className="border-b border-[rgba(212,175,55,0.1)]">
+                          <td className="p-3 text-white">{req.sellerName || 'Unknown'}</td>
+                          <td className="p-3 text-gray-400 hidden sm:table-cell">{req.sellerEmail || 'N/A'}</td>
+                          <td className="p-3 text-[#D4AF37] font-semibold">${req.amount?.toFixed(2)}</td>
+                          <td className="p-3 text-gray-400 hidden md:table-cell text-xs font-mono max-w-[150px] truncate" title={req.transactionHash}>
+                            {req.transactionHash || 'N/A'}
+                          </td>
+                          <td className="p-3 text-gray-400 hidden md:table-cell text-sm">
+                            {req.createdAt ? new Date(req.createdAt).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric'
+                            }) : '—'}
+                          </td>
+                          <td className="p-3">
+                            <span className={`status-badge ${
+                              req.status === 'approved' ? 'status-verified' :
+                              req.status === 'rejected' ? 'status-rejected' :
+                              'status-pending'
+                            }`}>
+                              {req.status}
+                            </span>
+                            {req.adminNote && req.status !== 'pending' && (
+                              <p className="text-xs text-gray-500 mt-1 max-w-xs truncate">{req.adminNote}</p>
+                            )}
+                          </td>
+                          <td className="p-3">
+                            {req.status === 'pending' ? (
+                              <div className="flex gap-2 justify-end">
+                                <button
+                                  onClick={async () => {
+                                    const note = window.prompt('Enter admin note (optional):') || undefined;
+                                    try {
+                                      await api.post(`/admin/seller-wallet-recharge-requests/${req.id}/status`, {
+                                        status: 'approved',
+                                        adminNote: note
+                                      });
+                                      toast.success('Seller recharge request approved');
+                                      fetchData();
+                                    } catch (error) {
+                                      toast.error(error.response?.data?.detail || 'Failed to approve request');
+                                    }
+                                  }}
+                                  className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-sm"
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    const note = window.prompt('Enter reason for rejection:') || undefined;
+                                    try {
+                                      await api.post(`/admin/seller-wallet-recharge-requests/${req.id}/status`, {
+                                        status: 'rejected',
+                                        adminNote: note
+                                      });
+                                      toast.success('Seller recharge request rejected');
+                                      fetchData();
+                                    } catch (error) {
+                                      toast.error(error.response?.data?.detail || 'Failed to reject request');
+                                    }
+                                  }}
+                                  className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm"
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-right text-xs text-gray-500">
+                                {req.updatedAt && `Processed: ${new Date(req.updatedAt).toLocaleDateString()}`}
                               </div>
                             )}
                           </td>

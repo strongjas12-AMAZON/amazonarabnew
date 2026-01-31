@@ -98,3 +98,4 @@ limits==5.6.0
 slowapi==0.1.9
 resend>=2.0.0
 deprecated
+wrapt
