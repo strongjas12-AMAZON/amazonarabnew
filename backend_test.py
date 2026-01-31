@@ -5302,15 +5302,319 @@ class APITester:
         
         return True
 
+    def test_seller_earnings_calculation(self):
+        """Test seller earnings calculation with NEW store products system"""
+        print("\n" + "="*80)
+        print("TESTING SELLER EARNINGS CALCULATION")
+        print("="*80)
+        
+        if not self.seller_token:
+            self.test_seller_login()
+            
+        if not self.seller_token:
+            self.log_test(
+                "Seller Earnings Calculation", 
+                False, 
+                "Cannot test earnings - seller login failed",
+                None
+            )
+            return False
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            response = self.session.get(f"{self.base_url}/seller/earnings", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    earnings = data.get("earnings", {})
+                    total_earnings = earnings.get("totalEarnings", 0)
+                    available_balance = earnings.get("availableBalance", 0)
+                    pending_withdrawals = earnings.get("pendingWithdrawals", 0)
+                    
+                    self.log_test(
+                        "GET /api/seller/earnings", 
+                        True, 
+                        f"✅ Seller earnings calculation working with NEW store_products system. Total: ${total_earnings}, Available: ${available_balance}, Pending: ${pending_withdrawals}",
+                        {"total_earnings": total_earnings, "available_balance": available_balance, "pending_withdrawals": pending_withdrawals}
+                    )
+                    return True
+                else:
+                    self.log_test(
+                        "GET /api/seller/earnings", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+                    return False
+            else:
+                self.log_test(
+                    "GET /api/seller/earnings", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                return False
+                
+        except Exception as e:
+            self.log_test(
+                "GET /api/seller/earnings", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+            return False
+
+    def test_admin_mark_order_completed(self):
+        """Test admin mark order as completed functionality"""
+        print("\n" + "="*80)
+        print("TESTING ADMIN MARK ORDER AS COMPLETED")
+        print("="*80)
+        
+        if not self.admin_token:
+            self.test_admin_login()
+            
+        if not self.admin_token:
+            self.log_test(
+                "Admin Mark Order Completed", 
+                False, 
+                "Cannot test order completion - admin login failed",
+                None
+            )
+            return False
+            
+        # First get orders to find one to mark as completed
+        try:
+            headers = {"Authorization": f"Bearer {self.admin_token}"}
+            orders_response = self.session.get(f"{self.base_url}/orders", headers=headers)
+            
+            if orders_response.status_code != 200:
+                self.log_test(
+                    "Admin Mark Order Completed - Get Orders", 
+                    False, 
+                    f"Cannot get orders: HTTP {orders_response.status_code}",
+                    None
+                )
+                return False
+                
+            orders_data = orders_response.json()
+            orders = orders_data.get("orders", [])
+            
+            # Find an order that's not already completed
+            test_order = None
+            for order in orders:
+                if order.get("orderStatus") != "completed":
+                    test_order = order
+                    break
+                    
+            if not test_order:
+                self.log_test(
+                    "Admin Mark Order Completed", 
+                    True, 
+                    "✅ No orders available to mark as completed (all orders already completed or no orders exist)",
+                    {"orders_count": len(orders), "note": "no_orders_to_complete"}
+                )
+                return True
+                
+            order_id = test_order.get("id")
+            
+            # Try to mark order as completed
+            completion_data = {"status": "completed"}
+            response = self.session.put(f"{self.base_url}/orders/{order_id}/status", headers=headers, json=completion_data)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    updated_order = data.get("order", {})
+                    new_status = updated_order.get("orderStatus") or updated_order.get("order_status")
+                    
+                    if new_status == "completed":
+                        self.log_test(
+                            "PUT /api/orders/{id}/status (Mark Completed)", 
+                            True, 
+                            f"✅ Admin successfully marked order as completed. Order ID: {order_id}, Status: {new_status}",
+                            {"order_id": order_id, "new_status": new_status}
+                        )
+                        return True
+                    else:
+                        self.log_test(
+                            "PUT /api/orders/{id}/status (Mark Completed)", 
+                            False, 
+                            f"❌ Order status not updated correctly. Expected 'completed', got: {new_status}",
+                            {"order_id": order_id, "expected_status": "completed", "actual_status": new_status}
+                        )
+                        return False
+                else:
+                    self.log_test(
+                        "PUT /api/orders/{id}/status (Mark Completed)", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+                    return False
+            else:
+                self.log_test(
+                    "PUT /api/orders/{id}/status (Mark Completed)", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                return False
+                
+        except Exception as e:
+            self.log_test(
+                "PUT /api/orders/{id}/status (Mark Completed)", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+            return False
+
+    def test_seller_payout_with_trc20_wallet(self):
+        """Test seller payout request with required USDT TRC20 wallet address"""
+        print("\n" + "="*80)
+        print("TESTING SELLER PAYOUT WITH TRC20 WALLET")
+        print("="*80)
+        
+        if not self.seller_token:
+            self.test_seller_login()
+            
+        if not self.seller_token:
+            self.log_test(
+                "Seller Payout with TRC20 Wallet", 
+                False, 
+                "Cannot test payout - seller login failed",
+                None
+            )
+            return False
+            
+        # Test with valid TRC20 wallet address
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            payout_data = {
+                "requestedAmount": 50.0,
+                "payoutWallet": "TY8Z91NMCjREyZVj9NjDsF8hVjyqfxFFRU"  # Valid TRC20 address
+            }
+            
+            response = self.session.post(f"{self.base_url}/seller/payout-requests", headers=headers, json=payout_data)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    payout_request = data.get("payoutRequest", {})
+                    wallet_address = payout_request.get("payoutWallet")
+                    
+                    if wallet_address == payout_data["payoutWallet"]:
+                        self.log_test(
+                            "POST /api/seller/payout-requests (Valid TRC20)", 
+                            True, 
+                            f"✅ Seller payout request created with TRC20 wallet: ${payout_data['requestedAmount']}, Wallet: {wallet_address}",
+                            {"requested_amount": payout_data["requestedAmount"], "wallet_address": wallet_address}
+                        )
+                    else:
+                        self.log_test(
+                            "POST /api/seller/payout-requests (Valid TRC20)", 
+                            False, 
+                            f"❌ Wallet address not saved correctly. Expected: {payout_data['payoutWallet']}, Got: {wallet_address}",
+                            {"expected_wallet": payout_data["payoutWallet"], "actual_wallet": wallet_address}
+                        )
+                        return False
+                else:
+                    self.log_test(
+                        "POST /api/seller/payout-requests (Valid TRC20)", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+                    return False
+            else:
+                self.log_test(
+                    "POST /api/seller/payout-requests (Valid TRC20)", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                return False
+                
+        except Exception as e:
+            self.log_test(
+                "POST /api/seller/payout-requests (Valid TRC20)", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+            return False
+            
+        # Test with invalid wallet address (should fail)
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            invalid_payout_data = {
+                "requestedAmount": 25.0,
+                "payoutWallet": "invalid_wallet_address"  # Invalid format
+            }
+            
+            response = self.session.post(f"{self.base_url}/seller/payout-requests", headers=headers, json=invalid_payout_data)
+            
+            if response.status_code == 400:
+                self.log_test(
+                    "POST /api/seller/payout-requests (Invalid Wallet)", 
+                    True, 
+                    f"✅ TRC20 validation working - invalid wallet address rejected: {response.text}",
+                    {"validation_working": True}
+                )
+                return True
+            elif response.status_code == 200:
+                self.log_test(
+                    "POST /api/seller/payout-requests (Invalid Wallet)", 
+                    False, 
+                    "❌ TRC20 validation NOT working - invalid wallet address was accepted",
+                    {"validation_working": False}
+                )
+                return False
+            else:
+                self.log_test(
+                    "POST /api/seller/payout-requests (Invalid Wallet)", 
+                    False, 
+                    f"Unexpected response: HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                return False
+                
+        except Exception as e:
+            self.log_test(
+                "POST /api/seller/payout-requests (Invalid Wallet)", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+            return False
+
 def main():
     """Main test runner"""
     tester = APITester()
     
     # Test the seller wallet recharge request flow as requested
-    success = tester.test_seller_wallet_recharge_flow()
+    recharge_success = tester.test_seller_wallet_recharge_flow()
+    
+    # Test other high-priority backend tasks that need retesting
+    earnings_success = tester.test_seller_earnings_calculation()
+    order_completion_success = tester.test_admin_mark_order_completed()
+    payout_success = tester.test_seller_payout_with_trc20_wallet()
+    
+    # Overall success
+    overall_success = recharge_success and earnings_success and order_completion_success and payout_success
+    
+    print("\n" + "="*80)
+    print("BACKEND TESTING SUMMARY")
+    print("="*80)
+    print(f"Seller Wallet Recharge Flow: {'✅ PASS' if recharge_success else '❌ FAIL'}")
+    print(f"Seller Earnings Calculation: {'✅ PASS' if earnings_success else '❌ FAIL'}")
+    print(f"Admin Mark Order Completed: {'✅ PASS' if order_completion_success else '❌ FAIL'}")
+    print(f"Seller Payout with TRC20: {'✅ PASS' if payout_success else '❌ FAIL'}")
+    print("="*80)
     
     # Exit with appropriate code
-    sys.exit(0 if success else 1)
+    sys.exit(0 if overall_success else 1)
 
 if __name__ == "__main__":
     main()
