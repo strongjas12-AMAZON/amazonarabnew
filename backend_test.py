@@ -2926,10 +2926,10 @@ class APITester:
                     # The endpoint returns 'rechargeRequests', not 'requests'
                     requests = data.get("rechargeRequests", [])
                     
-                    # Look for our $75 request
+                    # Look for our $75 request - check transactionHash field instead of paymentWallet
                     found_new_request = False
                     for req in requests:
-                        if req.get("amount") == 75 and req.get("paymentWallet") == "test_transaction_hash_123":
+                        if req.get("amount") == 75 and req.get("transactionHash") == "test_transaction_hash_123":
                             found_new_request = True
                             break
                     
