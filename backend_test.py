@@ -6476,7 +6476,7 @@ class APITester:
             order_data = {
                 "items": [
                     {
-                        "product_id": self.store_product_id,
+                        "productId": self.store_product_id,
                         "quantity": 2,
                         "price": self.store_product_price
                     }
