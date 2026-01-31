@@ -33,6 +33,13 @@ const SellerDashboard = () => {
   const [payoutAmount, setPayoutAmount] = useState('');
   const [payoutWallet, setPayoutWallet] = useState('');
   const [payoutSubmitting, setPayoutSubmitting] = useState(false);
+  
+  // Wallet recharge states
+  const [showRechargeModal, setShowRechargeModal] = useState(false);
+  const [rechargeAmount, setRechargeAmount] = useState('');
+  const [transactionHash, setTransactionHash] = useState('');
+  const [rechargeSubmitting, setRechargeSubmitting] = useState(false);
+  const [rechargeHistory, setRechargeHistory] = useState([]);
 
   useEffect(() => {
     if (user) {
