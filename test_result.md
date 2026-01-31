@@ -414,6 +414,7 @@ test_plan:
   current_focus:
     - "Seller Payout Request with USDT TRC20 Wallet Address"
     - "Seller Dashboard - Payout Request Form with TRC20 Wallet"
+    - "Seller Earnings Calculation - Fix for Store Products System"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
