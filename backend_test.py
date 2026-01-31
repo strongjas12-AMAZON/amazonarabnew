@@ -2923,7 +2923,8 @@ class APITester:
             if response.status_code == 200:
                 data = response.json()
                 if data.get("success"):
-                    requests = data.get("requests", [])
+                    # The endpoint returns 'rechargeRequests', not 'requests'
+                    requests = data.get("rechargeRequests", [])
                     
                     # Look for our $75 request
                     found_new_request = False
