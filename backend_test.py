@@ -5253,16 +5253,14 @@ class APITester:
             if response.status_code == 200:
                 data = response.json()
                 if data.get("success"):
-                    updated_request = data.get("request", {})
-                    new_status = updated_request.get("status")
-                    admin_note = updated_request.get("adminNote")
+                    new_status = data.get("status")  # Fixed: get status from response root
                     
                     if new_status == "approved":
                         self.log_test(
                             "POST /api/admin/seller-wallet-recharge-requests/{id}/status", 
                             True, 
-                            f"✅ Admin successfully approved recharge request. Status changed to: {new_status}, Note: {admin_note}",
-                            {"request_id": recharge_request_id, "new_status": new_status, "admin_note": admin_note}
+                            f"✅ Admin successfully approved recharge request. Status changed to: {new_status}",
+                            {"request_id": recharge_request_id, "new_status": new_status, "message": data.get("message")}
                         )
                     else:
                         self.log_test(
