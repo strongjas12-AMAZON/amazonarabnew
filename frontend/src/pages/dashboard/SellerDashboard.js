@@ -96,6 +96,48 @@ const SellerDashboard = () => {
     }
   };
 
+  const fetchRechargeHistory = async () => {
+    try {
+      const res = await api.get('/seller/wallet/recharge-requests');
+      setRechargeHistory(res.data.rechargeRequests || []);
+    } catch (error) {
+      console.error('Failed to load recharge history', error);
+    }
+  };
+
+  const handleRechargeSubmit = async (e) => {
+    e.preventDefault();
+    const amount = parseFloat(rechargeAmount || '0');
+    
+    if (!amount || amount <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+    
+    if (!transactionHash || transactionHash.trim() === '') {
+      toast.error('Please enter your transaction hash');
+      return;
+    }
+    
+    try {
+      setRechargeSubmitting(true);
+      await api.post('/seller/wallet/recharge', {
+        amount: amount,
+        paymentMethod: 'USDT_TRON',
+        paymentWallet: transactionHash.trim() // Using this field for transaction hash
+      });
+      toast.success('Recharge request submitted successfully! Awaiting admin approval.');
+      setRechargeAmount('');
+      setTransactionHash('');
+      setShowRechargeModal(false);
+      await fetchRechargeHistory();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to submit recharge request');
+    } finally {
+      setRechargeSubmitting(false);
+    }
+  };
+
   const fetchStoreNameRequest = async () => {
     try {
       const res = await api.get('/seller/store-name-change');
