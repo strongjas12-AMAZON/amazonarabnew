@@ -5426,22 +5426,22 @@ class APITester:
                 data = response.json()
                 if data.get("success"):
                     updated_order = data.get("order", {})
-                    new_status = updated_order.get("orderStatus") or updated_order.get("order_status")
+                    new_payment_status = updated_order.get("paymentStatus")  # Fixed: check paymentStatus not orderStatus
                     
-                    if new_status == "completed":
+                    if new_payment_status == "completed":
                         self.log_test(
                             "PUT /api/orders/{id}/status (Mark Completed)", 
                             True, 
-                            f"✅ Admin successfully marked order as completed. Order ID: {order_id}, Status: {new_status}",
-                            {"order_id": order_id, "new_status": new_status}
+                            f"✅ Admin successfully marked order as completed. Order ID: {order_id}, Payment Status: {new_payment_status}",
+                            {"order_id": order_id, "new_payment_status": new_payment_status}
                         )
                         return True
                     else:
                         self.log_test(
                             "PUT /api/orders/{id}/status (Mark Completed)", 
                             False, 
-                            f"❌ Order status not updated correctly. Expected 'completed', got: {new_status}",
-                            {"order_id": order_id, "expected_status": "completed", "actual_status": new_status}
+                            f"❌ Order payment status not updated correctly. Expected 'completed', got: {new_payment_status}",
+                            {"order_id": order_id, "expected_status": "completed", "actual_status": new_payment_status}
                         )
                         return False
                 else:
