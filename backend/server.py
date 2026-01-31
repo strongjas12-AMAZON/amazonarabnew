@@ -2177,6 +2177,53 @@ async def get_seller_recharge_requests(current_user: dict = Depends(get_current_
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@api_router.get("/seller/wallet/balance")
+async def get_seller_wallet_balance(current_user: dict = Depends(get_current_user)):
+    """Get seller's wallet balance (from recharges) and total summary"""
+    if current_user['role'] != 'seller':
+        raise HTTPException(status_code=403, detail="Only sellers can view wallet balance")
+    
+    try:
+        # Get or create seller wallet
+        wallet = await get_or_create_seller_wallet(current_user['id'])
+        wallet_balance = float(wallet.get('balance', 0))
+        wallet_total_recharged = float(wallet.get('totalEarnings') or wallet.get('total_earnings', 0))
+        
+        # Get pending recharge requests
+        pending_result = (
+            supabase_admin.table('seller_wallet_recharge_requests')
+            .select('amount')
+            .eq('sellerId', current_user['id'])
+            .eq('status', 'pending')
+            .execute()
+        )
+        pending_recharges = sum(float(r.get('amount', 0)) for r in (pending_result.data or []))
+        
+        # Get approved recharge requests (for history)
+        approved_result = (
+            supabase_admin.table('seller_wallet_recharge_requests')
+            .select('amount')
+            .eq('sellerId', current_user['id'])
+            .eq('status', 'approved')
+            .execute()
+        )
+        total_approved_recharges = sum(float(r.get('amount', 0)) for r in (approved_result.data or []))
+        
+        return {
+            "success": True,
+            "wallet": {
+                "balance": round(wallet_balance, 2),
+                "totalRecharged": round(wallet_total_recharged, 2),
+                "pendingRecharges": round(pending_recharges, 2),
+                "approvedRecharges": round(total_approved_recharges, 2),
+                "updatedAt": wallet.get('updatedAt') or wallet.get('updated_at')
+            }
+        }
+    except Exception as e:
+        logging.error(f"Get seller wallet balance error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @api_router.get("/admin/seller-wallet-recharge-requests")
 async def admin_get_seller_recharge_requests(current_user: dict = Depends(get_current_user)):
     """Admin can view all seller wallet recharge requests"""
