@@ -5386,7 +5386,7 @@ class APITester:
         # First get orders to find one to mark as completed
         try:
             headers = {"Authorization": f"Bearer {self.admin_token}"}
-            orders_response = self.session.get(f"{self.base_url}/orders", headers=headers)
+            orders_response = self.session.get(f"{self.base_url}/orders/my", headers=headers)  # Fixed: use correct endpoint
             
             if orders_response.status_code != 200:
                 self.log_test(
