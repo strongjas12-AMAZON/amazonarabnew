@@ -2952,7 +2952,7 @@ class APITester:
                             {
                                 "total_requests": len(requests),
                                 "new_request_found": False,
-                                "available_requests": [{"amount": req.get("amount"), "wallet": req.get("paymentWallet")} for req in requests[:3]]
+                                "available_requests": [{"amount": req.get("amount"), "transactionHash": req.get("transactionHash")} for req in requests[:3]]
                             }
                         )
                 else:
