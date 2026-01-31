@@ -40,6 +40,7 @@ const SellerDashboard = () => {
   const [transactionHash, setTransactionHash] = useState('');
   const [rechargeSubmitting, setRechargeSubmitting] = useState(false);
   const [rechargeHistory, setRechargeHistory] = useState([]);
+  const [walletBalance, setWalletBalance] = useState(null);
 
   useEffect(() => {
     if (user) {
@@ -48,8 +49,18 @@ const SellerDashboard = () => {
       fetchStoreNameRequest();
       fetchEarnings();
       fetchRechargeHistory();
+      fetchWalletBalance();
     }
   }, [user]);
+
+  const fetchWalletBalance = async () => {
+    try {
+      const res = await api.get('/seller/wallet/balance');
+      setWalletBalance(res.data.wallet || null);
+    } catch (error) {
+      console.error('Failed to load wallet balance', error);
+    }
+  };
 
   const fetchCategories = async () => {
     try {
@@ -132,6 +143,7 @@ const SellerDashboard = () => {
       setTransactionHash('');
       setShowRechargeModal(false);
       await fetchRechargeHistory();
+      await fetchWalletBalance(); // Refresh wallet balance
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to submit recharge request');
     } finally {
@@ -440,15 +452,19 @@ const SellerDashboard = () => {
             {earnings ? `$${earnings.totalEarnings.toFixed(2)}` : '—'}
           </p>
           <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
-            <Wallet className="w-3 h-3 text-[#D4AF37]" />
-            Available: <span className="text-[#D4AF37] font-semibold ml-1">{earnings ? `$${earnings.availableBalance.toFixed(2)}` : '—'}</span>
+            <DollarSign className="w-3 h-3 text-green-400" />
+            Available: <span className="text-green-400 font-semibold ml-1">{earnings ? `$${earnings.availableBalance.toFixed(2)}` : '—'}</span>
           </p>
         </div>
-        <div className="luxury-card">
-          <p className="text-gray-400 text-sm mb-1">Status</p>
-          <span className={`status-badge ${user.verificationStatus === 'verified' ? 'status-verified' : 'status-pending'}`}>
-            {user.verificationStatus}
-          </span>
+        <div className="luxury-card cursor-pointer hover:border-[#D4AF37] transition-colors" onClick={() => setActiveTab('wallet')}>
+          <p className="text-gray-400 text-sm mb-1">Wallet Balance</p>
+          <p className="text-3xl font-bold text-[#D4AF37]">
+            ${walletBalance ? walletBalance.balance.toFixed(2) : '0.00'}
+          </p>
+          <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+            <Clock className="w-3 h-3 text-yellow-400" />
+            Pending: <span className="text-yellow-400 font-semibold ml-1">${walletBalance ? walletBalance.pendingRecharges.toFixed(2) : '0.00'}</span>
+          </p>
         </div>
       </div>
 
@@ -501,6 +517,18 @@ const SellerDashboard = () => {
         >
           <ClipboardList className="w-4 h-4" />
           Order Center
+        </button>
+        <button
+          onClick={() => setActiveTab('wallet')}
+          className={`px-6 py-3 rounded-lg font-medium transition-all flex items-center gap-2 ${
+            activeTab === 'wallet'
+              ? 'bg-[#D4AF37] text-[#0a0a0a]'
+              : 'bg-[rgba(30,30,30,0.6)] text-gray-300 hover:bg-[rgba(30,30,30,0.8)]'
+          }`}
+          data-testid="tab-wallet"
+        >
+          <Wallet className="w-4 h-4" />
+          Wallet
         </button>
         <button
           onClick={() => setActiveTab('payouts')}
@@ -840,6 +868,153 @@ const SellerDashboard = () => {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Wallet Section */}
+      {activeTab === 'wallet' && (
+        <div className="luxury-card mb-8">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white">My Wallet</h2>
+            <button
+              onClick={() => setShowRechargeModal(true)}
+              className="luxury-button flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Recharge Wallet
+            </button>
+          </div>
+
+          {/* Wallet Balance Card */}
+          <div className="mb-8">
+            <div className="bg-gradient-to-br from-[#1a1a1a] to-[#0a0a0a] rounded-xl border-2 border-[#D4AF37] p-6 shadow-lg">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-[#D4AF37]/20 flex items-center justify-center">
+                    <Wallet className="w-6 h-6 text-[#D4AF37]" />
+                  </div>
+                  <div>
+                    <p className="text-gray-400 text-sm">Current Balance</p>
+                    <p className="text-4xl font-bold text-[#D4AF37]">
+                      ${walletBalance ? walletBalance.balance.toFixed(2) : '0.00'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={fetchWalletBalance}
+                  className="text-gray-400 hover:text-[#D4AF37] transition-colors p-2"
+                  title="Refresh Balance"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 12a9 9 0 11-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+                    <path d="M21 3v5h-5" />
+                  </svg>
+                </button>
+              </div>
+              {walletBalance?.updatedAt && (
+                <p className="text-xs text-gray-500">
+                  Last updated: {new Date(walletBalance.updatedAt).toLocaleString()}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Wallet Summary Stats */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+            <div className="p-4 bg-[rgba(30,30,30,0.8)] rounded-lg border border-[rgba(212,175,55,0.2)]">
+              <div className="flex items-center gap-2 mb-2">
+                <CheckCircle className="w-4 h-4 text-green-400" />
+                <p className="text-gray-400 text-sm">Total Approved Recharges</p>
+              </div>
+              <p className="text-2xl font-bold text-green-400">
+                ${walletBalance ? walletBalance.approvedRecharges.toFixed(2) : '0.00'}
+              </p>
+            </div>
+            <div className="p-4 bg-[rgba(30,30,30,0.8)] rounded-lg border border-[rgba(212,175,55,0.2)]">
+              <div className="flex items-center gap-2 mb-2">
+                <Clock className="w-4 h-4 text-yellow-400" />
+                <p className="text-gray-400 text-sm">Pending Recharges</p>
+              </div>
+              <p className="text-2xl font-bold text-yellow-400">
+                ${walletBalance ? walletBalance.pendingRecharges.toFixed(2) : '0.00'}
+              </p>
+            </div>
+            <div className="p-4 bg-[rgba(30,30,30,0.8)] rounded-lg border border-[rgba(212,175,55,0.2)]">
+              <div className="flex items-center gap-2 mb-2">
+                <DollarSign className="w-4 h-4 text-[#D4AF37]" />
+                <p className="text-gray-400 text-sm">Available Balance</p>
+              </div>
+              <p className="text-2xl font-bold text-[#D4AF37]">
+                ${walletBalance ? walletBalance.balance.toFixed(2) : '0.00'}
+              </p>
+            </div>
+          </div>
+
+          {/* How to Recharge Info */}
+          <div className="mb-8 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+            <h3 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-blue-400" />
+              How to Recharge Your Wallet
+            </h3>
+            <ol className="list-decimal list-inside text-sm text-gray-300 space-y-2">
+              <li>Click the "Recharge Wallet" button above</li>
+              <li>Send USDT (TRC20) to the provided wallet address</li>
+              <li>Enter the transaction hash from your wallet app</li>
+              <li>Submit your recharge request for admin approval</li>
+              <li>Once approved, your balance will be updated automatically</li>
+            </ol>
+          </div>
+
+          {/* Recharge History */}
+          <div className="border-t border-[rgba(212,175,55,0.1)] pt-6">
+            <h3 className="text-lg font-semibold text-white mb-4">Recharge History</h3>
+            {rechargeHistory.length === 0 ? (
+              <p className="text-gray-400 text-center py-8">No recharge requests yet.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-[rgba(212,175,55,0.2)]">
+                      <th className="text-left p-3 text-gray-400 font-medium">Date</th>
+                      <th className="text-left p-3 text-gray-400 font-medium">Amount</th>
+                      <th className="text-left p-3 text-gray-400 font-medium hidden md:table-cell">Transaction Hash</th>
+                      <th className="text-left p-3 text-gray-400 font-medium">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rechargeHistory.map((req) => (
+                      <tr key={req.id} className="border-b border-[rgba(212,175,55,0.1)]">
+                        <td className="p-3 text-gray-300 text-sm">
+                          {req.createdAt ? new Date(req.createdAt).toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                          }) : '—'}
+                        </td>
+                        <td className="p-3 text-[#D4AF37] font-semibold">
+                          ${parseFloat(req.amount || 0).toFixed(2)}
+                        </td>
+                        <td className="p-3 text-gray-400 hidden md:table-cell">
+                          <span className="text-xs font-mono truncate max-w-[200px] inline-block" title={req.transactionHash}>
+                            {req.transactionHash || 'N/A'}
+                          </span>
+                        </td>
+                        <td className="p-3">
+                          <span className={`status-badge ${
+                            req.status === 'approved' ? 'status-verified' :
+                            req.status === 'rejected' ? 'status-rejected' :
+                            'status-pending'
+                          }`}>
+                            {req.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

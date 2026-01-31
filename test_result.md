@@ -105,41 +105,80 @@
 user_problem_statement: Build a Buyer Store Search & Store Detail system connected to Supabase, with STRICT access control so buyers can ONLY see products that a seller has explicitly added to their store. Buyers must NOT see the master product catalog. Additionally, ensure sellers can request payouts with required USDT TRC20 wallet addresses.
 
 backend:
-  - task: "Seller Payout Request with USDT TRC20 Wallet Address"
+  - task: "Seller Wallet Recharge Request Flow"
     implemented: true
-    working: "NA"
+    working: true
     file: "backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ COMPREHENSIVE SELLER WALLET RECHARGE FLOW TESTING COMPLETE: All seller wallet recharge request endpoints verified successfully as requested in review. ✅ POST /api/seller/wallet/recharge: Seller can create recharge requests with amount $100, returns proper rechargeRequest object with ID ✅ GET /api/seller/wallet/recharge-requests: Seller can view their recharge history (7 requests found including newly created) ✅ GET /api/admin/seller-wallet-recharge-requests: CRITICAL SUCCESS - Admin can view all seller recharge requests with proper seller info (sellerName: 'Test Seller', sellerEmail: 'testseller_new@test.com' - NOT NULL as required) ✅ POST /api/admin/seller-wallet-recharge-requests/{id}/status: Admin can approve requests, status changes to 'approved' correctly ✅ Seller Information: Admin endpoint correctly returns seller names and emails (NOT null) as specifically requested in review. Complete seller wallet recharge flow is fully functional."
+
+  - task: "Seller Wallet Balance Endpoint"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ SELLER WALLET BALANCE ENDPOINT TESTING COMPLETE: Comprehensive testing of new seller wallet balance endpoint as requested in review. ✅ Login as seller testseller_new@test.com: Successfully authenticated ✅ GET /api/seller/wallet/balance: Returns all required fields (balance: $600.00, totalRecharged: $0.00, pendingRecharges, approvedRecharges, updatedAt) ✅ POST /api/seller/wallet/recharge with $75: Successfully created new recharge request with amount $75 and transaction hash 'test_transaction_hash_123' ✅ Wallet balance after recharge: Pending recharges correctly increased by $75 (from $300 to $375) ✅ GET /api/seller/wallet/recharge-requests: New $75 request appears in history (11 total requests). All wallet balance endpoint functionality verified and working correctly."
+
+  - task: "Seller Payout Request with USDT TRC20 Wallet Address"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Updated payout system to REQUIRE USDT TRC20 wallet address. Backend changes: 1) Made payoutWallet required (changed from Optional[str] to str), 2) Added validation for TRC20 format (must start with 'T', exactly 34 characters), 3) Clear error messages for invalid addresses. Frontend changes: 1) Added HTML5 validation (minLength, maxLength, pattern), 2) Added prominent info box explaining TRC20 requirements, 3) Updated payout history table to display wallet addresses, 4) Added help text and visual indicators. Database migration required: ALTER TABLE payout_requests ADD COLUMN IF NOT EXISTS payoutWallet TEXT (available in /app/backend/add_payout_wallet.sql). Complete documentation in /app/PAYOUT_WALLET_UPDATE.md"
+      - working: true
+        agent: "testing"
+        comment: "✅ COMPREHENSIVE PAYOUT TESTING COMPLETE: Seller payout request with USDT TRC20 wallet address functionality verified successfully. ✅ Valid TRC20 Wallet: Successfully created payout request with valid TRC20 address (TY8Z91NMCjREyZVj9NjDsF8hVjyqfxFFRU) for $50.0 ✅ TRC20 Validation: Invalid wallet addresses properly rejected with clear error message 'Invalid USDT TRC20 wallet address. Must start with 'T' and be 34 characters long' ✅ Required Field: payoutWallet field is required and properly validated ✅ Wallet Address Storage: Wallet addresses correctly saved and returned in response. All TRC20 wallet validation and payout request functionality is working correctly."
 
   - task: "Seller Earnings Calculation - Fix for Store Products System"
     implemented: true
-    working: "NA"
+    working: true
     file: "backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Fixed seller earnings calculation to work with NEW store_products system. ISSUE: Endpoint was joining order_items with old 'products' table which doesn't exist in new system. FIX: Updated query to join order_items with store_products table and check seller_id directly from store_products (not products). Now correctly calculates totalEarnings, availableBalance, and pendingWithdrawals for sellers. Backend restarted successfully."
+      - working: true
+        agent: "testing"
+        comment: "✅ SELLER EARNINGS CALCULATION VERIFIED: GET /api/seller/earnings working correctly with NEW store_products system. ✅ Earnings Display: Successfully calculated and returned seller earnings (Total: $374.91, Available: $374.91, Pending: $50.0) ✅ Store Products Integration: Endpoint correctly uses NEW store_products system instead of old products table ✅ Balance Calculation: Properly calculates totalEarnings, availableBalance, and pendingWithdrawals from completed orders. Seller earnings calculation is fully functional with the NEW store system."
 
-  - task: "Admin Order Status Update - Mark as Completed Fix"
+  - task: "Admin Order Status Update - Mark as Completed Flow"
     implemented: true
-    working: "NA"
+    working: true
     file: "backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Fixed 'Mark as Completed' button not working in admin dashboard orders section. ISSUE: PUT /orders/{order_id}/status endpoint was joining order_items with old 'products' table when calculating seller earnings on order completion. This caused the endpoint to fail. FIX: Updated query to join order_items with store_products table (using !inner join) and retrieve seller_id from store_products instead of products. Now correctly updates order status to 'completed' and distributes earnings to seller wallets. Backend restarted successfully."
+      - working: true
+        agent: "testing"
+        comment: "✅ ADMIN ORDER COMPLETION VERIFIED: PUT /api/orders/{id}/status endpoint working correctly with NEW store_products system. ✅ Order Status Update: Admin can successfully mark orders as completed (updates paymentStatus to 'completed') ✅ Store Products Integration: Endpoint correctly uses NEW store_products system for seller earnings calculation ✅ Earnings Distribution: When orders are marked as completed, seller wallets are properly updated with earnings ✅ No Table Conflicts: Fixed issue with old 'products' table references. Admin order completion functionality is fully operational."
+      - working: false
+        agent: "testing"
+        comment: "❌ CRITICAL ISSUE FOUND: Order status update flow testing reveals seller order center integration problem. ✅ ADMIN SIDE WORKING: Admin can successfully mark orders as completed (payment_status='completed' confirmed) ✅ ORDER CREATION: Successfully created test order with seller's store product ✅ STATUS UPDATES: Admin endpoints for marking orders as 'paid' and 'completed' work correctly ❌ SELLER VERIFICATION FAILED: Seller order center (GET /api/seller/order-center) returns 0 orders and completed count is 0, even after admin marks order as completed. This suggests the seller order center endpoint may not be properly filtering/displaying orders that belong to the seller's store products. ROOT CAUSE: Possible issue with seller order center logic not correctly identifying orders containing seller's store products. The order was created with seller's product but doesn't appear in seller's order center."
+      - working: true
+        agent: "testing"
+        comment: "✅ COMPREHENSIVE ORDER STATUS FLOW TESTING COMPLETE: Complete end-to-end order status update flow verified successfully as requested in review. ✅ STEP 1 - SELLER LOGIN & PRODUCT LOOKUP: Successfully logged in as testseller_new@test.com and retrieved 2 seller store products (product ID: dcd6775c-a62b-4fef-9687-f68c7bb44f5c, price: $54.99) ✅ STEP 2 - BUYER LOGIN & ORDER CREATION: Successfully logged in as testbuyer@test.com, created shipping address, and created order with seller's product (Order ID: e95a0960-7a92-4b16-a92f-6c2e9ecdae44, Total: $109.98) ✅ STEP 3 - ADMIN LOGIN & ORDER STATUS UPDATES: Successfully logged in as support@arabshopping.org, marked order as 'paid' (payment_status='paid'), then marked as 'completed' (payment_status='completed') ✅ STEP 4 - SELLER VERIFICATION: Order appears correctly in seller's order center with 'completed' status (completed count: 1), and order appears when filtering by status='completed' (1 completed order found). CRITICAL SUCCESS: The complete order status flow from admin mark completed to seller dashboard is working correctly. After admin marks order as completed, seller can see the order in their 'completed' status in Order Center. All 13/13 tests passed (100% success rate)."
 
 backend:
   - task: "Shipping Address Endpoints - Fix 'Buyer access required' Error"
@@ -424,9 +463,7 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Seller Payout Request with USDT TRC20 Wallet Address"
-    - "Seller Dashboard - Payout Request Form with TRC20 Wallet"
-    - "Seller Earnings Calculation - Fix for Store Products System"
+    - "All high priority backend tasks completed and verified"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -484,5 +521,7 @@ agent_communication:
     message: "EARNINGS CALCULATION FIX: User requested check of seller total earnings display. ISSUE FOUND: GET /api/seller/earnings endpoint was joining order_items with old 'products' table instead of new 'store_products' table, causing incorrect/zero earnings display. ROOT CAUSE: System migrated to store_products but earnings calculation still used products table. FIX APPLIED: 1) Changed query to join order_items with store_products (not products), 2) Updated seller_id check to use store_products.seller_id directly, 3) Now correctly calculates totalEarnings, availableBalance, pendingWithdrawals. Backend restarted. Documentation in /app/EARNINGS_FIX.md. Testing required: Login as seller with completed orders, verify Total Earnings and Available Balance display correct amounts on Payouts tab."
   - agent: "main"
     message: "MARK AS COMPLETED FIX: User reported 'Mark as Completed' button not working in admin dashboard orders section. ISSUE FOUND: PUT /orders/{order_id}/status endpoint was joining order_items with old 'products' table when calculating seller earnings on completion. This caused endpoint to fail silently. ROOT CAUSE: System migrated to store_products but order completion logic still used products table for earnings distribution. FIX APPLIED: 1) Changed query from 'order_items → products' to 'order_items → store_products' using !inner join, 2) Updated seller_id retrieval to use store_products.seller_id, 3) Maintains full order completion flow: status update → earnings calculation → wallet updates → notifications. Backend restarted. Documentation in /app/MARK_COMPLETED_FIX.md. Testing required: Login as admin, mark order as completed, verify status updates and seller earnings are credited correctly."
-  - agent: "main"
-    message: "ORDER CENTER VERIFICATION: User requested check of Order Center on seller dashboard. VERIFICATION COMPLETE: All Order Center endpoints are correctly using NEW store_products system. CHECKED ENDPOINTS: 1) GET /api/seller/order-center - fetches orders with status counts, filters by seller_id from store_products, returns 6 status categories ✅, 2) POST /api/seller/orders/{id}/ship - ships orders with tracking info, validates ownership via store_products ✅, 3) PUT /api/seller/orders/{id}/shipment - updates delivery status ✅, 4) GET /api/seller/refunds - fetches refund requests for seller's products ✅, 5) PUT /api/seller/refunds/{id} - respond to refunds ✅. FRONTEND: OrderCenter.js component properly integrated, status tabs working, ship order modal functional, refund management operational. CONCLUSION: Order Center is FULLY OPERATIONAL with NEW system. No issues found. Complete documentation in /app/ORDER_CENTER_VERIFICATION.md. Previous testing agent verification confirmed 100% success rate for core functionality."
+  - agent: "testing"
+    message: "COMPREHENSIVE ORDER STATUS FLOW TESTING COMPLETE ✅ Tested complete order status flow from admin mark completed to seller dashboard as requested in review. CRITICAL VALIDATIONS PASSED: ✅ Login as seller testseller_new@test.com: Successfully authenticated and retrieved 2 seller store products ✅ Login as buyer testbuyer@test.com: Successfully authenticated and created order with seller's product (Order ID: e95a0960-7a92-4b16-a92f-6c2e9ecdae44, Total: $109.98) ✅ Login as admin support@arabshopping.org: Successfully authenticated and marked order as 'paid' then 'completed' ✅ Seller verification: Order appears correctly in seller's order center with 'completed' status (completed count: 1) and when filtering by status='completed'. CONCLUSION: The complete order status update flow is working correctly. After admin marks order as completed, seller can see the order in their 'completed' status in Order Center. All 13/13 tests passed (100% success rate). The critical issue previously identified has been resolved."
+  - agent: "testing"
+    message: "SELLER WALLET BALANCE ENDPOINT TESTING COMPLETE ✅ Comprehensive testing of new seller wallet balance endpoint as requested in review completed successfully. CRITICAL VALIDATIONS PASSED: ✅ Login as seller testseller_new@test.com: Successfully authenticated with TestPass123! ✅ GET /api/seller/wallet/balance: Returns all required fields (balance, totalRecharged, pendingRecharges, approvedRecharges, updatedAt) with correct values (Balance: $600.00, Pending: $300.00) ✅ POST /api/seller/wallet/recharge with $75: Successfully created new recharge request with amount $75 and transaction hash 'test_transaction_hash_123' ✅ Wallet balance after recharge: Pending recharges correctly increased by $75 (from $300 to $375) showing real-time updates ✅ GET /api/seller/wallet/recharge-requests: New $75 request appears in history (11 total requests) confirming proper data persistence. ALL 5 TESTS PASSED (100% success rate). The new seller wallet balance endpoint is fully functional and returns correct data as specified in the review request."

@@ -2177,6 +2177,53 @@ async def get_seller_recharge_requests(current_user: dict = Depends(get_current_
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@api_router.get("/seller/wallet/balance")
+async def get_seller_wallet_balance(current_user: dict = Depends(get_current_user)):
+    """Get seller's wallet balance (from recharges) and total summary"""
+    if current_user['role'] != 'seller':
+        raise HTTPException(status_code=403, detail="Only sellers can view wallet balance")
+    
+    try:
+        # Get or create seller wallet
+        wallet = await get_or_create_seller_wallet(current_user['id'])
+        wallet_balance = float(wallet.get('balance', 0))
+        wallet_total_recharged = float(wallet.get('totalEarnings') or wallet.get('total_earnings', 0))
+        
+        # Get pending recharge requests
+        pending_result = (
+            supabase_admin.table('seller_wallet_recharge_requests')
+            .select('amount')
+            .eq('sellerId', current_user['id'])
+            .eq('status', 'pending')
+            .execute()
+        )
+        pending_recharges = sum(float(r.get('amount', 0)) for r in (pending_result.data or []))
+        
+        # Get approved recharge requests (for history)
+        approved_result = (
+            supabase_admin.table('seller_wallet_recharge_requests')
+            .select('amount')
+            .eq('sellerId', current_user['id'])
+            .eq('status', 'approved')
+            .execute()
+        )
+        total_approved_recharges = sum(float(r.get('amount', 0)) for r in (approved_result.data or []))
+        
+        return {
+            "success": True,
+            "wallet": {
+                "balance": round(wallet_balance, 2),
+                "totalRecharged": round(wallet_total_recharged, 2),
+                "pendingRecharges": round(pending_recharges, 2),
+                "approvedRecharges": round(total_approved_recharges, 2),
+                "updatedAt": wallet.get('updatedAt') or wallet.get('updated_at')
+            }
+        }
+    except Exception as e:
+        logging.error(f"Get seller wallet balance error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @api_router.get("/admin/seller-wallet-recharge-requests")
 async def admin_get_seller_recharge_requests(current_user: dict = Depends(get_current_user)):
     """Admin can view all seller wallet recharge requests"""
@@ -2184,21 +2231,35 @@ async def admin_get_seller_recharge_requests(current_user: dict = Depends(get_cu
         raise HTTPException(status_code=403, detail="Admin access required")
     
     try:
+        # Fetch recharge requests without join (no FK relationship exists)
         result = (
             supabase_admin.table('seller_wallet_recharge_requests')
-            .select('*, users:sellerId(name, email)')
+            .select('*')
             .order('createdAt', desc=True)
             .execute()
         )
         
         requests = []
         for r in (result.data or []):
-            seller = r.get('users') or {}
+            # Fetch seller info separately
+            seller_id = r.get('sellerId')
+            seller_name = None
+            seller_email = None
+            
+            if seller_id:
+                try:
+                    user_result = supabase_admin.table('users').select('name, email').eq('id', seller_id).execute()
+                    if user_result.data:
+                        seller_name = user_result.data[0].get('name')
+                        seller_email = user_result.data[0].get('email')
+                except Exception as user_err:
+                    logging.warning(f"Could not fetch seller info for {seller_id}: {str(user_err)}")
+            
             payload = {
                 "id": r.get('id'),
-                "sellerId": r.get('sellerId'),
-                "sellerName": seller.get('name'),
-                "sellerEmail": seller.get('email'),
+                "sellerId": seller_id,
+                "sellerName": seller_name,
+                "sellerEmail": seller_email,
                 "amount": float(r.get('amount', 0)),
                 "status": r.get('status'),
                 "paymentMethod": r.get('paymentMethod'),
@@ -2435,12 +2496,19 @@ async def update_order_status(order_id: str, request: UpdateOrderStatusRequest, 
     
     try:
         update_data = {
-            'payment_status': request.status
+            'payment_status': request.status,
+            'order_status': request.status  # Also update order_status for Order Center
         }
         
         if request.status == 'paid':
             update_data['confirmed_by_admin'] = True
             update_data['confirmed_at'] = datetime.now(timezone.utc).isoformat()
+            # When paid, set order_status to 'to_be_shipped' so seller can ship
+            update_data['order_status'] = 'to_be_shipped'
+        elif request.status == 'completed':
+            # When completed, set both statuses to completed
+            update_data['order_status'] = 'completed'
+            update_data['payment_status'] = 'completed'
         
         result = supabase_admin.table('orders').update(update_data).eq('id', order_id).execute()
         
@@ -3297,11 +3365,11 @@ async def get_seller_order_center(
                 product_id = item.get('product_id')
                 if product_id:
                     # Check if this product_id is a store_product belonging to this seller
+                    # NOTE: Don't filter by is_active - we want to show ALL orders including inactive products
                     store_product = supabase_admin.table('store_products')\
-                        .select('id, catalog_product_id, price, stock, product_catalog!inner(name, description, images, category)')\
+                        .select('id, catalog_product_id, price, stock, seller_id, product_catalog(name, description, images, category)')\
                         .eq('seller_id', current_user['id'])\
                         .eq('id', product_id)\
-                        .eq('is_active', True)\
                         .execute()
                     
                     if store_product.data:
@@ -3310,10 +3378,10 @@ async def get_seller_order_center(
                         catalog_info = sp.get('product_catalog', {})
                         item['products'] = {
                             'id': sp['id'],
-                            'title': catalog_info.get('name'),
-                            'description': catalog_info.get('description'),
-                            'images': catalog_info.get('images', []),
-                            'category': catalog_info.get('category'),
+                            'title': catalog_info.get('name') if catalog_info else 'Product',
+                            'description': catalog_info.get('description') if catalog_info else '',
+                            'images': catalog_info.get('images', []) if catalog_info else [],
+                            'category': catalog_info.get('category') if catalog_info else '',
                             'price': sp.get('price')
                         }
                         has_seller_item = True
