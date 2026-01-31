@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime
 
 # Get Supabase credentials from environment
-SUPABASE_URL = os.getenv('SUPABASE_URL')
+SUPABASE_URL = os.getenv('SUPABASE_URL') or os.getenv('NEXT_PUBLIC_SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 
 if not SUPABASE_URL or not SUPABASE_KEY:
