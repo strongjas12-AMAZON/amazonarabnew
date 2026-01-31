@@ -205,7 +205,6 @@ def cleanup_and_seed():
                 'id': str(uuid.uuid4()),
                 'name': name,
                 'description': desc,
-                'price': price,
                 'base_price': price,
                 'category': category,
                 'images': [image],
