@@ -3365,11 +3365,11 @@ async def get_seller_order_center(
                 product_id = item.get('product_id')
                 if product_id:
                     # Check if this product_id is a store_product belonging to this seller
+                    # NOTE: Don't filter by is_active - we want to show ALL orders including inactive products
                     store_product = supabase_admin.table('store_products')\
-                        .select('id, catalog_product_id, price, stock, product_catalog!inner(name, description, images, category)')\
+                        .select('id, catalog_product_id, price, stock, seller_id, product_catalog(name, description, images, category)')\
                         .eq('seller_id', current_user['id'])\
                         .eq('id', product_id)\
-                        .eq('is_active', True)\
                         .execute()
                     
                     if store_product.data:
@@ -3378,10 +3378,10 @@ async def get_seller_order_center(
                         catalog_info = sp.get('product_catalog', {})
                         item['products'] = {
                             'id': sp['id'],
-                            'title': catalog_info.get('name'),
-                            'description': catalog_info.get('description'),
-                            'images': catalog_info.get('images', []),
-                            'category': catalog_info.get('category'),
+                            'title': catalog_info.get('name') if catalog_info else 'Product',
+                            'description': catalog_info.get('description') if catalog_info else '',
+                            'images': catalog_info.get('images', []) if catalog_info else [],
+                            'category': catalog_info.get('category') if catalog_info else '',
                             'price': sp.get('price')
                         }
                         has_seller_item = True
