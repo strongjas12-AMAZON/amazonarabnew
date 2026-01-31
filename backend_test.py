@@ -6073,8 +6073,16 @@ class APITester:
                 data = response.json()
                 if data.get("success"):
                     order = data.get("order", {})
-                    order_status = order.get("orderStatus") or order.get("order_status")
-                    payment_status = order.get("paymentStatus") or order.get("payment_status")
+                    
+                    # Debug: Print all available fields
+                    print(f"DEBUG: Completion response fields: {list(order.keys())}")
+                    
+                    # Try different field name variations
+                    order_status = (order.get("orderStatus") or 
+                                  order.get("order_status") or 
+                                  order.get("status"))
+                    payment_status = (order.get("paymentStatus") or 
+                                    order.get("payment_status"))
                     
                     if order_status == 'completed' and payment_status == 'completed':
                         self.log_test(
