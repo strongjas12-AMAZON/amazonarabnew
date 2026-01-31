@@ -452,15 +452,19 @@ const SellerDashboard = () => {
             {earnings ? `$${earnings.totalEarnings.toFixed(2)}` : '—'}
           </p>
           <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
-            <Wallet className="w-3 h-3 text-[#D4AF37]" />
-            Available: <span className="text-[#D4AF37] font-semibold ml-1">{earnings ? `$${earnings.availableBalance.toFixed(2)}` : '—'}</span>
+            <DollarSign className="w-3 h-3 text-green-400" />
+            Available: <span className="text-green-400 font-semibold ml-1">{earnings ? `$${earnings.availableBalance.toFixed(2)}` : '—'}</span>
           </p>
         </div>
-        <div className="luxury-card">
-          <p className="text-gray-400 text-sm mb-1">Status</p>
-          <span className={`status-badge ${user.verificationStatus === 'verified' ? 'status-verified' : 'status-pending'}`}>
-            {user.verificationStatus}
-          </span>
+        <div className="luxury-card cursor-pointer hover:border-[#D4AF37] transition-colors" onClick={() => setActiveTab('wallet')}>
+          <p className="text-gray-400 text-sm mb-1">Wallet Balance</p>
+          <p className="text-3xl font-bold text-[#D4AF37]">
+            ${walletBalance ? walletBalance.balance.toFixed(2) : '0.00'}
+          </p>
+          <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+            <Clock className="w-3 h-3 text-yellow-400" />
+            Pending: <span className="text-yellow-400 font-semibold ml-1">${walletBalance ? walletBalance.pendingRecharges.toFixed(2) : '0.00'}</span>
+          </p>
         </div>
       </div>
 
