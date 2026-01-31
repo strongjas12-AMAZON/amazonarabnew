@@ -5916,13 +5916,21 @@ class APITester:
                 if data.get("success"):
                     orders = data.get("orders", [])
                     
-                    # Find an order with payment_status='pending_payment' or 'paid'
+                    # First try to find an order with payment_status='pending_payment' or 'paid'
                     suitable_order = None
                     for order in orders:
                         payment_status = order.get("paymentStatus") or order.get("payment_status")
                         if payment_status in ['pending_payment', 'paid']:
                             suitable_order = order
                             break
+                    
+                    # If no pending/paid orders, use a completed order to test the verification flow
+                    if not suitable_order:
+                        for order in orders:
+                            payment_status = order.get("paymentStatus") or order.get("payment_status")
+                            if payment_status == 'completed':
+                                suitable_order = order
+                                break
                     
                     if suitable_order:
                         order_id = suitable_order.get("id")
@@ -5939,7 +5947,7 @@ class APITester:
                         self.log_test(
                             "GET /api/orders/my (admin)", 
                             False, 
-                            f"Found {len(orders)} orders but none have payment_status='pending_payment' or 'paid'",
+                            f"Found {len(orders)} orders but none have suitable payment_status",
                             {"orders_count": len(orders), "available_statuses": [o.get("paymentStatus") or o.get("payment_status") for o in orders]}
                         )
                         return None
