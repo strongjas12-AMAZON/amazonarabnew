@@ -2247,14 +2247,14 @@ async def update_order_status(order_id: str, request: UpdateOrderStatusRequest, 
         # When order is completed, update seller wallets with earnings
         if result.data and request.status == 'completed':
             order_data = result.data[0]
-            # Fetch order items with products
-            order_items_result = supabase_admin.table('order_items').select('*, products(*)').eq('order_id', order_id).execute()
+            # Fetch order items with store_products (NEW system)
+            order_items_result = supabase_admin.table('order_items').select('*, store_products!inner(seller_id)').eq('order_id', order_id).execute()
             
             # Group earnings by seller
             seller_earnings = {}
             for item in (order_items_result.data or []):
-                product = item.get('products', {})
-                seller_id = product.get('seller_id')
+                store_product = item.get('store_products', {})
+                seller_id = store_product.get('seller_id')
                 if seller_id:
                     earnings = float(item.get('price', 0)) * int(item.get('quantity', 0))
                     seller_earnings[seller_id] = seller_earnings.get(seller_id, 0) + earnings
