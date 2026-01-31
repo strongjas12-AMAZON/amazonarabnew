@@ -6250,7 +6250,7 @@ class APITester:
             order_data = {
                 "items": [
                     {
-                        "product_id": product_id,
+                        "productId": product_id,  # Use camelCase as expected by API
                         "quantity": quantity,
                         "price": product_price
                     }
