@@ -879,16 +879,23 @@ const SellerDashboard = () => {
                     </div>
                     <div className="flex-1">
                       <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Your Wallet Address (TRC20)
+                        USDT TRC20 Wallet Address <span className="text-red-400">*</span>
                       </label>
                       <input
                         type="text"
                         value={payoutWallet}
                         onChange={(e) => setPayoutWallet(e.target.value)}
                         className="luxury-input w-full font-mono text-sm"
-                        placeholder="Enter your TRC20 wallet address"
+                        placeholder="Enter your TRC20 wallet address (starts with T)"
+                        minLength={34}
+                        maxLength={34}
+                        pattern="T[A-Za-z0-9]{33}"
+                        title="Must be a valid TRC20 wallet address (34 characters, starts with T)"
                         required
                       />
+                      <p className="text-xs text-gray-500 mt-1">
+                        ⓘ Must be a valid USDT TRC20 wallet address (34 characters, starts with 'T')
+                      </p>
                     </div>
                   </div>
                   <button
