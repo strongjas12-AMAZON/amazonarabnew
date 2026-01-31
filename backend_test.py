@@ -2941,7 +2941,7 @@ class APITester:
                             {
                                 "total_requests": len(requests),
                                 "new_request_found": True,
-                                "search_criteria": {"amount": 75, "paymentWallet": "test_transaction_hash_123"}
+                                "search_criteria": {"amount": 75, "transactionHash": "test_transaction_hash_123"}
                             }
                         )
                     else:
