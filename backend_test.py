@@ -6327,6 +6327,556 @@ class APITester:
             )
             return None
 
+    def test_get_seller_store_products_for_order(self):
+        """Test GET /api/seller/store/products - Get seller's store products for order creation"""
+        if not self.seller_token:
+            self.log_test(
+                "GET /api/seller/store/products (for order)", 
+                False, 
+                "No seller auth token available - seller login failed",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            response = self.session.get(f"{self.base_url}/seller/store/products", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    products = data.get("products", [])
+                    
+                    if len(products) > 0:
+                        # Store the first product for order creation
+                        first_product = products[0]
+                        self.store_product_id = first_product.get("id")
+                        self.store_product_price = first_product.get("price", 29.99)
+                        
+                        self.log_test(
+                            "GET /api/seller/store/products (for order)", 
+                            True, 
+                            f"Found {len(products)} seller products. Using product ID: {self.store_product_id}, price: ${self.store_product_price}",
+                            {"products_count": len(products), "selected_product_id": self.store_product_id, "selected_price": self.store_product_price}
+                        )
+                    else:
+                        self.log_test(
+                            "GET /api/seller/store/products (for order)", 
+                            False, 
+                            "No products found in seller's store - cannot create order",
+                            {"products_count": 0}
+                        )
+                else:
+                    self.log_test(
+                        "GET /api/seller/store/products (for order)", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            else:
+                self.log_test(
+                    "GET /api/seller/store/products (for order)", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "GET /api/seller/store/products (for order)", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_create_buyer_address(self):
+        """Test POST /api/buyer/addresses - Create shipping address for order"""
+        if not self.buyer_token:
+            self.log_test(
+                "POST /api/buyer/addresses", 
+                False, 
+                "No buyer auth token available - buyer login failed",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.buyer_token}"}
+            address_data = {
+                "fullName": "John Doe",
+                "phone": "+1234567890",
+                "addressLine1": "123 Test Street",
+                "addressLine2": "Apt 4B",
+                "city": "Test City",
+                "state": "Test State",
+                "postalCode": "12345",
+                "country": "Test Country",
+                "isDefault": True
+            }
+            
+            response = self.session.post(f"{self.base_url}/buyer/addresses", headers=headers, json=address_data)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    address = data.get("address", {})
+                    self.buyer_address_id = address.get("id")
+                    
+                    self.log_test(
+                        "POST /api/buyer/addresses", 
+                        True, 
+                        f"Shipping address created successfully. Address ID: {self.buyer_address_id}",
+                        {"address_id": self.buyer_address_id, "full_name": address.get("fullName")}
+                    )
+                else:
+                    self.log_test(
+                        "POST /api/buyer/addresses", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            else:
+                self.log_test(
+                    "POST /api/buyer/addresses", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "POST /api/buyer/addresses", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_create_order_with_seller_product(self):
+        """Test POST /api/orders - Create order with seller's product"""
+        if not self.buyer_token:
+            self.log_test(
+                "POST /api/orders (with seller product)", 
+                False, 
+                "No buyer auth token available - buyer login failed",
+                None
+            )
+            return
+            
+        if not self.store_product_id:
+            self.log_test(
+                "POST /api/orders (with seller product)", 
+                False, 
+                "No store product ID available - seller product lookup failed",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.buyer_token}"}
+            order_data = {
+                "items": [
+                    {
+                        "product_id": self.store_product_id,
+                        "quantity": 2,
+                        "price": self.store_product_price
+                    }
+                ],
+                "totalAmount": self.store_product_price * 2,
+                "useWallet": False,
+                "shippingAddressId": self.buyer_address_id,
+                "shippingName": "John Doe",
+                "shippingPhone": "+1234567890",
+                "shippingAddress": {
+                    "fullName": "John Doe",
+                    "phone": "+1234567890",
+                    "addressLine1": "123 Test Street",
+                    "city": "Test City",
+                    "state": "Test State",
+                    "postalCode": "12345",
+                    "country": "Test Country"
+                }
+            }
+            
+            response = self.session.post(f"{self.base_url}/orders", headers=headers, json=order_data)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    order = data.get("order", {})
+                    self.test_order_id = order.get("id")
+                    
+                    self.log_test(
+                        "POST /api/orders (with seller product)", 
+                        True, 
+                        f"Order created successfully with seller's product. Order ID: {self.test_order_id}, Total: ${order.get('totalAmount', 0)}",
+                        {"order_id": self.test_order_id, "total_amount": order.get("totalAmount"), "product_id": self.store_product_id}
+                    )
+                else:
+                    self.log_test(
+                        "POST /api/orders (with seller product)", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            else:
+                self.log_test(
+                    "POST /api/orders (with seller product)", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "POST /api/orders (with seller product)", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_admin_mark_order_as_paid(self):
+        """Test PUT /api/orders/{order_id}/status - Mark order as paid"""
+        if not self.admin_token:
+            self.log_test(
+                "PUT /api/orders/{order_id}/status (paid)", 
+                False, 
+                "No admin auth token available - admin login failed",
+                None
+            )
+            return
+            
+        if not self.test_order_id:
+            self.log_test(
+                "PUT /api/orders/{order_id}/status (paid)", 
+                False, 
+                "No test order ID available - order creation failed",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.admin_token}"}
+            status_data = {"status": "paid"}
+            
+            response = self.session.put(f"{self.base_url}/orders/{self.test_order_id}/status", headers=headers, json=status_data)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    order = data.get("order", {})
+                    payment_status = order.get("paymentStatus") or order.get("payment_status")
+                    
+                    if payment_status == "paid":
+                        self.log_test(
+                            "PUT /api/orders/{order_id}/status (paid)", 
+                            True, 
+                            f"Order marked as paid successfully. Payment status: {payment_status}",
+                            {"order_id": self.test_order_id, "payment_status": payment_status}
+                        )
+                    else:
+                        self.log_test(
+                            "PUT /api/orders/{order_id}/status (paid)", 
+                            False, 
+                            f"Order status not updated correctly. Expected 'paid', got '{payment_status}'",
+                            {"order_id": self.test_order_id, "payment_status": payment_status}
+                        )
+                else:
+                    self.log_test(
+                        "PUT /api/orders/{order_id}/status (paid)", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            else:
+                self.log_test(
+                    "PUT /api/orders/{order_id}/status (paid)", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "PUT /api/orders/{order_id}/status (paid)", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_admin_mark_order_as_completed(self):
+        """Test PUT /api/orders/{order_id}/status - Mark order as completed"""
+        if not self.admin_token:
+            self.log_test(
+                "PUT /api/orders/{order_id}/status (completed)", 
+                False, 
+                "No admin auth token available - admin login failed",
+                None
+            )
+            return
+            
+        if not self.test_order_id:
+            self.log_test(
+                "PUT /api/orders/{order_id}/status (completed)", 
+                False, 
+                "No test order ID available - order creation failed",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.admin_token}"}
+            status_data = {"status": "completed"}
+            
+            response = self.session.put(f"{self.base_url}/orders/{self.test_order_id}/status", headers=headers, json=status_data)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    order = data.get("order", {})
+                    payment_status = order.get("paymentStatus") or order.get("payment_status")
+                    
+                    if payment_status == "completed":
+                        self.log_test(
+                            "PUT /api/orders/{order_id}/status (completed)", 
+                            True, 
+                            f"Order marked as completed successfully. Payment status: {payment_status}",
+                            {"order_id": self.test_order_id, "payment_status": payment_status}
+                        )
+                    else:
+                        self.log_test(
+                            "PUT /api/orders/{order_id}/status (completed)", 
+                            False, 
+                            f"Order status not updated correctly. Expected 'completed', got '{payment_status}'",
+                            {"order_id": self.test_order_id, "payment_status": payment_status}
+                        )
+                else:
+                    self.log_test(
+                        "PUT /api/orders/{order_id}/status (completed)", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            else:
+                self.log_test(
+                    "PUT /api/orders/{order_id}/status (completed)", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "PUT /api/orders/{order_id}/status (completed)", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_seller_order_center_verification(self):
+        """Test GET /api/seller/order-center - Verify order appears in seller's completed orders"""
+        if not self.seller_token:
+            self.log_test(
+                "GET /api/seller/order-center (verification)", 
+                False, 
+                "No seller auth token available - seller login failed",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            response = self.session.get(f"{self.base_url}/seller/order-center", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    orders = data.get("orders", [])
+                    counts = data.get("counts", {})
+                    completed_count = counts.get("completed", 0)
+                    
+                    # Check if our test order appears in the orders list
+                    test_order_found = False
+                    completed_orders = []
+                    
+                    for order in orders:
+                        order_id = order.get("id")
+                        payment_status = order.get("paymentStatus") or order.get("payment_status")
+                        
+                        if payment_status == "completed":
+                            completed_orders.append(order_id)
+                            
+                        if order_id == self.test_order_id:
+                            test_order_found = True
+                            if payment_status == "completed":
+                                self.log_test(
+                                    "GET /api/seller/order-center (verification)", 
+                                    True, 
+                                    f"✅ SUCCESS: Order {self.test_order_id} appears in seller's order center with 'completed' status. Completed count: {completed_count}",
+                                    {"order_id": self.test_order_id, "payment_status": payment_status, "completed_count": completed_count, "total_orders": len(orders)}
+                                )
+                                return
+                            else:
+                                self.log_test(
+                                    "GET /api/seller/order-center (verification)", 
+                                    False, 
+                                    f"❌ Order {self.test_order_id} found in seller's order center but status is '{payment_status}', not 'completed'",
+                                    {"order_id": self.test_order_id, "payment_status": payment_status, "completed_count": completed_count}
+                                )
+                                return
+                    
+                    if not test_order_found:
+                        self.log_test(
+                            "GET /api/seller/order-center (verification)", 
+                            False, 
+                            f"❌ CRITICAL ISSUE: Order {self.test_order_id} does NOT appear in seller's order center. Total orders: {len(orders)}, Completed count: {completed_count}. This suggests the seller order center is not properly identifying orders with seller's products.",
+                            {"order_id": self.test_order_id, "total_orders": len(orders), "completed_count": completed_count, "completed_orders": completed_orders}
+                        )
+                    else:
+                        self.log_test(
+                            "GET /api/seller/order-center (verification)", 
+                            False, 
+                            f"❌ Order {self.test_order_id} found but not in completed status",
+                            {"order_id": self.test_order_id, "total_orders": len(orders), "completed_count": completed_count}
+                        )
+                else:
+                    self.log_test(
+                        "GET /api/seller/order-center (verification)", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            else:
+                self.log_test(
+                    "GET /api/seller/order-center (verification)", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "GET /api/seller/order-center (verification)", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_seller_order_center_completed_filter(self):
+        """Test GET /api/seller/order-center?status=completed - Filter by completed status"""
+        if not self.seller_token:
+            self.log_test(
+                "GET /api/seller/order-center (completed filter)", 
+                False, 
+                "No seller auth token available - seller login failed",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            response = self.session.get(f"{self.base_url}/seller/order-center?status=completed", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    orders = data.get("orders", [])
+                    
+                    # Check if our test order appears in completed filter
+                    test_order_found = False
+                    for order in orders:
+                        if order.get("id") == self.test_order_id:
+                            test_order_found = True
+                            break
+                    
+                    if test_order_found:
+                        self.log_test(
+                            "GET /api/seller/order-center (completed filter)", 
+                            True, 
+                            f"✅ Order {self.test_order_id} appears when filtering by 'completed' status. Found {len(orders)} completed orders.",
+                            {"order_id": self.test_order_id, "completed_orders_count": len(orders)}
+                        )
+                    else:
+                        self.log_test(
+                            "GET /api/seller/order-center (completed filter)", 
+                            False, 
+                            f"❌ Order {self.test_order_id} does NOT appear when filtering by 'completed' status. Found {len(orders)} completed orders.",
+                            {"order_id": self.test_order_id, "completed_orders_count": len(orders)}
+                        )
+                else:
+                    self.log_test(
+                        "GET /api/seller/order-center (completed filter)", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            else:
+                self.log_test(
+                    "GET /api/seller/order-center (completed filter)", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "GET /api/seller/order-center (completed filter)", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def run_order_status_flow_test(self):
+        """Run the complete order status flow test as requested in review"""
+        print("🚀 Starting Order Status Flow Testing")
+        print("=" * 60)
+        
+        # Step 1: Login as seller and get products
+        print("\n📋 STEP 1: SELLER LOGIN & PRODUCT LOOKUP")
+        print("-" * 45)
+        self.test_seller_login()
+        self.test_get_seller_store_products_for_order()
+        
+        # Step 2: Login as buyer and create order
+        print("\n📋 STEP 2: BUYER LOGIN & ORDER CREATION")
+        print("-" * 40)
+        self.test_buyer_login()
+        self.test_create_buyer_address()
+        self.test_create_order_with_seller_product()
+        
+        # Step 3: Login as admin and update order status
+        print("\n📋 STEP 3: ADMIN LOGIN & ORDER STATUS UPDATES")
+        print("-" * 45)
+        self.test_admin_login()
+        self.test_admin_mark_order_as_paid()
+        self.test_admin_mark_order_as_completed()
+        
+        # Step 4: Switch back to seller and verify
+        print("\n📋 STEP 4: SELLER VERIFICATION")
+        print("-" * 30)
+        self.test_seller_order_center_verification()
+        self.test_seller_order_center_completed_filter()
+        
+        # Summary
+        print("\n" + "=" * 60)
+        print("🏁 ORDER STATUS FLOW TESTING COMPLETE")
+        print("=" * 60)
+        
+        passed = sum(1 for result in self.test_results if result["success"])
+        total = len(self.test_results)
+        
+        print(f"\n📊 RESULTS: {passed}/{total} tests passed ({passed/total*100:.1f}%)")
+        
+        if passed == total:
+            print("🎉 ALL TESTS PASSED! Order status flow is working correctly.")
+        else:
+            print("⚠️  Some tests failed. Check the details above.")
+            failed_tests = [result for result in self.test_results if not result["success"]]
+            print(f"\n❌ FAILED TESTS ({len(failed_tests)}):")
+            for test in failed_tests:
+                print(f"   - {test['test']}: {test['details']}")
+        
+        return passed == total
+
     def test_order_status_update_flow(self):
         """Test complete order status update flow when admin marks orders as completed"""
         print("🔄 ORDER STATUS UPDATE FLOW TEST")
