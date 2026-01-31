@@ -1994,33 +1994,10 @@ async def get_seller_earnings(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Only sellers can view earnings")
 
     try:
-        # 1) Fetch seller's store(s) to get store IDs
-        stores_result = (
-            supabase_admin.table("stores")
-            .select("id")
-            .eq("seller_id", current_user["id"])
-            .execute()
-        )
-        
-        store_ids = [store["id"] for store in (stores_result.data or [])]
-        
-        if not store_ids:
-            # Seller has no stores, so no earnings
-            return {
-                "success": True,
-                "earnings": {
-                    "totalEarnings": 0.0,
-                    "availableBalance": 0.0,
-                    "pendingWithdrawals": 0.0,
-                    "completedWithdrawals": 0.0,
-                    "payoutRequests": [],
-                },
-            }
-        
-        # 2) Fetch all completed/paid orders with items & store_products for this seller
+        # 1) Fetch all completed/paid orders with items & store_products for this seller
         orders_result = (
             supabase_admin.table("orders")
-            .select("*, order_items(*, store_products!inner(store_id))")
+            .select("*, order_items(*, store_products!inner(seller_id))")
             .in_("payment_status", ["paid", "completed"])
             .execute()
         )
@@ -2029,8 +2006,8 @@ async def get_seller_earnings(current_user: dict = Depends(get_current_user)):
         for order in orders_result.data or []:
             for item in order.get("order_items", []):
                 store_product = item.get("store_products") or {}
-                # Check if this product belongs to the seller's store
-                if store_product.get("store_id") in store_ids:
+                # Check if this product belongs to the current seller
+                if store_product.get("seller_id") == current_user["id"]:
                     total_earnings += float(item.get("price", 0)) * int(item.get("quantity", 0))
 
         # 2) Fetch payout requests for this seller
