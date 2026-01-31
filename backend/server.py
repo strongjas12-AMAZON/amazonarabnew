@@ -123,7 +123,7 @@ class StoreNameChangeAdminAction(BaseModel):
 
 class CreatePayoutRequest(BaseModel):
     requestedAmount: float
-    payoutWallet: Optional[str] = None
+    payoutWallet: str  # Required: USDT TRC20 wallet address
 
 
 class UpdatePayoutStatusRequest(BaseModel):
