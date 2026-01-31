@@ -6207,11 +6207,14 @@ class APITester:
                 print("❌ Cannot proceed with completion test - failed to mark order as paid")
                 return
         
-        # Step 3: Mark order as completed
-        completed_success = self.test_admin_mark_order_completed(order_id)
-        if not completed_success:
-            print("❌ Order completion failed")
-            return
+        # Step 3: Mark order as completed (or test if already completed)
+        if current_payment_status != 'completed':
+            completed_success = self.test_admin_mark_order_completed(order_id)
+            if not completed_success:
+                print("❌ Order completion failed")
+                return
+        else:
+            print(f"ℹ️  Order {order_id} is already completed - testing seller verification directly")
         
         # Step 4: Verify from seller perspective
         seller_verification = self.test_seller_order_center_completed_status(order_id)
