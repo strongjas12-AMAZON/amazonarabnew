@@ -3923,6 +3923,66 @@ async def clear_product_catalog_new(request: Request, current_user: dict = Depen
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@api_router.post("/admin/cleanup-and-reseed-catalog")
+@limiter.limit("2/hour")
+async def cleanup_and_reseed_catalog(request: Request, current_user: dict = Depends(get_current_user)):
+    """
+    Admin-only: Intelligent catalog cleanup and reseed
+    1. Keeps catalog products already in seller stores
+    2. Deletes unused catalog products
+    3. Seeds 500 new unique products
+    """
+    try:
+        # Check admin role
+        if current_user.get('role') != 'admin':
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        #  Step 1: Find which catalog products are in use
+        store_products_result = supabase_admin.table('store_products').select('catalog_product_id').execute()
+        in_use_ids = set([sp['catalog_product_id'] for sp in (store_products_result.data or []) if sp.get('catalog_product_id')])
+        
+        # Step 2: Get all catalog products
+        all_catalog_result = supabase_admin.table('product_catalog').select('id').execute()
+        all_ids = [p['id'] for p in (all_catalog_result.data or [])]
+        
+        # Step 3: Delete unused products
+        to_delete = [pid for pid in all_ids if pid not in in_use_ids]
+        deleted_count = 0
+        if to_delete:
+            # Delete in batches of 100
+            for i in range(0, len(to_delete), 100):
+                batch = to_delete[i:i+100]
+                supabase_admin.table('product_catalog').delete().in_('id', batch).execute()
+                deleted_count += len(batch)
+        
+        # Step 4: Seed 150 new products (keeping it manageable, can be increased)
+        from new_catalog_500 import get_unique_products
+        new_products = get_unique_products(150)  # Get 150 unique products
+        
+        added_count = 0
+        for product in new_products:
+            try:
+                supabase_admin.table('product_catalog').insert(product).execute()
+                added_count += 1
+            except Exception as e:
+                logging.error(f"Error adding product {product['name']}: {str(e)}")
+        
+        return {
+            "success": True,
+            "kept": len(in_use_ids),
+            "deleted": deleted_count,
+            "added": added_count,
+            "total_catalog_size": len(in_use_ids) + added_count,
+            "message": f"Cleanup complete! Kept {len(in_use_ids)} products in use, deleted {deleted_count} unused products, added {added_count} new products"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Clear catalog error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @api_router.get("/stores/search")
 async def search_stores(query: Optional[str] = None, limit: int = 20, offset: int = 0, current_user: dict = Depends(get_current_user)):
     """Protected: Search stores by name (login required)"""
