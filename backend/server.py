@@ -2184,21 +2184,35 @@ async def admin_get_seller_recharge_requests(current_user: dict = Depends(get_cu
         raise HTTPException(status_code=403, detail="Admin access required")
     
     try:
+        # Fetch recharge requests without join (no FK relationship exists)
         result = (
             supabase_admin.table('seller_wallet_recharge_requests')
-            .select('*, users:sellerId(name, email)')
+            .select('*')
             .order('createdAt', desc=True)
             .execute()
         )
         
         requests = []
         for r in (result.data or []):
-            seller = r.get('users') or {}
+            # Fetch seller info separately
+            seller_id = r.get('sellerId')
+            seller_name = None
+            seller_email = None
+            
+            if seller_id:
+                try:
+                    user_result = supabase_admin.table('users').select('name, email').eq('id', seller_id).execute()
+                    if user_result.data:
+                        seller_name = user_result.data[0].get('name')
+                        seller_email = user_result.data[0].get('email')
+                except Exception as user_err:
+                    logging.warning(f"Could not fetch seller info for {seller_id}: {str(user_err)}")
+            
             payload = {
                 "id": r.get('id'),
-                "sellerId": r.get('sellerId'),
-                "sellerName": seller.get('name'),
-                "sellerEmail": seller.get('email'),
+                "sellerId": seller_id,
+                "sellerName": seller_name,
+                "sellerEmail": seller_email,
                 "amount": float(r.get('amount', 0)),
                 "status": r.get('status'),
                 "paymentMethod": r.get('paymentMethod'),
