@@ -2177,6 +2177,126 @@ async def get_seller_recharge_requests(current_user: dict = Depends(get_current_
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@api_router.get("/admin/seller-wallet-recharge-requests")
+async def admin_get_seller_recharge_requests(current_user: dict = Depends(get_current_user)):
+    """Admin can view all seller wallet recharge requests"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        result = (
+            supabase_admin.table('seller_wallet_recharge_requests')
+            .select('*, users:sellerId(name, email)')
+            .order('createdAt', desc=True)
+            .execute()
+        )
+        
+        requests = []
+        for r in (result.data or []):
+            seller = r.get('users') or {}
+            payload = {
+                "id": r.get('id'),
+                "sellerId": r.get('sellerId'),
+                "sellerName": seller.get('name'),
+                "sellerEmail": seller.get('email'),
+                "amount": float(r.get('amount', 0)),
+                "status": r.get('status'),
+                "paymentMethod": r.get('paymentMethod'),
+                "paymentWallet": r.get('paymentWallet'),
+                "transactionHash": r.get('transactionHash'),
+                "adminNote": r.get('adminNote'),
+                "createdAt": r.get('createdAt'),
+                "updatedAt": r.get('updatedAt')
+            }
+            requests.append(payload)
+        
+        return {"success": True, "requests": requests}
+    except Exception as e:
+        logging.error(f"Admin get seller recharge requests error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/admin/seller-wallet-recharge-requests/{request_id}/status")
+async def admin_update_seller_recharge_status(
+    request_id: str,
+    req: UpdateRechargeStatusRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Admin approves or rejects seller wallet recharge request"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    if req.status not in ('approved', 'rejected'):
+        raise HTTPException(status_code=400, detail="Invalid status. Must be 'approved' or 'rejected'")
+    
+    try:
+        # Get the recharge request
+        recharge_result = supabase_admin.table('seller_wallet_recharge_requests').select('*').eq('id', request_id).execute()
+        
+        if not recharge_result.data:
+            raise HTTPException(status_code=404, detail="Recharge request not found")
+        
+        recharge = recharge_result.data[0]
+        seller_id = recharge['sellerId']
+        amount = float(recharge['amount'])
+        
+        # Update the recharge request status
+        update_data = {
+            'status': req.status,
+            'adminNote': req.adminNote,
+            'updatedAt': datetime.now(timezone.utc).isoformat()
+        }
+        
+        supabase_admin.table('seller_wallet_recharge_requests').update(update_data).eq('id', request_id).execute()
+        
+        # If approved, credit the seller's wallet
+        if req.status == 'approved':
+            # Get or create seller wallet
+            wallet_result = supabase_admin.table('seller_wallets').select('*').eq('userId', seller_id).execute()
+            
+            if wallet_result.data:
+                # Update existing wallet
+                current_balance = float(wallet_result.data[0].get('balance', 0))
+                new_balance = current_balance + amount
+                
+                supabase_admin.table('seller_wallets').update({
+                    'balance': new_balance,
+                    'updatedAt': datetime.now(timezone.utc).isoformat()
+                }).eq('userId', seller_id).execute()
+            else:
+                # Create new wallet
+                supabase_admin.table('seller_wallets').insert({
+                    'id': str(uuid.uuid4()),
+                    'userId': seller_id,
+                    'balance': amount,
+                    'totalEarnings': 0,
+                    'createdAt': datetime.now(timezone.utc).isoformat(),
+                    'updatedAt': datetime.now(timezone.utc).isoformat()
+                }).execute()
+            
+            # Create wallet transaction record
+            await create_wallet_transaction(
+                user_id=seller_id,
+                user_role='seller',
+                transaction_type='recharge',
+                amount=amount,
+                previous_balance=current_balance if wallet_result.data else 0,
+                new_balance=(current_balance if wallet_result.data else 0) + amount,
+                description=f"Wallet recharge approved: ${amount:.2f} (USDT TRC20)"
+            )
+        
+        return {
+            "success": True,
+            "message": f"Recharge request {req.status}",
+            "status": req.status
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Admin update seller recharge status error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @api_router.get("/seller/payout-requests")
 async def get_seller_payout_requests(current_user: dict = Depends(get_current_user)):
     """Get all payout requests for the current seller."""
