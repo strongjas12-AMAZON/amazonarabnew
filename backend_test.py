@@ -2665,127 +2665,367 @@ class APITester:
                 f"Exception: {str(e)}",
                 None
             )
+    def test_seller_wallet_balance(self):
+        """Test GET /api/seller/wallet/balance - Get seller wallet balance with all fields"""
+        if not self.seller_token:
+            self.log_test(
+                "GET /api/seller/wallet/balance", 
+                False, 
+                "No seller auth token available - seller login failed",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            response = self.session.get(f"{self.base_url}/seller/wallet/balance", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    wallet = data.get("wallet", {})
+                    
+                    # Check all required fields
+                    required_fields = ['balance', 'totalRecharged', 'pendingRecharges', 'approvedRecharges', 'updatedAt']
+                    missing_fields = [field for field in required_fields if field not in wallet]
+                    
+                    if not missing_fields:
+                        self.log_test(
+                            "GET /api/seller/wallet/balance", 
+                            True, 
+                            f"✅ Wallet balance retrieved successfully. Balance: ${wallet.get('balance', 0):.2f}, Total Recharged: ${wallet.get('totalRecharged', 0):.2f}, Pending: ${wallet.get('pendingRecharges', 0):.2f}, Approved: ${wallet.get('approvedRecharges', 0):.2f}",
+                            {
+                                "balance": wallet.get('balance'),
+                                "totalRecharged": wallet.get('totalRecharged'),
+                                "pendingRecharges": wallet.get('pendingRecharges'),
+                                "approvedRecharges": wallet.get('approvedRecharges'),
+                                "updatedAt": wallet.get('updatedAt'),
+                                "all_fields_present": True
+                            }
+                        )
+                    else:
+                        self.log_test(
+                            "GET /api/seller/wallet/balance", 
+                            False, 
+                            f"❌ Wallet object missing required fields: {missing_fields}",
+                            {"missing_fields": missing_fields, "available_fields": list(wallet.keys())}
+                        )
+                else:
+                    self.log_test(
+                        "GET /api/seller/wallet/balance", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            elif response.status_code == 403:
+                self.log_test(
+                    "GET /api/seller/wallet/balance", 
+                    False, 
+                    "Access forbidden - check if user has seller role",
+                    response.text
+                )
+            elif response.status_code == 401:
+                self.log_test(
+                    "GET /api/seller/wallet/balance", 
+                    False, 
+                    "Unauthorized - check if auth token is valid",
+                    response.text
+                )
+            else:
+                self.log_test(
+                    "GET /api/seller/wallet/balance", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "GET /api/seller/wallet/balance", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_seller_wallet_recharge_new_request(self):
+        """Test POST /api/seller/wallet/recharge - Submit new recharge request with $75"""
+        if not self.seller_token:
+            self.log_test(
+                "POST /api/seller/wallet/recharge (New $75 Request)", 
+                False, 
+                "No seller auth token available - seller login failed",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            recharge_data = {
+                "amount": 75,
+                "paymentWallet": "test_transaction_hash_123"
+            }
+            
+            response = self.session.post(f"{self.base_url}/seller/wallet/recharge", headers=headers, json=recharge_data)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    recharge_request = data.get("rechargeRequest", {})
+                    
+                    # Verify the request was created with correct amount
+                    if recharge_request.get("amount") == 75:
+                        self.log_test(
+                            "POST /api/seller/wallet/recharge (New $75 Request)", 
+                            True, 
+                            f"✅ New recharge request submitted successfully. Amount: ${recharge_request.get('amount')}, Payment Wallet: {recharge_request.get('paymentWallet')}, Status: {recharge_request.get('status', 'pending')}",
+                            {
+                                "recharge_id": recharge_request.get("id"),
+                                "amount": recharge_request.get("amount"),
+                                "paymentWallet": recharge_request.get("paymentWallet"),
+                                "status": recharge_request.get("status")
+                            }
+                        )
+                    else:
+                        self.log_test(
+                            "POST /api/seller/wallet/recharge (New $75 Request)", 
+                            False, 
+                            f"❌ Recharge request created with wrong amount. Expected: $75, Got: ${recharge_request.get('amount')}",
+                            recharge_request
+                        )
+                else:
+                    self.log_test(
+                        "POST /api/seller/wallet/recharge (New $75 Request)", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            elif response.status_code == 400:
+                self.log_test(
+                    "POST /api/seller/wallet/recharge (New $75 Request)", 
+                    False, 
+                    f"❌ Bad request: {response.text}",
+                    None
+                )
+            elif response.status_code == 403:
+                self.log_test(
+                    "POST /api/seller/wallet/recharge (New $75 Request)", 
+                    False, 
+                    "Access forbidden - check if user has seller role",
+                    response.text
+                )
+            elif response.status_code == 401:
+                self.log_test(
+                    "POST /api/seller/wallet/recharge (New $75 Request)", 
+                    False, 
+                    "Unauthorized - check if auth token is valid",
+                    response.text
+                )
+            else:
+                self.log_test(
+                    "POST /api/seller/wallet/recharge (New $75 Request)", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "POST /api/seller/wallet/recharge (New $75 Request)", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_seller_wallet_balance_after_recharge(self):
+        """Test GET /api/seller/wallet/balance after submitting recharge - verify pendingRecharges increased"""
+        if not self.seller_token:
+            self.log_test(
+                "GET /api/seller/wallet/balance (After Recharge)", 
+                False, 
+                "No seller auth token available - seller login failed",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            response = self.session.get(f"{self.base_url}/seller/wallet/balance", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    wallet = data.get("wallet", {})
+                    
+                    pending_recharges = wallet.get('pendingRecharges', 0)
+                    
+                    # Check if pendingRecharges includes the $75 we just submitted
+                    if pending_recharges >= 75:
+                        self.log_test(
+                            "GET /api/seller/wallet/balance (After Recharge)", 
+                            True, 
+                            f"✅ Pending recharges increased correctly. Current pending: ${pending_recharges:.2f} (includes the $75 request)",
+                            {
+                                "balance": wallet.get('balance'),
+                                "pendingRecharges": pending_recharges,
+                                "totalRecharged": wallet.get('totalRecharged'),
+                                "approvedRecharges": wallet.get('approvedRecharges')
+                            }
+                        )
+                    else:
+                        self.log_test(
+                            "GET /api/seller/wallet/balance (After Recharge)", 
+                            False, 
+                            f"❌ Pending recharges did not increase as expected. Current pending: ${pending_recharges:.2f}, Expected at least: $75.00",
+                            {
+                                "pendingRecharges": pending_recharges,
+                                "expected_minimum": 75,
+                                "wallet_data": wallet
+                            }
+                        )
+                else:
+                    self.log_test(
+                        "GET /api/seller/wallet/balance (After Recharge)", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            else:
+                self.log_test(
+                    "GET /api/seller/wallet/balance (After Recharge)", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "GET /api/seller/wallet/balance (After Recharge)", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
+    def test_seller_wallet_recharge_history_verification(self):
+        """Test GET /api/seller/wallet/recharge-requests - Verify new request appears in history"""
+        if not self.seller_token:
+            self.log_test(
+                "GET /api/seller/wallet/recharge-requests (Verify New Request)", 
+                False, 
+                "No seller auth token available - seller login failed",
+                None
+            )
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            response = self.session.get(f"{self.base_url}/seller/wallet/recharge-requests", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    requests = data.get("requests", [])
+                    
+                    # Look for our $75 request
+                    found_new_request = False
+                    for req in requests:
+                        if req.get("amount") == 75 and req.get("paymentWallet") == "test_transaction_hash_123":
+                            found_new_request = True
+                            break
+                    
+                    if found_new_request:
+                        self.log_test(
+                            "GET /api/seller/wallet/recharge-requests (Verify New Request)", 
+                            True, 
+                            f"✅ New $75 recharge request appears in history. Total requests: {len(requests)}",
+                            {
+                                "total_requests": len(requests),
+                                "new_request_found": True,
+                                "search_criteria": {"amount": 75, "paymentWallet": "test_transaction_hash_123"}
+                            }
+                        )
+                    else:
+                        self.log_test(
+                            "GET /api/seller/wallet/recharge-requests (Verify New Request)", 
+                            False, 
+                            f"❌ New $75 recharge request not found in history. Total requests: {len(requests)}",
+                            {
+                                "total_requests": len(requests),
+                                "new_request_found": False,
+                                "available_requests": [{"amount": req.get("amount"), "wallet": req.get("paymentWallet")} for req in requests[:3]]
+                            }
+                        )
+                else:
+                    self.log_test(
+                        "GET /api/seller/wallet/recharge-requests (Verify New Request)", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+            elif response.status_code == 403:
+                self.log_test(
+                    "GET /api/seller/wallet/recharge-requests (Verify New Request)", 
+                    False, 
+                    "Access forbidden - check if user has seller role",
+                    response.text
+                )
+            elif response.status_code == 401:
+                self.log_test(
+                    "GET /api/seller/wallet/recharge-requests (Verify New Request)", 
+                    False, 
+                    "Unauthorized - check if auth token is valid",
+                    response.text
+                )
+            else:
+                self.log_test(
+                    "GET /api/seller/wallet/recharge-requests (Verify New Request)", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                
+        except Exception as e:
+            self.log_test(
+                "GET /api/seller/wallet/recharge-requests (Verify New Request)", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+
     def run_all_tests(self):
-        """Run shipping address endpoint tests after 'Buyer access required' fix"""
+        """Run seller wallet balance endpoint tests as requested in review"""
         print("=" * 80)
-        print("BACKEND API TESTING - SHIPPING ADDRESS ENDPOINTS AFTER FIX")
+        print("BACKEND API TESTING - Seller Wallet Balance Endpoint")
         print("=" * 80)
         print(f"Base URL: {self.base_url}")
-        print(f"Admin Email: {ADMIN_EMAIL}")
         print(f"Seller Email: {SELLER_EMAIL} (testseller_new@test.com)")
-        print(f"Buyer Email: {BUYER_EMAIL}")
         print()
         print("TESTING CONTEXT:")
-        print("User reported 'Buyer access required' error when adding address on checkout page.")
-        print("FIXED: Removed strict buyer-only role check from address endpoints.")
-        print("NOW: ANY authenticated user can manage their shipping addresses.")
+        print("Testing the new seller wallet balance endpoint as requested in review:")
+        print("1. Login as seller: testseller_new@test.com / TestPass123!")
+        print("2. Test GET /api/seller/wallet/balance endpoint")
+        print("3. Submit new recharge request with $75")
+        print("4. Verify wallet balance shows increased pendingRecharges")
+        print("5. Check recharge history for new request")
         print("=" * 80)
         print()
         
         # Authentication Tests
-        print("🔐 STEP 1: Authentication Tests")
+        print("🔐 STEP 1: Authentication")
         print("-" * 40)
-        self.test_admin_login()
         self.test_seller_login()
-        self.test_buyer_login()
         print()
         
-        # Address Management Tests (Main Focus)
-        print("📮 STEP 2: Shipping Address Tests (After 'Buyer access required' Fix)")
+        # Seller Wallet Balance Tests (Main Focus)
+        print("💰 STEP 2: Seller Wallet Balance Tests")
         print("-" * 40)
-        print("Testing with Buyer Role:")
-        self.test_buyer_addresses_crud()
-        print()
-        print("Testing with Seller Role (This was failing before):")
-        self.test_seller_addresses_crud()
-        print()
-        print("Testing with Admin Role:")
-        self.test_admin_addresses_crud()
-        print()
-        print("Testing RLS Protection:")
-        self.test_address_rls_protection()
-        print()
-        print("Testing Checkout Flow:")
-        self.test_checkout_address_functionality()
+        self.test_seller_wallet_balance()
+        self.test_seller_wallet_recharge_new_request()
+        self.test_seller_wallet_balance_after_recharge()
+        self.test_seller_wallet_recharge_history_verification()
         print()
         
         # Summary
-        print("=" * 80)
-        print("TEST SUMMARY - SHIPPING ADDRESS ENDPOINTS")
-        print("=" * 80)
-        
-        passed = sum(1 for result in self.test_results if result["success"])
-        total = len(self.test_results)
-        
-        print(f"Total Tests: {total}")
-        print(f"Passed: {passed}")
-        print(f"Failed: {total - passed}")
-        print()
-        
-        # Categorize results by address functionality
-        buyer_tests = [r for r in self.test_results if "Buyer Address" in r["test"]]
-        seller_tests = [r for r in self.test_results if "Seller Address" in r["test"]]
-        admin_tests = [r for r in self.test_results if "Admin Address" in r["test"]]
-        rls_tests = [r for r in self.test_results if "RLS Protection" in r["test"]]
-        checkout_tests = [r for r in self.test_results if "Checkout" in r["test"]]
-        
-        print("CRITICAL VALIDATIONS:")
-        print("-" * 40)
-        
-        # Check buyer address functionality
-        buyer_passed = any(r["success"] for r in buyer_tests)
-        if buyer_passed:
-            print("✅ Buyer can manage addresses without errors - BUYER FUNCTIONALITY WORKING")
-        else:
-            print("❌ Buyer address functionality failed - BUYER FUNCTIONALITY BROKEN")
-        
-        # Check seller address functionality (this was the main issue)
-        seller_passed = any(r["success"] for r in seller_tests)
-        if seller_passed:
-            print("✅ Seller can manage addresses without 'Buyer access required' error - FIX VERIFIED")
-        else:
-            print("❌ Seller still getting 'Buyer access required' error - FIX FAILED")
-        
-        # Check admin address functionality
-        admin_passed = any(r["success"] for r in admin_tests)
-        if admin_passed:
-            print("✅ Admin can manage addresses without errors - ADMIN FUNCTIONALITY WORKING")
-        else:
-            print("❌ Admin address functionality failed - ADMIN FUNCTIONALITY BROKEN")
-        
-        # Check RLS protection
-        rls_passed = any(r["success"] for r in rls_tests)
-        if rls_passed:
-            print("✅ Users can only access their OWN addresses - RLS PROTECTION WORKING")
-        else:
-            print("❌ RLS protection failed - SECURITY ISSUE")
-        
-        # Check checkout functionality
-        checkout_passed = any(r["success"] for r in checkout_tests)
-        if checkout_passed:
-            print("✅ Checkout can use addresses without errors - CHECKOUT FUNCTIONALITY WORKING")
-        else:
-            print("❌ Checkout address functionality failed - CHECKOUT BROKEN")
-        
-        # Check for specific errors
-        buyer_access_errors = [r for r in self.test_results if not r["success"] and "buyer access required" in str(r.get("details", "")).lower()]
-        if buyer_access_errors:
-            print("❌ 'Buyer access required' errors still occurring - FIX NOT COMPLETE")
-        else:
-            print("✅ No 'Buyer access required' errors detected - FIX SUCCESSFUL")
-        
-        print()
-        
-        if total - passed > 0:
-            print("FAILED TESTS:")
-            for result in self.test_results:
-                if not result["success"]:
-                    print(f"❌ {result['test']}: {result['details']}")
-            print()
-        
-        print("=" * 80)
-        
-        return passed == total
+        self.print_summary()
 
     def run_comprehensive_order_system_tests(self):
         """Run comprehensive Order System testing after migration - END-TO-END FLOW"""
