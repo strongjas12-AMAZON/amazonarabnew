@@ -129,6 +129,18 @@ backend:
         agent: "main"
         comment: "Fixed seller earnings calculation to work with NEW store_products system. ISSUE: Endpoint was joining order_items with old 'products' table which doesn't exist in new system. FIX: Updated query to join order_items with store_products table and check seller_id directly from store_products (not products). Now correctly calculates totalEarnings, availableBalance, and pendingWithdrawals for sellers. Backend restarted successfully."
 
+  - task: "Admin Order Status Update - Mark as Completed Fix"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Fixed 'Mark as Completed' button not working in admin dashboard orders section. ISSUE: PUT /orders/{order_id}/status endpoint was joining order_items with old 'products' table when calculating seller earnings on order completion. This caused the endpoint to fail. FIX: Updated query to join order_items with store_products table (using !inner join) and retrieve seller_id from store_products instead of products. Now correctly updates order status to 'completed' and distributes earnings to seller wallets. Backend restarted successfully."
+
 backend:
   - task: "Shipping Address Endpoints - Fix 'Buyer access required' Error"
     implemented: true
