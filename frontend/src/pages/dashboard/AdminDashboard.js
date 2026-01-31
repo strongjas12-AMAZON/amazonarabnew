@@ -135,6 +135,13 @@ const AdminDashboard = () => {
       } else {
         setRechargeRequests([]);
       }
+
+      // Seller Recharge Requests (results[8])
+      if (results[8].status === 'fulfilled' && !results[8].value.error) {
+        setSellerRechargeRequests(results[8].value.data?.requests || []);
+      } else {
+        setSellerRechargeRequests([]);
+      }
     } catch (error) {
       // Silently handle errors - individual requests already handled above
     } finally {
