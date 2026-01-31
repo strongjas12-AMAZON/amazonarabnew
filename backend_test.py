@@ -5403,7 +5403,7 @@ class APITester:
             # Find an order that's not already completed
             test_order = None
             for order in orders:
-                if order.get("orderStatus") != "completed":
+                if order.get("paymentStatus") != "completed":  # Fixed: check paymentStatus
                     test_order = order
                     break
                     
