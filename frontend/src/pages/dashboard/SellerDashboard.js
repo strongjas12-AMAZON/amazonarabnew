@@ -920,6 +920,7 @@ const SellerDashboard = () => {
                         <tr className="text-left text-gray-400 border-b border-[rgba(212,175,55,0.1)]">
                           <th className="py-2 pr-4">Date</th>
                           <th className="py-2 pr-4">Amount</th>
+                          <th className="py-2 pr-4">Wallet Address</th>
                           <th className="py-2 pr-4">Status</th>
                           <th className="py-2 pr-4">Admin Note</th>
                         </tr>
@@ -938,6 +939,15 @@ const SellerDashboard = () => {
                             </td>
                             <td className="py-2 pr-4 text-[#D4AF37] font-semibold">
                               ${p.requestedAmount?.toFixed(2)}
+                            </td>
+                            <td className="py-2 pr-4 font-mono text-xs text-gray-400">
+                              {p.payoutWallet ? (
+                                <span className="truncate max-w-[150px] inline-block" title={p.payoutWallet}>
+                                  {p.payoutWallet}
+                                </span>
+                              ) : (
+                                '—'
+                              )}
                             </td>
                             <td className="py-2 pr-4">
                               <span
