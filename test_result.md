@@ -117,6 +117,18 @@ backend:
         agent: "testing"
         comment: "✅ COMPREHENSIVE SELLER WALLET RECHARGE FLOW TESTING COMPLETE: All seller wallet recharge request endpoints verified successfully as requested in review. ✅ POST /api/seller/wallet/recharge: Seller can create recharge requests with amount $100, returns proper rechargeRequest object with ID ✅ GET /api/seller/wallet/recharge-requests: Seller can view their recharge history (7 requests found including newly created) ✅ GET /api/admin/seller-wallet-recharge-requests: CRITICAL SUCCESS - Admin can view all seller recharge requests with proper seller info (sellerName: 'Test Seller', sellerEmail: 'testseller_new@test.com' - NOT NULL as required) ✅ POST /api/admin/seller-wallet-recharge-requests/{id}/status: Admin can approve requests, status changes to 'approved' correctly ✅ Seller Information: Admin endpoint correctly returns seller names and emails (NOT null) as specifically requested in review. Complete seller wallet recharge flow is fully functional."
 
+  - task: "Seller Wallet Balance Endpoint"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ SELLER WALLET BALANCE ENDPOINT TESTING COMPLETE: Comprehensive testing of new seller wallet balance endpoint as requested in review. ✅ Login as seller testseller_new@test.com: Successfully authenticated ✅ GET /api/seller/wallet/balance: Returns all required fields (balance: $600.00, totalRecharged: $0.00, pendingRecharges, approvedRecharges, updatedAt) ✅ POST /api/seller/wallet/recharge with $75: Successfully created new recharge request with amount $75 and transaction hash 'test_transaction_hash_123' ✅ Wallet balance after recharge: Pending recharges correctly increased by $75 (from $300 to $375) ✅ GET /api/seller/wallet/recharge-requests: New $75 request appears in history (11 total requests). All wallet balance endpoint functionality verified and working correctly."
+
   - task: "Seller Payout Request with USDT TRC20 Wallet Address"
     implemented: true
     working: true
