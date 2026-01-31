@@ -399,7 +399,9 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus: []
+  current_focus:
+    - "Seller Payout Request with USDT TRC20 Wallet Address"
+    - "Seller Dashboard - Payout Request Form with TRC20 Wallet"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
