@@ -143,6 +143,7 @@ const SellerDashboard = () => {
       setTransactionHash('');
       setShowRechargeModal(false);
       await fetchRechargeHistory();
+      await fetchWalletBalance(); // Refresh wallet balance
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to submit recharge request');
     } finally {
