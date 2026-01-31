@@ -6952,7 +6952,7 @@ class APITester:
         print()
         
         # Order Status Update Flow Test (Main Focus)
-        self.test_order_status_update_flow()
+        self.run_order_status_flow_test()
         print()
         
         # Summary
