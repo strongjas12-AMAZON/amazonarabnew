@@ -823,6 +823,15 @@ const SellerDashboard = () => {
               {/* Payout Request Form */}
               <div className="border-t border-[rgba(212,175,55,0.1)] pt-6">
                 <h3 className="text-lg font-semibold text-white mb-2">Request Payout</h3>
+                <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                  <p className="text-sm text-blue-300 flex items-start gap-2">
+                    <Wallet className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                    <span>
+                      <strong>Important:</strong> You must provide a valid USDT TRC20 wallet address to receive your payout. 
+                      TRC20 addresses start with 'T' and are exactly 34 characters long.
+                    </span>
+                  </p>
+                </div>
                 <p className="text-xs text-gray-500 mb-4">
                   Payouts are processed manually by admin. You can request a payout up to your available balance.
                 </p>
