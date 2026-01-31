@@ -40,6 +40,7 @@ const SellerDashboard = () => {
   const [transactionHash, setTransactionHash] = useState('');
   const [rechargeSubmitting, setRechargeSubmitting] = useState(false);
   const [rechargeHistory, setRechargeHistory] = useState([]);
+  const [walletBalance, setWalletBalance] = useState(null);
 
   useEffect(() => {
     if (user) {
@@ -48,8 +49,18 @@ const SellerDashboard = () => {
       fetchStoreNameRequest();
       fetchEarnings();
       fetchRechargeHistory();
+      fetchWalletBalance();
     }
   }, [user]);
+
+  const fetchWalletBalance = async () => {
+    try {
+      const res = await api.get('/seller/wallet/balance');
+      setWalletBalance(res.data.wallet || null);
+    } catch (error) {
+      console.error('Failed to load wallet balance', error);
+    }
+  };
 
   const fetchCategories = async () => {
     try {
