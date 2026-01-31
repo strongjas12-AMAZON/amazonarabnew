@@ -4076,11 +4076,16 @@ async def get_catalog_products_for_seller(
     """
     Seller-only: Browse product catalog to add products to their store
     Buyers CANNOT access this endpoint (enforced by RLS)
+    IMPORTANT: Filters out products already added by ANY seller to prevent duplicates
     """
     try:
         # Verify seller role
         if current_user.get('role') != 'seller':
             raise HTTPException(status_code=403, detail="Seller access required")
+        
+        # Get all catalog product IDs that are already in use by ANY seller
+        store_products_result = supabase_admin.table('store_products').select('catalog_product_id').execute()
+        used_catalog_ids = set([sp['catalog_product_id'] for sp in (store_products_result.data or []) if sp.get('catalog_product_id')])
         
         # Query catalog (RLS enforces seller-only access)
         query = supabase.table('product_catalog').select('*')
@@ -4088,12 +4093,17 @@ async def get_catalog_products_for_seller(
         if category:
             query = query.eq('category', category)
         
-        query = query.range(offset, offset + limit - 1).order('name')
+        # Get more products than needed since we'll filter some out
+        query = query.limit(limit * 3).order('name')
         result = query.execute()
         
-        # Format response
+        # Format response and filter out already-used products
         products = []
         for product in result.data:
+            # Skip products that are already in any seller's store
+            if product['id'] in used_catalog_ids:
+                continue
+                
             products.append({
                 'id': product['id'],
                 'name': product['name'],
@@ -4103,6 +4113,10 @@ async def get_catalog_products_for_seller(
                 'category': product['category'],
                 'createdAt': product['created_at']
             })
+            
+            # Stop when we have enough products
+            if len(products) >= limit:
+                break
         
         return {
             "success": True,
