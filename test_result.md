@@ -102,7 +102,20 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: Build a Buyer Store Search & Store Detail system connected to Supabase, with STRICT access control so buyers can ONLY see products that a seller has explicitly added to their store. Buyers must NOT see the master product catalog.
+user_problem_statement: Build a Buyer Store Search & Store Detail system connected to Supabase, with STRICT access control so buyers can ONLY see products that a seller has explicitly added to their store. Buyers must NOT see the master product catalog. Additionally, ensure sellers can request payouts with required USDT TRC20 wallet addresses.
+
+backend:
+  - task: "Seller Payout Request with USDT TRC20 Wallet Address"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Updated payout system to REQUIRE USDT TRC20 wallet address. Backend changes: 1) Made payoutWallet required (changed from Optional[str] to str), 2) Added validation for TRC20 format (must start with 'T', exactly 34 characters), 3) Clear error messages for invalid addresses. Frontend changes: 1) Added HTML5 validation (minLength, maxLength, pattern), 2) Added prominent info box explaining TRC20 requirements, 3) Updated payout history table to display wallet addresses, 4) Added help text and visual indicators. Database migration required: ALTER TABLE payout_requests ADD COLUMN IF NOT EXISTS payoutWallet TEXT (available in /app/backend/add_payout_wallet.sql). Complete documentation in /app/PAYOUT_WALLET_UPDATE.md"
 
 backend:
   - task: "Shipping Address Endpoints - Fix 'Buyer access required' Error"
