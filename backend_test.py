@@ -5030,12 +5030,286 @@ class APITester:
                 None
             )
 
+    def test_seller_wallet_recharge_flow(self):
+        """Test the complete seller wallet recharge request flow as requested in review"""
+        print("\n" + "="*80)
+        print("TESTING SELLER WALLET RECHARGE REQUEST FLOW")
+        print("="*80)
+        
+        # Step 1: Login as seller
+        if not self.seller_token:
+            self.test_seller_login()
+            
+        if not self.seller_token:
+            self.log_test(
+                "Seller Wallet Recharge Flow - Login", 
+                False, 
+                "Cannot proceed with recharge flow - seller login failed",
+                None
+            )
+            return False
+            
+        # Step 2: Login as admin
+        if not self.admin_token:
+            self.test_admin_login()
+            
+        if not self.admin_token:
+            self.log_test(
+                "Seller Wallet Recharge Flow - Admin Login", 
+                False, 
+                "Cannot proceed with recharge flow - admin login failed",
+                None
+            )
+            return False
+        
+        recharge_request_id = None
+        
+        # Step 3: Seller creates recharge request
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            recharge_data = {"amount": 100}
+            
+            response = self.session.post(f"{self.base_url}/seller/wallet/recharge", headers=headers, json=recharge_data)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    recharge_request = data.get("rechargeRequest", {})
+                    recharge_request_id = recharge_request.get("id")
+                    
+                    self.log_test(
+                        "POST /api/seller/wallet/recharge", 
+                        True, 
+                        f"✅ Seller recharge request created successfully: amount $100, ID: {recharge_request_id}",
+                        {"recharge_request_id": recharge_request_id, "amount": 100, "status": recharge_request.get("status")}
+                    )
+                else:
+                    self.log_test(
+                        "POST /api/seller/wallet/recharge", 
+                        False, 
+                        "Response missing success=true or rechargeRequest object",
+                        data
+                    )
+                    return False
+            else:
+                self.log_test(
+                    "POST /api/seller/wallet/recharge", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                return False
+                
+        except Exception as e:
+            self.log_test(
+                "POST /api/seller/wallet/recharge", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+            return False
+        
+        # Step 4: Seller views their recharge history
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            response = self.session.get(f"{self.base_url}/seller/wallet/recharge-requests", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    requests_list = data.get("requests", [])
+                    found_request = any(req.get("id") == recharge_request_id for req in requests_list)
+                    
+                    if found_request:
+                        self.log_test(
+                            "GET /api/seller/wallet/recharge-requests", 
+                            True, 
+                            f"✅ Seller can view their recharge history: {len(requests_list)} requests found, including the newly created request",
+                            {"requests_count": len(requests_list), "found_new_request": True}
+                        )
+                    else:
+                        self.log_test(
+                            "GET /api/seller/wallet/recharge-requests", 
+                            False, 
+                            f"❌ Newly created request not found in seller's recharge history. Found {len(requests_list)} requests but missing ID {recharge_request_id}",
+                            {"requests_count": len(requests_list), "found_new_request": False, "missing_id": recharge_request_id}
+                        )
+                        return False
+                else:
+                    self.log_test(
+                        "GET /api/seller/wallet/recharge-requests", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+                    return False
+            else:
+                self.log_test(
+                    "GET /api/seller/wallet/recharge-requests", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                return False
+                
+        except Exception as e:
+            self.log_test(
+                "GET /api/seller/wallet/recharge-requests", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+            return False
+        
+        # Step 5: Admin views all seller recharge requests
+        try:
+            headers = {"Authorization": f"Bearer {self.admin_token}"}
+            response = self.session.get(f"{self.base_url}/admin/seller-wallet-recharge-requests", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    all_requests = data.get("requests", [])
+                    found_request = None
+                    
+                    for req in all_requests:
+                        if req.get("id") == recharge_request_id:
+                            found_request = req
+                            break
+                    
+                    if found_request:
+                        # CRITICAL VALIDATION: Check seller information is NOT null
+                        seller_name = found_request.get("sellerName")
+                        seller_email = found_request.get("sellerEmail")
+                        
+                        if seller_name is not None and seller_email is not None:
+                            self.log_test(
+                                "GET /api/admin/seller-wallet-recharge-requests", 
+                                True, 
+                                f"✅ CRITICAL SUCCESS: Admin can view all seller recharge requests with proper seller info. Found {len(all_requests)} total requests. Seller info: {seller_name} ({seller_email})",
+                                {"total_requests": len(all_requests), "seller_name": seller_name, "seller_email": seller_email, "seller_info_valid": True}
+                            )
+                        else:
+                            self.log_test(
+                                "GET /api/admin/seller-wallet-recharge-requests", 
+                                False, 
+                                f"❌ CRITICAL ISSUE: sellerName or sellerEmail is NULL. sellerName: {seller_name}, sellerEmail: {seller_email}. This is the main issue to fix!",
+                                {"total_requests": len(all_requests), "seller_name": seller_name, "seller_email": seller_email, "seller_info_valid": False}
+                            )
+                            return False
+                    else:
+                        self.log_test(
+                            "GET /api/admin/seller-wallet-recharge-requests", 
+                            False, 
+                            f"❌ Admin cannot find the seller's recharge request in all requests list. Found {len(all_requests)} requests but missing ID {recharge_request_id}",
+                            {"total_requests": len(all_requests), "missing_id": recharge_request_id}
+                        )
+                        return False
+                else:
+                    self.log_test(
+                        "GET /api/admin/seller-wallet-recharge-requests", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+                    return False
+            else:
+                self.log_test(
+                    "GET /api/admin/seller-wallet-recharge-requests", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                return False
+                
+        except Exception as e:
+            self.log_test(
+                "GET /api/admin/seller-wallet-recharge-requests", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+            return False
+        
+        # Step 6: Admin approves the request
+        if not recharge_request_id:
+            self.log_test(
+                "POST /api/admin/seller-wallet-recharge-requests/{id}/status", 
+                False, 
+                "No recharge request ID available for approval test",
+                None
+            )
+            return False
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.admin_token}"}
+            approval_data = {
+                "status": "approved",
+                "adminNote": "Test approval"
+            }
+            
+            response = self.session.post(f"{self.base_url}/admin/seller-wallet-recharge-requests/{recharge_request_id}/status", headers=headers, json=approval_data)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    updated_request = data.get("request", {})
+                    new_status = updated_request.get("status")
+                    admin_note = updated_request.get("adminNote")
+                    
+                    if new_status == "approved":
+                        self.log_test(
+                            "POST /api/admin/seller-wallet-recharge-requests/{id}/status", 
+                            True, 
+                            f"✅ Admin successfully approved recharge request. Status changed to: {new_status}, Note: {admin_note}",
+                            {"request_id": recharge_request_id, "new_status": new_status, "admin_note": admin_note}
+                        )
+                    else:
+                        self.log_test(
+                            "POST /api/admin/seller-wallet-recharge-requests/{id}/status", 
+                            False, 
+                            f"❌ Request status not updated correctly. Expected 'approved', got: {new_status}",
+                            {"request_id": recharge_request_id, "expected_status": "approved", "actual_status": new_status}
+                        )
+                        return False
+                else:
+                    self.log_test(
+                        "POST /api/admin/seller-wallet-recharge-requests/{id}/status", 
+                        False, 
+                        "Response missing success=true",
+                        data
+                    )
+                    return False
+            else:
+                self.log_test(
+                    "POST /api/admin/seller-wallet-recharge-requests/{id}/status", 
+                    False, 
+                    f"HTTP {response.status_code}: {response.text}",
+                    None
+                )
+                return False
+                
+        except Exception as e:
+            self.log_test(
+                "POST /api/admin/seller-wallet-recharge-requests/{id}/status", 
+                False, 
+                f"Exception: {str(e)}",
+                None
+            )
+            return False
+        
+        print("\n" + "="*80)
+        print("SELLER WALLET RECHARGE FLOW TESTING COMPLETE")
+        print("="*80)
+        
+        return True
+
 def main():
     """Main test runner"""
     tester = APITester()
     
-    # Run comprehensive Order Center functionality tests as requested
-    success = tester.run_comprehensive_order_center_tests()
+    # Test the seller wallet recharge request flow as requested
+    success = tester.test_seller_wallet_recharge_flow()
     
     # Exit with appropriate code
     sys.exit(0 if success else 1)
