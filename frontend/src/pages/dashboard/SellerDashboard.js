@@ -47,6 +47,7 @@ const SellerDashboard = () => {
       fetchCategories();
       fetchStoreNameRequest();
       fetchEarnings();
+      fetchRechargeHistory();
     }
   }, [user]);
 
