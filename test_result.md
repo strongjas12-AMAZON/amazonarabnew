@@ -332,6 +332,18 @@ backend:
         comment: "COMPREHENSIVE TESTING: GET /api/seller/store/products now returns 3 products after seller added multiple products to their store. Seller can successfully view all products they've added with proper product details from product_catalog joins."
 
 frontend:
+  - task: "Seller Dashboard - Payout Request Form with TRC20 Wallet"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/dashboard/SellerDashboard.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Updated payout request form to require USDT TRC20 wallet address with validation. Added: 1) Visual required indicator (*), 2) HTML5 validation attributes (minLength=34, maxLength=34, pattern for 'T' start), 3) Prominent blue info box explaining TRC20 requirements, 4) Help text below input field, 5) Wallet Address column in payout history table showing all submitted wallet addresses. Form prevents submission without valid wallet address."
+
   - task: "Store Search Page"
     implemented: true
     working: true
