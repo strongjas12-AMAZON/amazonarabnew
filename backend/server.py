@@ -2057,6 +2057,15 @@ async def create_payout_request(req: CreatePayoutRequest, current_user: dict = D
 
     if req.requestedAmount <= 0:
         raise HTTPException(status_code=400, detail="Requested amount must be greater than zero")
+    
+    # Validate wallet address is provided
+    if not req.payoutWallet or not req.payoutWallet.strip():
+        raise HTTPException(status_code=400, detail="USDT TRC20 wallet address is required")
+    
+    # Basic TRC20 wallet validation (starts with 'T' and is 34 characters)
+    wallet_address = req.payoutWallet.strip()
+    if not wallet_address.startswith('T') or len(wallet_address) != 34:
+        raise HTTPException(status_code=400, detail="Invalid USDT TRC20 wallet address. Must start with 'T' and be 34 characters long")
 
     try:
         # Reuse earnings calculation to determine available balance
@@ -2070,7 +2079,7 @@ async def create_payout_request(req: CreatePayoutRequest, current_user: dict = D
             "sellerId": current_user["id"],
             "requestedAmount": req.requestedAmount,
             "status": "pending",
-            "payoutWallet": req.payoutWallet,
+            "payoutWallet": wallet_address,
             "requestDate": datetime.now(timezone.utc).isoformat(),
             "createdAt": datetime.now(timezone.utc).isoformat(),
             "updatedAt": datetime.now(timezone.utc).isoformat(),
