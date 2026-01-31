@@ -2496,12 +2496,19 @@ async def update_order_status(order_id: str, request: UpdateOrderStatusRequest, 
     
     try:
         update_data = {
-            'payment_status': request.status
+            'payment_status': request.status,
+            'order_status': request.status  # Also update order_status for Order Center
         }
         
         if request.status == 'paid':
             update_data['confirmed_by_admin'] = True
             update_data['confirmed_at'] = datetime.now(timezone.utc).isoformat()
+            # When paid, set order_status to 'to_be_shipped' so seller can ship
+            update_data['order_status'] = 'to_be_shipped'
+        elif request.status == 'completed':
+            # When completed, set both statuses to completed
+            update_data['order_status'] = 'completed'
+            update_data['payment_status'] = 'completed'
         
         result = supabase_admin.table('orders').update(update_data).eq('id', order_id).execute()
         
