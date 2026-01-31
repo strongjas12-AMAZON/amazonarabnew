@@ -159,9 +159,9 @@ backend:
         agent: "testing"
         comment: "✅ SELLER EARNINGS CALCULATION VERIFIED: GET /api/seller/earnings working correctly with NEW store_products system. ✅ Earnings Display: Successfully calculated and returned seller earnings (Total: $374.91, Available: $374.91, Pending: $50.0) ✅ Store Products Integration: Endpoint correctly uses NEW store_products system instead of old products table ✅ Balance Calculation: Properly calculates totalEarnings, availableBalance, and pendingWithdrawals from completed orders. Seller earnings calculation is fully functional with the NEW store system."
 
-  - task: "Admin Order Status Update - Mark as Completed Fix"
+  - task: "Admin Order Status Update - Mark as Completed Flow"
     implemented: true
-    working: true
+    working: false
     file: "backend/server.py"
     stuck_count: 0
     priority: "high"
@@ -173,6 +173,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ ADMIN ORDER COMPLETION VERIFIED: PUT /api/orders/{id}/status endpoint working correctly with NEW store_products system. ✅ Order Status Update: Admin can successfully mark orders as completed (updates paymentStatus to 'completed') ✅ Store Products Integration: Endpoint correctly uses NEW store_products system for seller earnings calculation ✅ Earnings Distribution: When orders are marked as completed, seller wallets are properly updated with earnings ✅ No Table Conflicts: Fixed issue with old 'products' table references. Admin order completion functionality is fully operational."
+      - working: false
+        agent: "testing"
+        comment: "❌ CRITICAL ISSUE FOUND: Order status update flow testing reveals seller order center integration problem. ✅ ADMIN SIDE WORKING: Admin can successfully mark orders as completed (payment_status='completed' confirmed) ✅ ORDER CREATION: Successfully created test order with seller's store product ✅ STATUS UPDATES: Admin endpoints for marking orders as 'paid' and 'completed' work correctly ❌ SELLER VERIFICATION FAILED: Seller order center (GET /api/seller/order-center) returns 0 orders and completed count is 0, even after admin marks order as completed. This suggests the seller order center endpoint may not be properly filtering/displaying orders that belong to the seller's store products. ROOT CAUSE: Possible issue with seller order center logic not correctly identifying orders containing seller's store products. The order was created with seller's product but doesn't appear in seller's order center."
 
 backend:
   - task: "Shipping Address Endpoints - Fix 'Buyer access required' Error"
