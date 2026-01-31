@@ -117,6 +117,18 @@ backend:
         agent: "main"
         comment: "Updated payout system to REQUIRE USDT TRC20 wallet address. Backend changes: 1) Made payoutWallet required (changed from Optional[str] to str), 2) Added validation for TRC20 format (must start with 'T', exactly 34 characters), 3) Clear error messages for invalid addresses. Frontend changes: 1) Added HTML5 validation (minLength, maxLength, pattern), 2) Added prominent info box explaining TRC20 requirements, 3) Updated payout history table to display wallet addresses, 4) Added help text and visual indicators. Database migration required: ALTER TABLE payout_requests ADD COLUMN IF NOT EXISTS payoutWallet TEXT (available in /app/backend/add_payout_wallet.sql). Complete documentation in /app/PAYOUT_WALLET_UPDATE.md"
 
+  - task: "Seller Earnings Calculation - Fix for Store Products System"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Fixed seller earnings calculation to work with NEW store_products system. ISSUE: Endpoint was joining order_items with old 'products' table which doesn't exist in new system. FIX: Updated query to join order_items with store_products table and check seller_id directly from store_products (not products). Now correctly calculates totalEarnings, availableBalance, and pendingWithdrawals for sellers. Backend restarted successfully."
+
 backend:
   - task: "Shipping Address Endpoints - Fix 'Buyer access required' Error"
     implemented: true
