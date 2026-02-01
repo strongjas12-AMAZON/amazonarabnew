@@ -1385,7 +1385,6 @@ async def admin_create_product(request: CreateProductRequest, current_user: dict
             'base_price': request.price,  # product_catalog uses 'base_price'
             'category': request.category,
             'images': request.images if hasattr(request, 'images') and request.images else [],
-            'is_active': True,
             'created_at': datetime.now(timezone.utc).isoformat()
         }
         
@@ -1399,8 +1398,7 @@ async def admin_create_product(request: CreateProductRequest, current_user: dict
             'price': result.data[0].get('base_price'),
             'category': result.data[0].get('category'),
             'images': result.data[0].get('images', []),
-            'created_at': result.data[0].get('created_at'),
-            'is_active': result.data[0].get('is_active', True)
+            'created_at': result.data[0].get('created_at')
         }
         
         return {"success": True, "product": formatted_product}
