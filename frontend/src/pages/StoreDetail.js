@@ -67,13 +67,14 @@ export default function StoreDetail() {
 
     // Create a product object compatible with cart
     const cartProduct = {
-      id: product.catalogProductId, // Use catalog product ID for cart
+      id: product.id, // FIXED: Use store_product ID (not catalogProductId)
       title: product.name,
       price: product.price,
       images: product.images,
       sellerId: product.sellerId,
       storeName: store?.storeName,
-      stock: product.stock
+      stock: product.stock,
+      catalogProductId: product.catalogProductId // Keep for reference
     };
 
     addToCart(cartProduct);
