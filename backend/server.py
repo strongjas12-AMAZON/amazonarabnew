@@ -1461,7 +1461,7 @@ async def admin_update_product(product_id: str, request: UpdateProductRequest, c
 
 @api_router.delete("/admin/products/{product_id}")
 async def admin_delete_product(product_id: str, current_user: dict = Depends(get_current_user)):
-    """Admin deletes a product from the catalog"""
+    """Admin deletes a product from the catalog (NEW STORE SYSTEM)"""
     if current_user['role'] != 'admin':
         raise HTTPException(status_code=403, detail="Only admins can delete products")
     
@@ -1469,36 +1469,22 @@ async def admin_delete_product(product_id: str, current_user: dict = Depends(get
         raise HTTPException(status_code=403, detail="Your account is restricted. You cannot manage products.")
     
     try:
-        product = supabase_admin.table('products').select('*').eq('id', product_id).execute()
+        # Use product_catalog table (NEW SYSTEM)
+        product = supabase_admin.table('product_catalog').select('*').eq('id', product_id).execute()
         
         if not product.data:
             raise HTTPException(status_code=404, detail="Product not found")
         
-        # Check if product has orders
-        order_items = supabase_admin.table('order_items').select('id').eq('product_id', product_id).limit(1).execute()
-        if order_items.data:
+        # Check if product is used in any store_products (sellers added it to their stores)
+        store_products = supabase_admin.table('store_products').select('id').eq('catalog_product_id', product_id).limit(1).execute()
+        if store_products.data:
             # Instead of deleting, just deactivate the product
-            supabase_admin.table('products').update({'is_active': False}).eq('id', product_id).execute()
-            return {"success": True, "message": "Product deactivated (has order history)"}
+            supabase_admin.table('product_catalog').update({'is_active': False}).eq('id', product_id).execute()
+            return {"success": True, "message": "Product deactivated (sellers are using it in their stores)"}
         
-        # Delete product images from storage
-        try:
-            product_images = product.data[0].get('images', [])
-            for img_url in product_images:
-                if '/products/' in img_url:
-                    file_path = img_url.split('/products/')[-1].split('?')[0]
-                    supabase_admin.storage.from_('products').remove([file_path])
-        except Exception as storage_error:
-            logging.warning(f"Could not delete product images from storage: {str(storage_error)}")
-        
-        # Also remove from seller_products if exists
-        try:
-            supabase_admin.table('seller_products').delete().eq('product_id', product_id).execute()
-        except:
-            pass  # Table might not exist yet
-        
-        supabase_admin.table('products').delete().eq('id', product_id).execute()
-        return {"success": True, "message": "Product deleted"}
+        # Delete product (no sellers using it, safe to delete)
+        supabase_admin.table('product_catalog').delete().eq('id', product_id).execute()
+        return {"success": True, "message": "Product deleted successfully"}
     except HTTPException:
         raise
     except Exception as e:
