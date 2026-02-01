@@ -222,11 +222,11 @@ backend:
 
   - task: "Admin Add Product Feature - Wrong Database Table"
     implemented: true
-    working: true
+    working: false
     file: "backend/server.py"
     stuck_count: 0
     priority: "critical"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: false
         agent: "main"
@@ -234,6 +234,9 @@ backend:
       - working: true
         agent: "main"
         comment: "✅ ADMIN PRODUCT MANAGEMENT FIXED: All three admin CRUD endpoints now correctly use product_catalog table with proper field mapping. Admin can now add new products (name, description, base_price, category, images) to catalog, edit existing products, and delete unused products. System properly prevents deletion of products being used in seller stores (deactivates instead). Ready for testing."
+      - working: false
+        agent: "testing"
+        comment: "❌ CRITICAL DATABASE SCHEMA ISSUE: Comprehensive audit reveals admin product creation still failing. GET /api/admin/products works correctly (returns 111 products from product_catalog), but POST /api/admin/products fails with database error: 'Could not find the is_active column of product_catalog in the schema cache'. This indicates the product_catalog table schema is missing the is_active column that the backend code expects. The backend code tries to set is_active=True when creating products, but this column doesn't exist in the database. REQUIRES DATABASE SCHEMA UPDATE: Need to add is_active column to product_catalog table or modify backend code to not use this column."
 
 backend:
   - task: "Shipping Address Endpoints - Fix 'Buyer access required' Error"
