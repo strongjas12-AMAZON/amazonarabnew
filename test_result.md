@@ -515,10 +515,13 @@ metadata:
 
 test_plan:
   current_focus:
-    - "All high priority backend tasks completed and verified"
+    - "Comprehensive audit of all admin, buyer, and seller functionalities"
+    - "Order Creation Foreign Key Fix verification"
+    - "Admin Add Product Feature verification"
+    - "Admin Modal Overlay Fix verification"
   stuck_tasks: []
-  test_all: false
-  test_priority: "high_first"
+  test_all: true
+  test_priority: "comprehensive_audit"
 
 agent_communication:
   - agent: "main"
