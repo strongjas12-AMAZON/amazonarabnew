@@ -119,6 +119,9 @@ backend:
       - working: true
         agent: "main"
         comment: "✅ MIGRATION APPLIED: User successfully ran the SQL migration in Supabase. Foreign key constraint order_items_product_id_fkey now correctly references store_products table instead of old products table. Database schema is now aligned with the NEW store system. User should now clear cart, add products again, and test order placement. Orders should now appear in both buyer dashboard and seller Order Center without foreign key errors."
+      - working: false
+        agent: "main"
+        comment: "USER STILL SEEING ERROR: After SQL migration, user reports same foreign key error with product_id=2d1d6183-c9a0-4d1c-9255-641ce7914680 not in store_products. DIAGNOSIS COMPLETED: Ran diagnostic script - found 4 active products in store_products. Discovered that user's cart contains CATALOG PRODUCT IDs (2d1d6183-c9a0-4d1c-9255-641ce7914680 is catalog_product_id) instead of STORE PRODUCT IDs (should be 29dae859-0ab4-4a69-886d-95d01651e895). ROOT CAUSE: Stale cart data from before migration. Cart has old catalog IDs but system now requires store_product IDs. SOLUTION: User must clear browser localStorage cart and add fresh products from /products page. Created /app/CART_FIX_REQUIRED.md with complete instructions for clearing cart and testing."
 
 backend:
   - task: "Seller Wallet Recharge Request Flow"
