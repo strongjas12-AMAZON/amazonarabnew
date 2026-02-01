@@ -10,7 +10,7 @@ import sys
 from typing import Dict, Any, Optional
 
 # Configuration
-BASE_URL = "https://repo-duplicator-9.preview.emergentagent.com/api"
+BASE_URL = "https://repo-twin-1.preview.emergentagent.com/api"
 
 # Test Credentials
 ADMIN_EMAIL = "support@arabshopping.org"
