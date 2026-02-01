@@ -1411,7 +1411,7 @@ async def admin_create_product(request: CreateProductRequest, current_user: dict
 
 @api_router.put("/admin/products/{product_id}")
 async def admin_update_product(product_id: str, request: UpdateProductRequest, current_user: dict = Depends(get_current_user)):
-    """Admin updates a product in the catalog"""
+    """Admin updates a product in the catalog (NEW STORE SYSTEM)"""
     if current_user['role'] != 'admin':
         raise HTTPException(status_code=403, detail="Only admins can update products")
     
@@ -1419,25 +1419,39 @@ async def admin_update_product(product_id: str, request: UpdateProductRequest, c
         raise HTTPException(status_code=403, detail="Your account is restricted. You cannot manage products.")
     
     try:
-        product = supabase_admin.table('products').select('*').eq('id', product_id).execute()
+        # Use product_catalog table (NEW SYSTEM)
+        product = supabase_admin.table('product_catalog').select('*').eq('id', product_id).execute()
         
         if not product.data:
             raise HTTPException(status_code=404, detail="Product not found")
         
         update_data = {}
         if request.title is not None:
-            update_data['title'] = request.title
+            update_data['name'] = request.title  # product_catalog uses 'name' field
         if request.description is not None:
             update_data['description'] = request.description
         if request.price is not None:
-            update_data['price'] = request.price
+            update_data['base_price'] = request.price  # product_catalog uses 'base_price'
         if request.images is not None:
             update_data['images'] = request.images
         if request.category is not None:
             update_data['category'] = request.category
         
-        result = supabase_admin.table('products').update(update_data).eq('id', product_id).execute()
-        return {"success": True, "product": format_product_response(result.data[0])}
+        result = supabase_admin.table('product_catalog').update(update_data).eq('id', product_id).execute()
+        
+        # Format response to match frontend expectations
+        formatted_product = {
+            'id': result.data[0].get('id'),
+            'title': result.data[0].get('name'),
+            'description': result.data[0].get('description'),
+            'price': result.data[0].get('base_price'),
+            'category': result.data[0].get('category'),
+            'images': result.data[0].get('images', []),
+            'created_at': result.data[0].get('created_at'),
+            'is_active': result.data[0].get('is_active', True)
+        }
+        
+        return {"success": True, "product": formatted_product}
     except HTTPException:
         raise
     except Exception as e:
