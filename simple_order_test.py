@@ -9,7 +9,7 @@ import json
 from datetime import datetime, timedelta
 
 # Configuration
-BASE_URL = "https://repo-duplicator-9.preview.emergentagent.com/api"
+BASE_URL = "https://repo-twin-1.preview.emergentagent.com/api"
 
 # Test Credentials
 SELLER_EMAIL = "testseller_new@test.com"

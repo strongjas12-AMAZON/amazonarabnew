@@ -1372,24 +1372,36 @@ async def get_my_products(current_user: dict = Depends(get_current_user)):
 
 @api_router.post("/admin/products")
 async def admin_create_product(request: CreateProductRequest, current_user: dict = Depends(get_current_user)):
-    """Admin creates a new product in the central catalog"""
+    """Admin creates a new product in the central catalog (NEW STORE SYSTEM)"""
     if current_user['role'] != 'admin':
         raise HTTPException(status_code=403, detail="Only admins can create products")
     
     try:
+        # Use product_catalog table (NEW SYSTEM) with correct field names
         product_data = {
             'id': str(uuid.uuid4()),
-            'title': request.title,
+            'name': request.title,  # product_catalog uses 'name' field
             'description': request.description,
-            'price': request.price,
+            'base_price': request.price,  # product_catalog uses 'base_price'
             'category': request.category,
-            'images': [],
-            'seller_id': None,  # Admin products don't have a seller
+            'images': request.images if hasattr(request, 'images') and request.images else [],
             'created_at': datetime.now(timezone.utc).isoformat()
         }
         
-        result = supabase_admin.table('products').insert(product_data).execute()
-        return {"success": True, "product": format_product_response(result.data[0])}
+        result = supabase_admin.table('product_catalog').insert(product_data).execute()
+        
+        # Format response to match frontend expectations
+        formatted_product = {
+            'id': result.data[0].get('id'),
+            'title': result.data[0].get('name'),
+            'description': result.data[0].get('description'),
+            'price': result.data[0].get('base_price'),
+            'category': result.data[0].get('category'),
+            'images': result.data[0].get('images', []),
+            'created_at': result.data[0].get('created_at')
+        }
+        
+        return {"success": True, "product": formatted_product}
     except Exception as e:
         logging.error(f"Admin create product error: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
@@ -1397,7 +1409,7 @@ async def admin_create_product(request: CreateProductRequest, current_user: dict
 
 @api_router.put("/admin/products/{product_id}")
 async def admin_update_product(product_id: str, request: UpdateProductRequest, current_user: dict = Depends(get_current_user)):
-    """Admin updates a product in the catalog"""
+    """Admin updates a product in the catalog (NEW STORE SYSTEM)"""
     if current_user['role'] != 'admin':
         raise HTTPException(status_code=403, detail="Only admins can update products")
     
@@ -1405,25 +1417,39 @@ async def admin_update_product(product_id: str, request: UpdateProductRequest, c
         raise HTTPException(status_code=403, detail="Your account is restricted. You cannot manage products.")
     
     try:
-        product = supabase_admin.table('products').select('*').eq('id', product_id).execute()
+        # Use product_catalog table (NEW SYSTEM)
+        product = supabase_admin.table('product_catalog').select('*').eq('id', product_id).execute()
         
         if not product.data:
             raise HTTPException(status_code=404, detail="Product not found")
         
         update_data = {}
         if request.title is not None:
-            update_data['title'] = request.title
+            update_data['name'] = request.title  # product_catalog uses 'name' field
         if request.description is not None:
             update_data['description'] = request.description
         if request.price is not None:
-            update_data['price'] = request.price
+            update_data['base_price'] = request.price  # product_catalog uses 'base_price'
         if request.images is not None:
             update_data['images'] = request.images
         if request.category is not None:
             update_data['category'] = request.category
         
-        result = supabase_admin.table('products').update(update_data).eq('id', product_id).execute()
-        return {"success": True, "product": format_product_response(result.data[0])}
+        result = supabase_admin.table('product_catalog').update(update_data).eq('id', product_id).execute()
+        
+        # Format response to match frontend expectations
+        formatted_product = {
+            'id': result.data[0].get('id'),
+            'title': result.data[0].get('name'),
+            'description': result.data[0].get('description'),
+            'price': result.data[0].get('base_price'),
+            'category': result.data[0].get('category'),
+            'images': result.data[0].get('images', []),
+            'created_at': result.data[0].get('created_at'),
+            'is_active': result.data[0].get('is_active', True)
+        }
+        
+        return {"success": True, "product": formatted_product}
     except HTTPException:
         raise
     except Exception as e:
@@ -1433,7 +1459,7 @@ async def admin_update_product(product_id: str, request: UpdateProductRequest, c
 
 @api_router.delete("/admin/products/{product_id}")
 async def admin_delete_product(product_id: str, current_user: dict = Depends(get_current_user)):
-    """Admin deletes a product from the catalog"""
+    """Admin deletes a product from the catalog (NEW STORE SYSTEM)"""
     if current_user['role'] != 'admin':
         raise HTTPException(status_code=403, detail="Only admins can delete products")
     
@@ -1441,36 +1467,22 @@ async def admin_delete_product(product_id: str, current_user: dict = Depends(get
         raise HTTPException(status_code=403, detail="Your account is restricted. You cannot manage products.")
     
     try:
-        product = supabase_admin.table('products').select('*').eq('id', product_id).execute()
+        # Use product_catalog table (NEW SYSTEM)
+        product = supabase_admin.table('product_catalog').select('*').eq('id', product_id).execute()
         
         if not product.data:
             raise HTTPException(status_code=404, detail="Product not found")
         
-        # Check if product has orders
-        order_items = supabase_admin.table('order_items').select('id').eq('product_id', product_id).limit(1).execute()
-        if order_items.data:
+        # Check if product is used in any store_products (sellers added it to their stores)
+        store_products = supabase_admin.table('store_products').select('id').eq('catalog_product_id', product_id).limit(1).execute()
+        if store_products.data:
             # Instead of deleting, just deactivate the product
-            supabase_admin.table('products').update({'is_active': False}).eq('id', product_id).execute()
-            return {"success": True, "message": "Product deactivated (has order history)"}
+            supabase_admin.table('product_catalog').update({'is_active': False}).eq('id', product_id).execute()
+            return {"success": True, "message": "Product deactivated (sellers are using it in their stores)"}
         
-        # Delete product images from storage
-        try:
-            product_images = product.data[0].get('images', [])
-            for img_url in product_images:
-                if '/products/' in img_url:
-                    file_path = img_url.split('/products/')[-1].split('?')[0]
-                    supabase_admin.storage.from_('products').remove([file_path])
-        except Exception as storage_error:
-            logging.warning(f"Could not delete product images from storage: {str(storage_error)}")
-        
-        # Also remove from seller_products if exists
-        try:
-            supabase_admin.table('seller_products').delete().eq('product_id', product_id).execute()
-        except:
-            pass  # Table might not exist yet
-        
-        supabase_admin.table('products').delete().eq('id', product_id).execute()
-        return {"success": True, "message": "Product deleted"}
+        # Delete product (no sellers using it, safe to delete)
+        supabase_admin.table('product_catalog').delete().eq('id', product_id).execute()
+        return {"success": True, "message": "Product deleted successfully"}
     except HTTPException:
         raise
     except Exception as e:
