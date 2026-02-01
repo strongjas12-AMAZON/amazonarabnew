@@ -1372,24 +1372,38 @@ async def get_my_products(current_user: dict = Depends(get_current_user)):
 
 @api_router.post("/admin/products")
 async def admin_create_product(request: CreateProductRequest, current_user: dict = Depends(get_current_user)):
-    """Admin creates a new product in the central catalog"""
+    """Admin creates a new product in the central catalog (NEW STORE SYSTEM)"""
     if current_user['role'] != 'admin':
         raise HTTPException(status_code=403, detail="Only admins can create products")
     
     try:
+        # Use product_catalog table (NEW SYSTEM) with correct field names
         product_data = {
             'id': str(uuid.uuid4()),
-            'title': request.title,
+            'name': request.title,  # product_catalog uses 'name' field
             'description': request.description,
-            'price': request.price,
+            'base_price': request.price,  # product_catalog uses 'base_price'
             'category': request.category,
-            'images': [],
-            'seller_id': None,  # Admin products don't have a seller
+            'images': request.images if hasattr(request, 'images') and request.images else [],
+            'is_active': True,
             'created_at': datetime.now(timezone.utc).isoformat()
         }
         
-        result = supabase_admin.table('products').insert(product_data).execute()
-        return {"success": True, "product": format_product_response(result.data[0])}
+        result = supabase_admin.table('product_catalog').insert(product_data).execute()
+        
+        # Format response to match frontend expectations
+        formatted_product = {
+            'id': result.data[0].get('id'),
+            'title': result.data[0].get('name'),
+            'description': result.data[0].get('description'),
+            'price': result.data[0].get('base_price'),
+            'category': result.data[0].get('category'),
+            'images': result.data[0].get('images', []),
+            'created_at': result.data[0].get('created_at'),
+            'is_active': result.data[0].get('is_active', True)
+        }
+        
+        return {"success": True, "product": formatted_product}
     except Exception as e:
         logging.error(f"Admin create product error: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
