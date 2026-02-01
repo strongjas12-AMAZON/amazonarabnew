@@ -104,6 +104,18 @@
 
 user_problem_statement: Build a Buyer Store Search & Store Detail system connected to Supabase, with STRICT access control so buyers can ONLY see products that a seller has explicitly added to their store. Buyers must NOT see the master product catalog. Additionally, ensure sellers can request payouts with required USDT TRC20 wallet addresses.
 
+  - task: "Admin Add Product Modal - Duplicate Modal Overlay"
+    implemented: true
+    working: true
+    file: "frontend/src/pages/dashboard/AdminDashboard.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "main"
+        comment: "USER REPORTED: Add Product page in admin catalog displays incorrect/broken interface with overlapping modals. DIAGNOSIS: Found TWO modal definitions in AdminDashboard.js - first modal at lines 371-539 (comprehensive form with image upload) and duplicate modal at lines 580-687 (simplified version). Both modals were rendering simultaneously when showProductForm=true, causing overlay issue visible in screenshot. FIX APPLIED: Removed duplicate modal definition (lines 580-687). Kept only the comprehensive modal with full functionality including title, description, price, category, and image URL management. Frontend compiled successfully with hot reload."
+
 backend:
   - task: "Order Creation Foreign Key Constraint Error"
     implemented: true
