@@ -23,7 +23,7 @@ print("=" * 60)
 
 try:
     # Check store_products
-    result = supabase.table('store_products').select('id, price, stock_quantity, is_active, catalog_product_id, seller_id').eq('is_active', True).limit(10).execute()
+    result = supabase.table('store_products').select('*').eq('is_active', True).limit(10).execute()
     
     if result.data:
         print(f"\n✅ Found {len(result.data)} active products in store_products table")
@@ -31,10 +31,11 @@ try:
         print("-" * 60)
         for idx, product in enumerate(result.data[:5], 1):
             print(f"{idx}. Product ID: {product['id']}")
-            print(f"   Price: ${product['price']}")
-            print(f"   Stock: {product['stock_quantity']}")
-            print(f"   Catalog ID: {product['catalog_product_id']}")
-            print(f"   Seller ID: {product['seller_id'][:8]}...")
+            print(f"   Price: ${product.get('price', 'N/A')}")
+            print(f"   Stock: {product.get('stock', product.get('stock_quantity', 'N/A'))}")
+            print(f"   Catalog ID: {product.get('catalog_product_id', 'N/A')}")
+            print(f"   Seller ID: {product.get('seller_id', 'N/A')[:8] if product.get('seller_id') else 'N/A'}...")
+            print(f"   Active: {product.get('is_active', 'N/A')}")
             print()
     else:
         print("\n⚠️  WARNING: No active products found in store_products table")
