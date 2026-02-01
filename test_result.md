@@ -196,6 +196,21 @@ backend:
         agent: "testing"
         comment: "✅ COMPREHENSIVE ORDER STATUS FLOW TESTING COMPLETE: Complete end-to-end order status update flow verified successfully as requested in review. ✅ STEP 1 - SELLER LOGIN & PRODUCT LOOKUP: Successfully logged in as testseller_new@test.com and retrieved 2 seller store products (product ID: dcd6775c-a62b-4fef-9687-f68c7bb44f5c, price: $54.99) ✅ STEP 2 - BUYER LOGIN & ORDER CREATION: Successfully logged in as testbuyer@test.com, created shipping address, and created order with seller's product (Order ID: e95a0960-7a92-4b16-a92f-6c2e9ecdae44, Total: $109.98) ✅ STEP 3 - ADMIN LOGIN & ORDER STATUS UPDATES: Successfully logged in as support@arabshopping.org, marked order as 'paid' (payment_status='paid'), then marked as 'completed' (payment_status='completed') ✅ STEP 4 - SELLER VERIFICATION: Order appears correctly in seller's order center with 'completed' status (completed count: 1), and order appears when filtering by status='completed' (1 completed order found). CRITICAL SUCCESS: The complete order status flow from admin mark completed to seller dashboard is working correctly. After admin marks order as completed, seller can see the order in their 'completed' status in Order Center. All 13/13 tests passed (100% success rate)."
 
+  - task: "Admin Add Product Feature - Wrong Database Table"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "main"
+        comment: "USER REPORTED: Issues with 'Add Product' feature in admin product catalog. ROOT CAUSE FOUND: Admin CRUD endpoints (POST/PUT/DELETE /admin/products) were using OLD 'products' table instead of NEW 'product_catalog' table. System migrated from products→seller_products to product_catalog→store_products but admin endpoints were never updated. SYMPTOMS: Admin could view products from catalog but couldn't add/edit/delete because operations went to wrong table. FIX APPLIED: 1) Updated POST /admin/products to insert into product_catalog using fields 'name' and 'base_price' (not 'title' and 'price'), 2) Updated PUT /admin/products/{id} to update product_catalog with correct field mapping, 3) Updated DELETE /admin/products/{id} to delete from product_catalog and check store_products for usage (not order_items). All responses formatted to match frontend expectations (title/price instead of name/base_price). Backend restarted successfully."
+      - working: true
+        agent: "main"
+        comment: "✅ ADMIN PRODUCT MANAGEMENT FIXED: All three admin CRUD endpoints now correctly use product_catalog table with proper field mapping. Admin can now add new products (name, description, base_price, category, images) to catalog, edit existing products, and delete unused products. System properly prevents deletion of products being used in seller stores (deactivates instead). Ready for testing."
+
 backend:
   - task: "Shipping Address Endpoints - Fix 'Buyer access required' Error"
     implemented: true
