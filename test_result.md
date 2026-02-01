@@ -105,6 +105,19 @@
 user_problem_statement: Build a Buyer Store Search & Store Detail system connected to Supabase, with STRICT access control so buyers can ONLY see products that a seller has explicitly added to their store. Buyers must NOT see the master product catalog. Additionally, ensure sellers can request payouts with required USDT TRC20 wallet addresses.
 
 backend:
+  - task: "Order Creation Foreign Key Constraint Error"
+    implemented: true
+    working: false
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "main"
+        comment: "USER REPORTED CRITICAL BUG: When buyer places order, error 'insert or update on table order_items violates foreign key constraint order_items_product_id_fkey. Key (product_id) is not present in table store_products'. ROOT CAUSE: Database migration was never run - order_items table foreign key still references old 'products' table instead of new 'store_products' table. SYMPTOMS: Order shows 'In Process' in buyer dashboard but doesn't appear in seller Order Center. SOLUTION PROVIDED: Created /app/FIX_ORDER_SYSTEM_NOW.md with SQL migration script to update foreign key constraint from products to store_products table. User must run this SQL in Supabase SQL Editor. After running SQL, users should clear cart and add products again to avoid stale data issues."
+
+backend:
   - task: "Seller Wallet Recharge Request Flow"
     implemented: true
     working: true
