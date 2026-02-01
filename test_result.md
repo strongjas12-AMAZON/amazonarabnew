@@ -533,13 +533,12 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Comprehensive audit of all admin, buyer, and seller functionalities"
-    - "Order Creation Foreign Key Fix verification"
-    - "Admin Add Product Feature verification"
-    - "Admin Modal Overlay Fix verification"
+    - "Comprehensive Backend API Audit - All Functionalities"
+    - "Admin Add Product Feature database schema fix"
+    - "Order creation stock validation issue"
   stuck_tasks: []
   test_all: true
-  test_priority: "comprehensive_audit"
+  test_priority: "comprehensive_audit_complete"
 
 agent_communication:
   - agent: "main"
