@@ -2626,19 +2626,19 @@ async def update_order_status(order_id: str, request: UpdateOrderStatusRequest, 
                     order = order_query.data[0]
                     total_amount = float(order.get('total_amount', 0))
                     
-                    # Update platform wallet
-                    platform_wallet = supabase_admin.table('platform_wallet')\
+                    # Update platform balance
+                    platform_balance = supabase_admin.table('platform_balance')\
                         .select('*')\
                         .eq('id', '00000000-0000-0000-0000-000000000001')\
                         .execute()
                     
-                    if platform_wallet.data:
-                        current_balance = float(platform_wallet.data[0].get('balance', 0))
+                    if platform_balance.data:
+                        current_balance = float(platform_balance.data[0].get('balance', 0))
                         new_balance = current_balance + total_amount
                         
-                        supabase_admin.table('platform_wallet').update({
+                        supabase_admin.table('platform_balance').update({
                             'balance': new_balance,
-                            'total_received': float(platform_wallet.data[0].get('totalReceived', 0)) + total_amount,
+                            'total_received': float(platform_balance.data[0].get('total_received', 0)) + total_amount,
                             'updated_at': datetime.now(timezone.utc).isoformat()
                         }).eq('id', '00000000-0000-0000-0000-000000000001').execute()
                         
