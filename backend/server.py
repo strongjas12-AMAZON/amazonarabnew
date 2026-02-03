@@ -5538,14 +5538,12 @@ async def ship_order_by_platform(order_id: str, req: ShipByPlatformRequest, curr
             raise HTTPException(status_code=400, detail="Order must have deposit received before shipping")
         
         # 2. Update order status to 'shipped'
-        auto_delivery_time = datetime.now(timezone.utc) + timedelta(hours=48)  # 48 hours from now
         update_data = {
             'escrow_status': 'shipped',
-            'orderStatus': 'shipped',
-            'autoDeliveryAt': auto_delivery_time.isoformat()
+            'orderStatus': 'shipped'
         }
         
-        # Note: Setting auto-delivery to current time for now, will implement proper 48h auto-confirm later
+        # Note: Auto-delivery feature requires adding autoDeliveryAt column to orders table
         supabase_admin.table('orders')\
             .update(update_data)\
             .eq('id', order_id)\
