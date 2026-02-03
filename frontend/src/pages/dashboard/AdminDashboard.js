@@ -111,7 +111,8 @@ const AdminDashboard = () => {
       api.get('/admin/store-name-requests').catch(err => ({ error: err })),
       api.get('/admin/payout-requests').catch(err => ({ error: err })),
       api.get('/admin/wallet-recharge-requests').catch(err => ({ error: err })),
-      api.get('/admin/seller-wallet-recharge-requests').catch(err => ({ error: err }))
+      api.get('/admin/seller-wallet-recharge-requests').catch(err => ({ error: err })),
+      api.get('/admin/deposit-confirmations').catch(err => ({ error: err }))
     ]);
 
     // Handle each result independently
