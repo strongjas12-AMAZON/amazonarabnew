@@ -26,6 +26,10 @@ const AdminDashboard = () => {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [categories, setCategories] = useState([]);
   
+  // NEW: Escrow system states
+  const [platformBalance, setPlatformBalance] = useState(null);
+  const [shippingOrderId, setShippingOrderId] = useState(null);
+  
   // Product form state
   const [showProductForm, setShowProductForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
@@ -49,6 +53,7 @@ const AdminDashboard = () => {
   useEffect(() => {
     fetchData();
     fetchCategories();
+    fetchPlatformBalance(); // NEW: Fetch platform balance
   }, []);
 
   const fetchCategories = async () => {
