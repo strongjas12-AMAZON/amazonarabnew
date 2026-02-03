@@ -4993,8 +4993,8 @@ async def get_orders_pending_deposit(current_user: dict = Depends(get_current_us
                 # Get deposit info
                 deposit_result = supabase_admin.table('order_deposits')\
                     .select('*')\
-                    .eq('orderId', order['id'])\
-                    .eq('sellerId', user_id)\
+                    .eq('order_id', order['id'])\
+                    .eq('seller_id', user_id)\
                     .execute()
                 
                 deposit_info = deposit_result.data[0] if deposit_result.data else None
@@ -5006,9 +5006,9 @@ async def get_orders_pending_deposit(current_user: dict = Depends(get_current_us
                     'escrowStatus': order.get('escrowStatus'),
                     'createdAt': order.get('createdAt'),
                     'depositInfo': {
-                        'requiredAmount': float(deposit_info['requiredAmount']) if deposit_info else 0,
-                        'depositedAmount': float(deposit_info['depositedAmount']) if deposit_info else 0,
-                        'isComplete': deposit_info['isDepositComplete'] if deposit_info else False
+                        'requiredAmount': float(deposit_info['required_amount']) if deposit_info else 0,
+                        'depositedAmount': float(deposit_info['deposited_amount']) if deposit_info else 0,
+                        'isComplete': deposit_info['is_deposit_complete'] if deposit_info else False
                     } if deposit_info else None
                 })
         
