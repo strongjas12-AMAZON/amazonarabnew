@@ -17,11 +17,31 @@ const BuyerDashboard = () => {
   const [showRechargeModal, setShowRechargeModal] = useState(false);
   const [rechargeAmount, setRechargeAmount] = useState('');
   const [rechargeSubmitting, setRechargeSubmitting] = useState(false);
+  const [confirmingDelivery, setConfirmingDelivery] = useState(null);
 
   useEffect(() => {
     fetchOrders();
     fetchWalletData();
   }, []);
+  
+  // NEW: Confirm delivery handler
+  const handleConfirmDelivery = async (orderId) => {
+    if (!window.confirm('Confirm that you have received this order?')) {
+      return;
+    }
+    
+    try {
+      setConfirmingDelivery(orderId);
+      await api.post(`/orders/${orderId}/confirm-delivery`);
+      toast.success('Delivery confirmed! Seller payout initiated.');
+      await fetchOrders();
+    } catch (error) {
+      const errorMsg = error.response?.data?.detail || 'Failed to confirm delivery';
+      toast.error(errorMsg);
+    } finally {
+      setConfirmingDelivery(null);
+    }
+  };
 
   const fetchOrders = async () => {
     try {
