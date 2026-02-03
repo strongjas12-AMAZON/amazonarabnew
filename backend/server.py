@@ -288,7 +288,9 @@ def format_order_response(order_data: dict) -> dict:
         'paymentStatus': order_data.get('payment_status'),
         'confirmedByAdmin': order_data.get('confirmed_by_admin'),
         'confirmedAt': order_data.get('confirmed_at'),
-        'createdAt': order_data.get('created_at')
+        'createdAt': order_data.get('created_at'),
+        'escrowStatus': order_data.get('escrow_status'),
+        'depositRequired': order_data.get('deposit_required')
     }
     if 'users' in order_data and order_data['users']:
         result['users'] = {
