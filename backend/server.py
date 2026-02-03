@@ -1962,9 +1962,9 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
                         'updated_at': datetime.now(timezone.utc).isoformat()
                     }).eq('id', '00000000-0000-0000-0000-000000000001').execute()
                     
-                    # Record transaction
+                    # Record platform transaction
                     supabase_admin.table('platform_transactions').insert({
-                        'type': 'buyer_payment',
+                        'transaction_type': 'buyer_payment',
                         'amount': req.totalAmount,
                         'order_id': order_id,
                         'user_id': current_user['id'],
