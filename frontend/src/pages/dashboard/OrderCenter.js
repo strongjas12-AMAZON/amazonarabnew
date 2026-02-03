@@ -609,20 +609,6 @@ const OrderCenter = () => {
             </div>
           )}
           
-          {/* Ship Order Button */}
-          {orderStatus === 'to_be_shipped' && order.paymentStatus === 'paid' && !order.shipment && order.escrowStatus !== 'awaiting_seller_deposit' && (
-            <button
-              onClick={() => {
-                setSelectedOrder(order);
-                setShowShipModal(true);
-              }}
-              className="flex-1 sm:flex-none btn-gold text-sm py-2 px-4 flex items-center justify-center gap-2"
-            >
-              <Send className="w-4 h-4" />
-              Ship Order
-            </button>
-          )}
-          
           {/* Platform will ship - waiting for deposit confirmation */}
           {order.escrowStatus === 'deposit_received' && (
             <div className="w-full p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
