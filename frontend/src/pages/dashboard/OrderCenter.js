@@ -105,6 +105,14 @@ const OrderCenter = () => {
   const [submitting, setSubmitting] = useState(false);
   const [refunds, setRefunds] = useState([]);
   const [refundCounts, setRefundCounts] = useState({});
+  
+  // USDT Deposit Payment States
+  const [showUsdtDepositModal, setShowUsdtDepositModal] = useState(false);
+  const [usdtDepositForm, setUsdtDepositForm] = useState({
+    transactionHash: '',
+    notes: ''
+  });
+  const [submittingUsdtDeposit, setSubmittingUsdtDeposit] = useState(false);
 
   // Fetch orders for Order Center
   const fetchOrders = useCallback(async (status = null) => {
