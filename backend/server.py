@@ -2644,7 +2644,7 @@ async def update_order_status(order_id: str, request: UpdateOrderStatusRequest, 
                         
                         # Record transaction
                         supabase_admin.table('platform_transactions').insert({
-                            'type': 'buyer_payment',
+                            'transaction_type': 'buyer_payment',
                             'amount': total_amount,
                             'order_id': order_id,
                             'user_id': order.get('buyer_id'),
