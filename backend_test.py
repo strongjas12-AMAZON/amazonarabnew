@@ -1583,7 +1583,8 @@ class ComprehensiveAPITester:
                 # Look for an order with 'shipped' status
                 test_order_id = None
                 for order in orders:
-                    if order.get("escrowStatus") == "shipped":
+                    escrow_status = order.get("escrowStatus") or order.get("escrow_status")
+                    if escrow_status == "shipped":
                         test_order_id = order.get("id")
                         break
                 
