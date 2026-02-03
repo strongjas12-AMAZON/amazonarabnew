@@ -649,6 +649,7 @@ const AdminDashboard = () => {
             <p className="text-3xl font-bold text-yellow-400">{stats.pendingPayouts}</p>
           </div>
         </div>
+        </div>
       )}
 
       {activeTab === 'payoutRequests' && (
