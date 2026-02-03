@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { 
   Users, Package, ShoppingCart, Code, CheckCircle, XCircle, Eye, 
   Clock, DollarSign, Trash2, Plus, Edit, Search, Database, 
-  ToggleLeft, ToggleRight, X, Save
+  ToggleLeft, ToggleRight, X, Save, AlertTriangle
 } from 'lucide-react';
 
 const AdminDashboard = () => {
@@ -21,6 +21,7 @@ const AdminDashboard = () => {
   const [payoutRequests, setPayoutRequests] = useState([]);
   const [rechargeRequests, setRechargeRequests] = useState([]);
   const [sellerRechargeRequests, setSellerRechargeRequests] = useState([]);
+  const [depositConfirmations, setDepositConfirmations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -110,7 +111,8 @@ const AdminDashboard = () => {
       api.get('/admin/store-name-requests').catch(err => ({ error: err })),
       api.get('/admin/payout-requests').catch(err => ({ error: err })),
       api.get('/admin/wallet-recharge-requests').catch(err => ({ error: err })),
-      api.get('/admin/seller-wallet-recharge-requests').catch(err => ({ error: err }))
+      api.get('/admin/seller-wallet-recharge-requests').catch(err => ({ error: err })),
+      api.get('/admin/deposit-confirmations').catch(err => ({ error: err }))
     ]);
 
     // Handle each result independently
@@ -177,6 +179,13 @@ const AdminDashboard = () => {
         setSellerRechargeRequests(results[8].value.data?.requests || []);
       } else {
         setSellerRechargeRequests([]);
+      }
+
+      // Deposit Confirmations (results[9])
+      if (results[9].status === 'fulfilled' && !results[9].value.error) {
+        setDepositConfirmations(results[9].value.data?.deposits || []);
+      } else {
+        setDepositConfirmations([]);
       }
     } catch (error) {
       // Silently handle errors - individual requests already handled above
@@ -381,7 +390,7 @@ const AdminDashboard = () => {
 
       {/* Tabs */}
       <div className="flex gap-2 mb-8 flex-wrap">
-        {['overview', 'products', 'orders', 'users', 'verifications', 'inviteCodes', 'bannedUsers', 'storeRequests', 'payoutRequests', 'wallets'].map((tab) => (
+        {['overview', 'products', 'orders', 'users', 'verifications', 'inviteCodes', 'bannedUsers', 'storeRequests', 'payoutRequests', 'depositConfirmations', 'wallets'].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -398,7 +407,13 @@ const AdminDashboard = () => {
             {tab === 'users' && <Users className="w-4 h-4 inline mr-2" />}
             {tab === 'verifications' && <CheckCircle className="w-4 h-4 inline mr-2" />}
             {tab === 'inviteCodes' && <Code className="w-4 h-4 inline mr-2" />}
+            {tab === 'depositConfirmations' && <DollarSign className="w-4 h-4 inline mr-2" />}
             {tab.charAt(0).toUpperCase() + tab.slice(1).replace(/([A-Z])/g, ' $1')}
+            {tab === 'depositConfirmations' && depositConfirmations.length > 0 && (
+              <span className="ml-2 bg-orange-500 text-white text-xs px-2 py-0.5 rounded-full">
+                {depositConfirmations.length}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -1835,6 +1850,168 @@ const AdminDashboard = () => {
           )}
         </div>
       )} */}
+
+
+      {/* Deposit Confirmations Tab */}
+      {activeTab === 'depositConfirmations' && (
+        <div>
+          <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white mb-4">
+            USDT Deposit Confirmations
+          </h2>
+          <p className="text-gray-400 mb-6">
+            Review and confirm seller USDT TRC20 deposit payments for orders
+          </p>
+
+          {depositConfirmations.length === 0 ? (
+            <div className="luxury-card text-center py-12">
+              <CheckCircle className="w-16 h-16 text-green-500/50 mx-auto mb-4" />
+              <p className="text-gray-400 text-lg">No pending deposit confirmations</p>
+              <p className="text-gray-500 text-sm mt-2">All deposits have been processed</p>
+            </div>
+          ) : (
+            <div className="luxury-card overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-[rgba(212,175,55,0.2)]">
+                    <th className="text-left p-3 text-gray-400 font-medium">Order ID</th>
+                    <th className="text-left p-3 text-gray-400 font-medium">Seller</th>
+                    <th className="text-left p-3 text-gray-400 font-medium hidden sm:table-cell">Email</th>
+                    <th className="text-left p-3 text-gray-400 font-medium">Order Amount</th>
+                    <th className="text-left p-3 text-gray-400 font-medium">Deposit (80%)</th>
+                    <th className="text-left p-3 text-gray-400 font-medium">Transaction Hash</th>
+                    <th className="text-left p-3 text-gray-400 font-medium hidden md:table-cell">Submitted</th>
+                    <th className="text-left p-3 text-gray-400 font-medium text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {depositConfirmations.map((deposit) => (
+                    <tr key={deposit.id} className="border-b border-[rgba(212,175,55,0.1)] hover:bg-[rgba(212,175,55,0.05)] transition-colors">
+                      <td className="p-3">
+                        <span className="text-white font-mono text-sm">
+                          {deposit.orderId?.slice(0, 8)}...
+                        </span>
+                      </td>
+                      <td className="p-3 text-white font-medium">{deposit.sellerName || 'Unknown'}</td>
+                      <td className="p-3 text-gray-400 hidden sm:table-cell text-sm">{deposit.sellerEmail || 'N/A'}</td>
+                      <td className="p-3 text-[#D4AF37] font-semibold">${deposit.orderAmount?.toFixed(2)}</td>
+                      <td className="p-3 text-orange-400 font-bold">${deposit.depositRequired?.toFixed(2)}</td>
+                      <td className="p-3">
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-300 font-mono text-xs truncate max-w-[120px]" title={deposit.transactionHash}>
+                              {deposit.transactionHash}
+                            </span>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(deposit.transactionHash);
+                                toast.success('Transaction hash copied!');
+                              }}
+                              className="text-[#D4AF37] hover:text-[#f0c860] transition-colors"
+                              title="Copy transaction hash"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                            </button>
+                          </div>
+                          <a
+                            href={`https://tronscan.org/#/transaction/${deposit.transactionHash}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-400 hover:text-blue-300 text-xs flex items-center gap-1"
+                          >
+                            Verify on TronScan
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                          </a>
+                        </div>
+                        {deposit.notes && (
+                          <p className="text-xs text-gray-500 mt-1 italic">Note: {deposit.notes}</p>
+                        )}
+                      </td>
+                      <td className="p-3 text-gray-400 hidden md:table-cell text-sm">
+                        {deposit.submittedAt
+                          ? new Date(deposit.submittedAt).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })
+                          : '—'}
+                      </td>
+                      <td className="p-3">
+                        <div className="flex flex-col sm:flex-row gap-2 sm:justify-end items-stretch">
+                          <button
+                            onClick={async () => {
+                              if (!window.confirm(`Confirm deposit of $${deposit.depositRequired?.toFixed(2)} for Order ${deposit.orderId?.slice(0, 8)}?\n\nThis will unlock the order for shipping.`)) {
+                                return;
+                              }
+                              try {
+                                await api.post(`/admin/orders/${deposit.orderId}/confirm-deposit`, {
+                                  approved: true
+                                });
+                                toast.success('Deposit confirmed! Order unlocked for shipping.');
+                                fetchData();
+                              } catch (error) {
+                                toast.error(error.response?.data?.detail || 'Failed to confirm deposit');
+                              }
+                            }}
+                            className="px-3 py-1.5 rounded-md text-xs bg-green-500/20 text-green-400 hover:bg-green-500/30 transition-colors font-semibold whitespace-nowrap w-full sm:w-auto text-center"
+                          >
+                            ✓ Confirm
+                          </button>
+                          <button
+                            onClick={async () => {
+                              const reason = window.prompt('Enter rejection reason (required):');
+                              if (!reason?.trim()) {
+                                toast.error('Rejection reason is required');
+                                return;
+                              }
+                              try {
+                                await api.post(`/admin/orders/${deposit.orderId}/confirm-deposit`, {
+                                  approved: false,
+                                  rejectionReason: reason
+                                });
+                                toast.success('Deposit rejected. Seller has been notified.');
+                                fetchData();
+                              } catch (error) {
+                                toast.error(error.response?.data?.detail || 'Failed to reject deposit');
+                              }
+                            }}
+                            className="px-3 py-1.5 rounded-md text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors font-semibold whitespace-nowrap w-full sm:w-auto text-center"
+                          >
+                            ✗ Reject
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Instructions */}
+          <div className="luxury-card mt-6 bg-blue-500/10 border-blue-500/30">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
+              <div>
+                <h3 className="text-blue-300 font-semibold mb-2">Verification Instructions:</h3>
+                <ul className="text-sm text-gray-300 space-y-1 list-disc list-inside">
+                  <li>Click "Verify on TronScan" to check transaction on blockchain</li>
+                  <li>Verify amount matches the deposit required (80% of order)</li>
+                  <li>Verify transaction is sent to wallet: <code className="text-[#D4AF37] font-mono text-xs">TY8Z91NMCjREyZVj9NjDsF8hVjyqfxFFRU</code></li>
+                  <li>Check transaction status is "SUCCESS" on TronScan</li>
+                  <li>Once verified, click "Confirm" to unlock the order for shipping</li>
+                  <li>If transaction is invalid or incorrect, click "Reject" with reason</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {activeTab === 'wallets' && (
         <div className="luxury-card">

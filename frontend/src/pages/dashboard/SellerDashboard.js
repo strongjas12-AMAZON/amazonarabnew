@@ -835,110 +835,169 @@ const SellerDashboard = () => {
               </div>
 
               {/* Orders List */}
-              {orders.map((order) => (
-                <div 
-                  key={order.id} 
-                  className={`p-5 rounded-lg border ${
-                    order.paymentStatus === 'pending_payment' ? 'bg-yellow-500/5 border-yellow-500/30' :
-                    order.paymentStatus === 'paid' ? 'bg-green-500/5 border-green-500/30' :
-                    order.paymentStatus === 'completed' ? 'bg-blue-500/5 border-blue-500/30' :
-                    'bg-[rgba(30,30,30,0.6)] border-[rgba(212,175,55,0.1)]'
-                  }`}
-                  data-testid="seller-order"
-                >
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <p className="text-white font-semibold text-lg">
-                        Order #{order.id?.slice(0, 8).toUpperCase()}
-                      </p>
-                      <p className="text-sm text-gray-400">
-                        {new Date(order.createdAt).toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <span className={`status-badge ${
-                        order.paymentStatus === 'paid' || order.paymentStatus === 'completed' ? 'status-verified' :
-                        order.paymentStatus === 'pending_payment' ? 'status-pending' :
-                        'status-rejected'
-                      }`}>
-                        {order.paymentStatus?.replace('_', ' ')}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Order Items */}
-                  <div className="space-y-3 border-t border-[rgba(212,175,55,0.1)] pt-4">
-                    <p className="text-sm text-gray-400 mb-2">Products in this order:</p>
-                    {order.orderItems?.map((item, idx) => (
-                      <div key={idx} className="flex items-center gap-4 p-3 bg-[rgba(20,20,20,0.6)] rounded-lg">
-                        {item.product?.images?.[0] ? (
-                          <img
-                            src={item.product.images[0]}
-                            alt={item.product.title}
-                            className="w-16 h-16 object-cover rounded-lg"
-                          />
-                        ) : (
-                          <div className="w-16 h-16 bg-[rgba(50,50,50,0.6)] rounded-lg flex items-center justify-center">
-                            <Package className="w-6 h-6 text-gray-500" />
-                          </div>
-                        )}
-                        <div className="flex-1">
-                          <p className="text-white font-medium">{item.product?.title || 'Product'}</p>
-                          <p className="text-sm text-gray-400">Quantity: {item.quantity}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[#D4AF37] font-bold">${(item.price * item.quantity).toFixed(2)}</p>
-                          <p className="text-xs text-gray-500">${item.price?.toFixed(2)} each</p>
-                        </div>
+              {orders.map((order) => {
+                // Check if deposit is needed - with fallback for orders without escrow_status
+                const hasEscrowStatus = order.escrowStatus === 'awaiting_seller_deposit';
+                const isPaidButNoDeposit = order.paymentStatus === 'paid' && !order.escrowStatus; // Fallback for old orders
+                const needsDeposit = (hasEscrowStatus || isPaidButNoDeposit) && order.totalAmount > 0;
+                const depositAmount = order.depositRequired || (order.totalAmount * 0.8); // Calculate if not in DB
+                
+                return (
+                  <div 
+                    key={order.id} 
+                    className={`p-5 rounded-lg border relative ${
+                      order.paymentStatus === 'pending_payment' ? 'bg-yellow-500/5 border-yellow-500/30' :
+                      order.paymentStatus === 'paid' ? 'bg-green-500/5 border-green-500/30' :
+                      order.paymentStatus === 'completed' ? 'bg-blue-500/5 border-blue-500/30' :
+                      'bg-[rgba(30,30,30,0.6)] border-[rgba(212,175,55,0.1)]'
+                    }`}
+                    data-testid="seller-order"
+                  >
+                    {/* Header - Always visible */}
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <p className="text-white font-semibold text-lg">
+                          Order #{order.id?.slice(0, 8).toUpperCase()}
+                        </p>
+                        <p className="text-sm text-gray-400">
+                          {new Date(order.createdAt).toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </p>
                       </div>
-                    ))}
-                  </div>
+                      <div className="text-right">
+                        <span className={`status-badge ${
+                          order.paymentStatus === 'paid' || order.paymentStatus === 'completed' ? 'status-verified' :
+                          order.paymentStatus === 'pending_payment' ? 'status-pending' :
+                          'status-rejected'
+                        }`}>
+                          {order.paymentStatus?.replace('_', ' ')}
+                        </span>
+                      </div>
+                    </div>
 
-                  {/* Order Total */}
-                  <div className="flex justify-between items-center mt-4 pt-4 border-t border-[rgba(212,175,55,0.1)]">
-                    <span className="text-gray-400">Your earnings from this order:</span>
-                    <span className="text-[#D4AF37] font-bold text-xl">
-                      ${order.orderItems?.reduce((sum, item) => sum + (item.price * item.quantity), 0).toFixed(2)}
-                    </span>
-                  </div>
-                  
-                  {/* NEW: Deposit Required Section */}
-                  {order.escrowStatus === 'awaiting_seller_deposit' && order.depositRequired && (
-                    <div className="mt-4 p-4 bg-gradient-to-r from-orange-500/10 to-red-500/10 border-2 border-orange-500/30 rounded-lg">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <AlertCircle className="w-5 h-5 text-orange-400" />
-                            <span className="text-orange-400 font-bold">Deposit Required</span>
+                    {/* Blurred/Locked Content when deposit required */}
+                    <div className={needsDeposit ? 'filter blur-sm pointer-events-none select-none' : ''}>
+                      {/* Order Items */}
+                      <div className="space-y-3 border-t border-[rgba(212,175,55,0.1)] pt-4">
+                        <p className="text-sm text-gray-400 mb-2">Products in this order:</p>
+                        {order.orderItems?.map((item, idx) => (
+                          <div key={idx} className="flex items-center gap-4 p-3 bg-[rgba(20,20,20,0.6)] rounded-lg">
+                            {item.product?.images?.[0] ? (
+                              <img
+                                src={item.product.images[0]}
+                                alt={item.product.title}
+                                className="w-16 h-16 object-cover rounded-lg"
+                              />
+                            ) : (
+                              <div className="w-16 h-16 bg-[rgba(50,50,50,0.6)] rounded-lg flex items-center justify-center">
+                                <Package className="w-6 h-6 text-gray-500" />
+                              </div>
+                            )}
+                            <div className="flex-1">
+                              <p className="text-white font-medium">{item.product?.title || 'Product'}</p>
+                              <p className="text-sm text-gray-400">Quantity: {item.quantity}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-[#D4AF37] font-bold">${(item.price * item.quantity).toFixed(2)}</p>
+                              <p className="text-xs text-gray-500">${item.price?.toFixed(2)} each</p>
+                            </div>
                           </div>
-                          <p className="text-sm text-gray-300 mb-1">
-                            Deposit <strong className="text-[#D4AF37]">${order.depositRequired.toFixed(2)} USDT (TRC20)</strong> to unlock this order
+                        ))}
+                      </div>
+
+                      {/* Order Total */}
+                      <div className="flex justify-between items-center mt-4 pt-4 border-t border-[rgba(212,175,55,0.1)]">
+                        <span className="text-gray-400">Your earnings from this order:</span>
+                        <span className="text-[#D4AF37] font-bold text-xl">
+                          ${order.orderItems?.reduce((sum, item) => sum + (item.price * item.quantity), 0).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  
+                    {/* NEW: Deposit Required Section - Overlays blurred content */}
+                    {needsDeposit && (
+                      <div className="mt-4 p-6 bg-gradient-to-br from-orange-500/20 to-red-500/20 border-2 border-orange-500/50 rounded-xl shadow-xl">
+                        <div className="text-center mb-4">
+                          <div className="flex items-center justify-center gap-2 mb-3">
+                            <AlertCircle className="w-6 h-6 text-orange-400" />
+                            <span className="text-orange-400 font-bold text-xl">🔒 Order Locked - Deposit Required</span>
+                          </div>
+                          <p className="text-gray-300 text-lg mb-2">
+                            Deposit <strong className="text-[#D4AF37] text-2xl">${depositAmount.toFixed(2)}</strong> to unlock this order
                           </p>
-                          <p className="text-xs text-gray-400">
-                            Platform will ship on your behalf. You'll earn ${(order.totalAmount - order.depositRequired).toFixed(2)} (20% profit) after delivery.
+                          <p className="text-sm text-gray-400 mb-4">
+                            Platform ships on your behalf • You earn <strong className="text-green-400">${(order.totalAmount - depositAmount).toFixed(2)} (20% profit)</strong> after delivery
                           </p>
                         </div>
+                        
                         <button
                           onClick={() => {
                             // Navigate to Order Center for deposit
                             setActiveTab('orderCenter');
-                            toast.info('Please complete deposit in Order Center tab');
+                            toast.info('Opening Order Center for deposit payment', {
+                              description: 'Please complete USDT (TRC20) deposit to unlock this order'
+                            });
                           }}
-                          className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-lg font-semibold transition-all shadow-lg hover:shadow-orange-500/50 flex items-center gap-2 whitespace-nowrap"
+                          className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white px-8 py-4 rounded-lg font-bold text-lg transition-all shadow-2xl hover:shadow-orange-500/50 hover:scale-105 transform flex items-center justify-center gap-3"
                         >
-                          <DollarSign className="w-5 h-5" />
+                          <DollarSign className="w-6 h-6" />
                           Deposit 80% of Amount
                         </button>
+                        
+                        <div className="mt-4 pt-4 border-t border-orange-500/30">
+                          <p className="text-xs text-gray-400 text-center flex items-center justify-center gap-1">
+                            💡 Click to view QR code and payment instructions • USDT (TRC20) only
+                          </p>
+                        </div>
                       </div>
-                      <div className="mt-3 pt-3 border-t border-orange-500/20">
-                        <p className="text-xs text-gray-400">
-                          💡 Click the button above to view deposit instructions and complete payment via USDT (TRC20)
+                    )}
+                  
+                  {/* Pending Admin Approval Status - When deposit submitted but not confirmed */}
+                  {order.depositInfo?.depositStatus === 'pending' && (
+                    <div className="mt-4 p-6 bg-gradient-to-br from-blue-500/20 to-purple-500/20 border-2 border-blue-500/50 rounded-xl shadow-xl">
+                      <div className="text-center">
+                        <div className="flex items-center justify-center gap-2 mb-3">
+                          <Clock className="w-6 h-6 text-blue-400 animate-pulse" />
+                          <span className="text-blue-400 font-bold text-xl">⏳ Pending Admin Approval</span>
+                        </div>
+                        <p className="text-gray-300 text-base mb-2">
+                          Your deposit payment proof has been submitted successfully
+                        </p>
+                        <div className="bg-[rgba(0,0,0,0.3)] rounded-lg p-4 mt-4">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-gray-400">Deposit Amount:</span>
+                            <span className="text-[#D4AF37] font-bold">${depositAmount.toFixed(2)}</span>
+                          </div>
+                          {order.depositInfo.transactionHash && (
+                            <div className="flex items-start justify-between text-sm mt-2 pt-2 border-t border-white/10">
+                              <span className="text-gray-400">Transaction:</span>
+                              <span className="text-blue-300 font-mono text-xs break-all ml-2">
+                                {order.depositInfo.transactionHash.slice(0, 20)}...
+                              </span>
+                            </div>
+                          )}
+                          {order.depositInfo.submittedAt && (
+                            <div className="flex items-center justify-between text-sm mt-2 pt-2 border-t border-white/10">
+                              <span className="text-gray-400">Submitted:</span>
+                              <span className="text-gray-300">
+                                {new Date(order.depositInfo.submittedAt).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-400 mt-4">
+                          Our admin team is verifying your transaction on the blockchain. 
+                          You'll receive an email notification once approved (usually within 24 hours).
                         </p>
                       </div>
                     </div>
@@ -964,7 +1023,8 @@ const SellerDashboard = () => {
                     </div>
                   )}
                 </div>
-              ))}
+              );
+              })}
             </div>
           )}
         </div>

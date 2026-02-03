@@ -36,7 +36,7 @@ The database migration has been successfully applied with the following changes:
 
 ```bash
 # Login as admin first, then:
-curl -X GET "https://codeduplicator-4.preview.emergentagent.com/api/admin/platform-wallet" \
+curl -X GET "https://git-mirror-8.preview.emergentagent.com/api/admin/platform-wallet" \
   -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
 ```
 
@@ -56,7 +56,7 @@ curl -X GET "https://codeduplicator-4.preview.emergentagent.com/api/admin/platfo
 
 ```bash
 # Login as seller first, then:
-curl -X GET "https://codeduplicator-4.preview.emergentagent.com/api/seller/orders/pending-deposit" \
+curl -X GET "https://git-mirror-8.preview.emergentagent.com/api/seller/orders/pending-deposit" \
   -H "Authorization: Bearer YOUR_SELLER_TOKEN"
 ```
 
