@@ -174,6 +174,44 @@ const OrderCenter = () => {
     }
   };
 
+  // Submit USDT Deposit Payment Proof
+  const handleSubmitUsdtDeposit = async () => {
+    if (!usdtDepositForm.transactionHash.trim()) {
+      toast.error('Transaction hash is required');
+      return;
+    }
+    
+    // Basic validation for transaction hash format
+    const hash = usdtDepositForm.transactionHash.trim();
+    if (hash.length < 30) {
+      toast.error('Transaction hash appears to be invalid. Please check and try again.');
+      return;
+    }
+    
+    try {
+      setSubmittingUsdtDeposit(true);
+      
+      await api.post(`/seller/orders/${selectedOrder.id}/submit-usdt-deposit`, {
+        orderId: selectedOrder.id,
+        transactionHash: hash,
+        notes: usdtDepositForm.notes.trim() || null
+      });
+      
+      toast.success('Payment proof submitted successfully! Awaiting admin confirmation.');
+      setShowUsdtDepositModal(false);
+      setUsdtDepositForm({ transactionHash: '', notes: '' });
+      
+      // Refresh orders to show updated status
+      await fetchOrders(activeTab === 'after_sales' ? null : activeTab);
+    } catch (error) {
+      const errorMsg = error.response?.data?.detail || 'Failed to submit payment proof';
+      toast.error(errorMsg);
+    } finally {
+      setSubmittingUsdtDeposit(false);
+    }
+  };
+
+
   // Initial data load
   useEffect(() => {
     if (user) {
