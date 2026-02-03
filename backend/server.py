@@ -5188,7 +5188,7 @@ async def ship_order_by_platform(order_id: str, req: ShipByPlatformRequest, curr
         
         # 2. Update order status to 'shipped'
         update_data = {
-            'escrowStatus': 'shipped',
+            'escrow_status': 'shipped',
             'orderStatus': 'shipped',
             'autoDeliveryAt': (datetime.now(timezone.utc) + asyncio.sleep(0)).isoformat()  # 48 hours from now
         }
