@@ -1193,7 +1193,6 @@ const OrderCenter = () => {
           </div>
         </div>
       )}
-    </div>
 
       {/* USDT Deposit Payment Modal */}
       {showUsdtDepositModal && selectedOrder && (
