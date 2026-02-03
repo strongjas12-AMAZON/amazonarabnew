@@ -11,7 +11,7 @@ import asyncio
 from pathlib import Path
 from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import uuid
 from supabase import create_client, Client
 import resend
