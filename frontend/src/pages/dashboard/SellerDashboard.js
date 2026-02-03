@@ -928,10 +928,10 @@ const SellerDashboard = () => {
                             <span className="text-orange-400 font-bold text-xl">🔒 Order Locked - Deposit Required</span>
                           </div>
                           <p className="text-gray-300 text-lg mb-2">
-                            Deposit <strong className="text-[#D4AF37] text-2xl">${order.depositRequired.toFixed(2)}</strong> to unlock this order
+                            Deposit <strong className="text-[#D4AF37] text-2xl">${depositAmount.toFixed(2)}</strong> to unlock this order
                           </p>
                           <p className="text-sm text-gray-400 mb-4">
-                            Platform ships on your behalf • You earn <strong className="text-green-400">${(order.totalAmount - order.depositRequired).toFixed(2)} (20% profit)</strong> after delivery
+                            Platform ships on your behalf • You earn <strong className="text-green-400">${(order.totalAmount - depositAmount).toFixed(2)} (20% profit)</strong> after delivery
                           </p>
                         </div>
                         
