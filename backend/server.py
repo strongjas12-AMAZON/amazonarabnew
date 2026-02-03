@@ -5115,30 +5115,30 @@ async def deposit_for_order(req: SellerDepositRequest, current_user: dict = Depe
         # 6. Update order_deposits
         deposit_result = supabase_admin.table('order_deposits')\
             .select('*')\
-            .eq('orderId', req.orderId)\
-            .eq('sellerId', user_id)\
+            .eq('order_id', req.orderId)\
+            .eq('seller_id', user_id)\
             .execute()
         
         if deposit_result.data:
             # Update existing
             supabase_admin.table('order_deposits')\
                 .update({
-                    'depositedAmount': required_deposit,
-                    'isDepositComplete': True,
-                    'depositedAt': datetime.now(timezone.utc).isoformat()
+                    'deposited_amount': required_deposit,
+                    'is_deposit_complete': True,
+                    'deposited_at': datetime.now(timezone.utc).isoformat()
                 })\
-                .eq('orderId', req.orderId)\
-                .eq('sellerId', user_id)\
+                .eq('order_id', req.orderId)\
+                .eq('seller_id', user_id)\
                 .execute()
         else:
             # Create new
             supabase_admin.table('order_deposits').insert({
-                'orderId': req.orderId,
-                'sellerId': user_id,
-                'requiredAmount': required_deposit,
-                'depositedAmount': required_deposit,
-                'isDepositComplete': True,
-                'depositedAt': datetime.now(timezone.utc).isoformat()
+                'order_id': req.orderId,
+                'seller_id': user_id,
+                'required_amount': required_deposit,
+                'deposited_amount': required_deposit,
+                'is_deposit_complete': True,
+                'deposited_at': datetime.now(timezone.utc).isoformat()
             }).execute()
         
         # 7. Update order status to 'deposit_received'
