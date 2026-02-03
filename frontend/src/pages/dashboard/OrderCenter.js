@@ -133,6 +133,39 @@ const OrderCenter = () => {
     }
   }, []);
 
+  // NEW: Fetch wallet balance
+  const fetchWalletBalance = async () => {
+    try {
+      const res = await api.get('/seller/wallet/balance');
+      setWalletBalance(res.data.wallet || null);
+    } catch (error) {
+      console.error('Failed to load wallet balance', error);
+    }
+  };
+  
+  // NEW: Handle deposit for order
+  const handleDepositForOrder = async (orderId, depositAmount) => {
+    if (!window.confirm(`Deposit $${depositAmount.toFixed(2)} to unlock this order and proceed with fulfillment?`)) {
+      return;
+    }
+    
+    try {
+      setDepositingOrderId(orderId);
+      await api.post('/seller/wallet/deposit-for-order', {
+        orderId: orderId,
+        amount: depositAmount
+      });
+      toast.success('Deposit successful! Order unlocked and ready for shipment.');
+      await fetchOrders(activeTab === 'after_sales' ? null : activeTab);
+      await fetchWalletBalance();
+    } catch (error) {
+      const errorMsg = error.response?.data?.detail || 'Failed to deposit';
+      toast.error(errorMsg);
+    } finally {
+      setDepositingOrderId(null);
+    }
+  };
+
   // Initial data load
   useEffect(() => {
     if (user) {
