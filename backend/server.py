@@ -5172,6 +5172,294 @@ async def deposit_for_order(req: SellerDepositRequest, current_user: dict = Depe
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@api_router.post("/seller/orders/{order_id}/submit-usdt-deposit")
+async def submit_usdt_deposit_payment(
+    order_id: str,
+    req: SubmitUSDTDepositRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Seller submits USDT TRC20 deposit payment proof for order
+    Alternative to internal wallet deposit
+    """
+    try:
+        user_id = current_user['id']
+        user_role = current_user.get('role')
+        
+        if user_role != 'seller':
+            raise HTTPException(status_code=403, detail="Seller access required")
+        
+        # 1. Verify order exists and needs deposit
+        order_result = supabase_admin.table('orders')\
+            .select('*, order_items(*, store_products(stores(*)))')\
+            .eq('id', req.orderId)\
+            .execute()
+        
+        if not order_result.data:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        order = order_result.data[0]
+        
+        # Verify this seller owns products in this order
+        has_seller_product = False
+        for item in order.get('order_items', []):
+            store_product = item.get('store_products')
+            if store_product:
+                store = store_product.get('stores')
+                if store and store.get('seller_id') == user_id:
+                    has_seller_product = True
+                    break
+        
+        if not has_seller_product:
+            raise HTTPException(status_code=403, detail="This order does not contain your products")
+        
+        if order.get('escrow_status') not in ['awaiting_seller_deposit', 'deposit_received']:
+            raise HTTPException(status_code=400, detail="Order is not awaiting deposit")
+        
+        required_deposit = float(order.get('deposit_required', 0))
+        
+        # 2. Get or create deposit record
+        deposit_result = supabase_admin.table('order_deposits')\
+            .select('*')\
+            .eq('order_id', req.orderId)\
+            .eq('seller_id', user_id)\
+            .execute()
+        
+        deposit_data = {
+            'deposit_method': 'usdt_payment',
+            'transaction_hash': req.transactionHash,
+            'payment_notes': req.notes,
+            'deposit_status': 'pending',
+            'submitted_at': datetime.now(timezone.utc).isoformat(),
+            'deposited_amount': required_deposit
+        }
+        
+        if deposit_result.data:
+            # Update existing deposit record
+            supabase_admin.table('order_deposits')\
+                .update(deposit_data)\
+                .eq('order_id', req.orderId)\
+                .eq('seller_id', user_id)\
+                .execute()
+        else:
+            # Create new deposit record
+            deposit_data.update({
+                'order_id': req.orderId,
+                'seller_id': user_id,
+                'required_amount': required_deposit,
+                'is_deposit_complete': False
+            })
+            supabase_admin.table('order_deposits').insert(deposit_data).execute()
+        
+        # 3. Send notification to admin
+        try:
+            if RESEND_API_KEY:
+                seller_info = current_user.get('name', current_user.get('email', 'Unknown'))
+                resend.Emails.send({
+                    "from": SENDER_EMAIL,
+                    "to": ADMIN_EMAIL,
+                    "subject": f"New USDT Deposit Submission - Order {order_id[:8]}",
+                    "html": f"""
+                    <h2>New USDT Deposit Payment Submitted</h2>
+                    <p><strong>Seller:</strong> {seller_info}</p>
+                    <p><strong>Order ID:</strong> {order_id}</p>
+                    <p><strong>Amount:</strong> ${required_deposit:.2f} USDT (TRC20)</p>
+                    <p><strong>Transaction Hash:</strong> {req.transactionHash}</p>
+                    <p><strong>Notes:</strong> {req.notes or 'None'}</p>
+                    <p><strong>Wallet Address:</strong> {ADMIN_CRYPTO_WALLET}</p>
+                    <p>Please verify this transaction and confirm the deposit in the admin panel.</p>
+                    """
+                })
+        except Exception as e:
+            logging.warning(f"Failed to send admin notification: {str(e)}")
+        
+        return {
+            "success": True,
+            "message": "Deposit payment submitted successfully. Awaiting admin confirmation.",
+            "depositAmount": required_deposit,
+            "transactionHash": req.transactionHash,
+            "status": "pending"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Submit USDT deposit error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/admin/deposit-confirmations")
+async def get_pending_deposit_confirmations(current_user: dict = Depends(get_current_user)):
+    """
+    Admin endpoint to view all pending USDT deposit confirmations
+    """
+    try:
+        if current_user.get('role') != 'admin':
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        # Get all pending deposit confirmations
+        deposits_result = supabase_admin.table('order_deposits')\
+            .select('*, orders(id, total_amount, created_at, buyer_id), users!seller_id(id, name, email)')\
+            .eq('deposit_method', 'usdt_payment')\
+            .eq('deposit_status', 'pending')\
+            .order('submitted_at', desc=True)\
+            .execute()
+        
+        formatted_deposits = []
+        for deposit in deposits_result.data or []:
+            order_info = deposit.get('orders', {})
+            seller_info = deposit.get('users', {})
+            
+            formatted_deposits.append({
+                'id': deposit['id'],
+                'orderId': deposit['order_id'],
+                'sellerId': deposit['seller_id'],
+                'sellerName': seller_info.get('name', 'Unknown'),
+                'sellerEmail': seller_info.get('email', 'Unknown'),
+                'orderAmount': float(order_info.get('total_amount', 0)),
+                'depositRequired': float(deposit['required_amount']),
+                'depositAmount': float(deposit.get('deposited_amount', 0)),
+                'transactionHash': deposit.get('transaction_hash'),
+                'notes': deposit.get('payment_notes'),
+                'submittedAt': deposit.get('submitted_at'),
+                'orderCreatedAt': order_info.get('created_at')
+            })
+        
+        return {
+            "success": True,
+            "deposits": formatted_deposits,
+            "count": len(formatted_deposits)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Get deposit confirmations error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/admin/orders/{order_id}/confirm-deposit")
+async def confirm_seller_deposit(
+    order_id: str,
+    req: ConfirmDepositRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Admin confirms or rejects seller's USDT deposit payment
+    """
+    try:
+        if current_user.get('role') != 'admin':
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        # 1. Get deposit record
+        deposit_result = supabase_admin.table('order_deposits')\
+            .select('*, users!seller_id(name, email)')\
+            .eq('order_id', order_id)\
+            .eq('deposit_method', 'usdt_payment')\
+            .eq('deposit_status', 'pending')\
+            .execute()
+        
+        if not deposit_result.data:
+            raise HTTPException(status_code=404, detail="No pending deposit found for this order")
+        
+        deposit = deposit_result.data[0]
+        seller_info = deposit.get('users', {})
+        
+        if req.approved:
+            # APPROVE DEPOSIT
+            # Update deposit record
+            supabase_admin.table('order_deposits')\
+                .update({
+                    'deposit_status': 'confirmed',
+                    'is_deposit_complete': True,
+                    'confirmed_at': datetime.now(timezone.utc).isoformat(),
+                    'confirmed_by': current_user['id']
+                })\
+                .eq('order_id', order_id)\
+                .execute()
+            
+            # Update order status to deposit_received
+            supabase_admin.table('orders')\
+                .update({'escrow_status': 'deposit_received'})\
+                .eq('id', order_id)\
+                .execute()
+            
+            # Send confirmation email to seller
+            try:
+                if RESEND_API_KEY and seller_info.get('email'):
+                    resend.Emails.send({
+                        "from": SENDER_EMAIL,
+                        "to": seller_info['email'],
+                        "subject": f"Deposit Confirmed - Order {order_id[:8]}",
+                        "html": f"""
+                        <h2>Your Deposit Has Been Confirmed!</h2>
+                        <p>Hello {seller_info.get('name', 'Seller')},</p>
+                        <p>Your USDT deposit of <strong>${float(deposit['required_amount']):.2f}</strong> has been confirmed by the admin.</p>
+                        <p><strong>Order ID:</strong> {order_id}</p>
+                        <p><strong>Transaction Hash:</strong> {deposit.get('transaction_hash')}</p>
+                        <p>You can now ship this order. Once the order is completed, you will receive 100% of the order amount in your earnings.</p>
+                        <p>Thank you for using our platform!</p>
+                        """
+                    })
+            except Exception as e:
+                logging.warning(f"Failed to send seller notification: {str(e)}")
+            
+            return {
+                "success": True,
+                "message": "Deposit confirmed successfully. Order unlocked for shipping.",
+                "orderId": order_id,
+                "status": "confirmed"
+            }
+        else:
+            # REJECT DEPOSIT
+            if not req.rejectionReason:
+                raise HTTPException(status_code=400, detail="Rejection reason is required")
+            
+            supabase_admin.table('order_deposits')\
+                .update({
+                    'deposit_status': 'rejected',
+                    'rejection_reason': req.rejectionReason,
+                    'confirmed_at': datetime.now(timezone.utc).isoformat(),
+                    'confirmed_by': current_user['id']
+                })\
+                .eq('order_id', order_id)\
+                .execute()
+            
+            # Send rejection email to seller
+            try:
+                if RESEND_API_KEY and seller_info.get('email'):
+                    resend.Emails.send({
+                        "from": SENDER_EMAIL,
+                        "to": seller_info['email'],
+                        "subject": f"Deposit Rejected - Order {order_id[:8]}",
+                        "html": f"""
+                        <h2>Deposit Payment Rejected</h2>
+                        <p>Hello {seller_info.get('name', 'Seller')},</p>
+                        <p>Unfortunately, your USDT deposit payment for Order <strong>{order_id[:8]}</strong> could not be confirmed.</p>
+                        <p><strong>Reason:</strong> {req.rejectionReason}</p>
+                        <p><strong>Transaction Hash:</strong> {deposit.get('transaction_hash')}</p>
+                        <p>Please verify the transaction details and submit again, or contact support if you believe this is an error.</p>
+                        """
+                    })
+            except Exception as e:
+                logging.warning(f"Failed to send seller notification: {str(e)}")
+            
+            return {
+                "success": True,
+                "message": "Deposit rejected. Seller has been notified.",
+                "orderId": order_id,
+                "status": "rejected",
+                "reason": req.rejectionReason
+            }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Confirm deposit error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
 @api_router.post("/orders/{order_id}/ship-by-platform")
 async def ship_order_by_platform(order_id: str, req: ShipByPlatformRequest, current_user: dict = Depends(get_current_user)):
     """Platform ships the order (admin only)"""
