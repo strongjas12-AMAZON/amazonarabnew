@@ -973,7 +973,8 @@ const SellerDashboard = () => {
                     </div>
                   )}
                 </div>
-              ))}
+              );
+              })}
             </div>
           )}
         </div>
