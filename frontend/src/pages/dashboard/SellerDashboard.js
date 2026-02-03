@@ -41,6 +41,11 @@ const SellerDashboard = () => {
   const [rechargeSubmitting, setRechargeSubmitting] = useState(false);
   const [rechargeHistory, setRechargeHistory] = useState([]);
   const [walletBalance, setWalletBalance] = useState(null);
+  
+  // NEW: Escrow + Deposit system states
+  const [pendingDepositOrders, setPendingDepositOrders] = useState([]);
+  const [depositingOrderId, setDepositingOrderId] = useState(null);
+  const [loadingDeposits, setLoadingDeposits] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -50,6 +55,7 @@ const SellerDashboard = () => {
       fetchEarnings();
       fetchRechargeHistory();
       fetchWalletBalance();
+      fetchPendingDepositOrders(); // NEW: Fetch orders needing deposits
     }
   }, [user]);
 
