@@ -4803,6 +4803,447 @@ async def submit_contact_form(
         raise HTTPException(status_code=500, detail="Failed to send message. Please try again later.")
 
 
+# ============================================================================
+# ESCROW + DEPOSIT SYSTEM ENDPOINTS
+# ============================================================================
+
+@api_router.get("/seller/orders/pending-deposit")
+async def get_orders_pending_deposit(current_user: dict = Depends(get_current_user)):
+    """Get all orders waiting for seller deposit"""
+    try:
+        user_id = current_user['id']
+        user_role = current_user.get('role')
+        
+        if user_role != 'seller':
+            raise HTTPException(status_code=403, detail="Seller access required")
+        
+        # Get orders with escrowStatus = 'awaiting_seller_deposit'
+        orders_result = supabase_admin.table('orders')\
+            .select('*, order_items(*, store_products(*, product_catalog(*), stores(*)))')\
+            .eq('escrowStatus', 'awaiting_seller_deposit')\
+            .execute()
+        
+        if not orders_result.data:
+            return {"orders": [], "count": 0}
+        
+        # Filter orders that contain this seller's products
+        seller_orders = []
+        for order in orders_result.data:
+            order_items = order.get('order_items', [])
+            has_seller_product = False
+            
+            for item in order_items:
+                store_product = item.get('store_products')
+                if store_product:
+                    store = store_product.get('stores')
+                    if store and store.get('seller_id') == user_id:
+                        has_seller_product = True
+                        break
+            
+            if has_seller_product:
+                # Get deposit info
+                deposit_result = supabase_admin.table('order_deposits')\
+                    .select('*')\
+                    .eq('orderId', order['id'])\
+                    .eq('sellerId', user_id)\
+                    .execute()
+                
+                deposit_info = deposit_result.data[0] if deposit_result.data else None
+                
+                seller_orders.append({
+                    'id': order['id'],
+                    'totalAmount': float(order['totalAmount']),
+                    'depositRequired': float(order.get('depositRequired', 0)),
+                    'escrowStatus': order.get('escrowStatus'),
+                    'createdAt': order.get('createdAt'),
+                    'depositInfo': {
+                        'requiredAmount': float(deposit_info['requiredAmount']) if deposit_info else 0,
+                        'depositedAmount': float(deposit_info['depositedAmount']) if deposit_info else 0,
+                        'isComplete': deposit_info['isDepositComplete'] if deposit_info else False
+                    } if deposit_info else None
+                })
+        
+        return {
+            "orders": seller_orders,
+            "count": len(seller_orders)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Get pending deposit orders error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/seller/wallet/deposit-for-order")
+async def deposit_for_order(req: SellerDepositRequest, current_user: dict = Depends(get_current_user)):
+    """Seller deposits money to unlock order (80% of order value)"""
+    try:
+        user_id = current_user['id']
+        user_role = current_user.get('role')
+        
+        if user_role != 'seller':
+            raise HTTPException(status_code=403, detail="Seller access required")
+        
+        # 1. Verify order exists and needs deposit
+        order_result = supabase_admin.table('orders')\
+            .select('*, order_items(*, store_products(stores(*)))')\
+            .eq('id', req.orderId)\
+            .execute()
+        
+        if not order_result.data:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        order = order_result.data[0]
+        
+        # Verify this seller owns products in this order
+        has_seller_product = False
+        for item in order.get('order_items', []):
+            store_product = item.get('store_products')
+            if store_product:
+                store = store_product.get('stores')
+                if store and store.get('seller_id') == user_id:
+                    has_seller_product = True
+                    break
+        
+        if not has_seller_product:
+            raise HTTPException(status_code=403, detail="This order does not contain your products")
+        
+        if order.get('escrowStatus') != 'awaiting_seller_deposit':
+            raise HTTPException(status_code=400, detail="Order is not awaiting deposit")
+        
+        # 2. Get or create seller wallet
+        wallet_result = supabase_admin.table('seller_wallets')\
+            .select('*')\
+            .eq('userId', user_id)\
+            .execute()
+        
+        if not wallet_result.data:
+            # Create wallet
+            create_result = supabase_admin.table('seller_wallets')\
+                .insert({'userId': user_id, 'balance': 0.00, 'depositBalance': 0.00, 'withdrawableBalance': 0.00})\
+                .execute()
+            wallet = create_result.data[0]
+        else:
+            wallet = wallet_result.data[0]
+        
+        current_balance = float(wallet.get('balance', 0))
+        deposit_balance = float(wallet.get('depositBalance', 0))
+        required_deposit = float(order.get('depositRequired', 0))
+        
+        # 3. Verify seller has enough balance to deposit
+        if current_balance < required_deposit:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Insufficient balance. You need ${required_deposit:.2f} but have ${current_balance:.2f}. Please recharge your wallet first."
+            )
+        
+        # 4. Process deposit (move from balance to depositBalance)
+        new_balance = current_balance - required_deposit
+        new_deposit_balance = deposit_balance + required_deposit
+        
+        update_wallet = supabase_admin.table('seller_wallets')\
+            .update({
+                'balance': new_balance,
+                'depositBalance': new_deposit_balance,
+                'updatedAt': datetime.now(timezone.utc).isoformat()
+            })\
+            .eq('userId', user_id)\
+            .execute()
+        
+        # 5. Record transaction
+        supabase_admin.table('wallet_transactions').insert({
+            'userId': user_id,
+            'userRole': 'seller',
+            'type': 'withdrawal',
+            'amount': required_deposit,
+            'previousBalance': current_balance,
+            'newBalance': new_balance,
+            'orderId': req.orderId,
+            'description': f'Deposit ${required_deposit:.2f} to unlock order {req.orderId[:8]}'
+        }).execute()
+        
+        # 6. Update order_deposits
+        deposit_result = supabase_admin.table('order_deposits')\
+            .select('*')\
+            .eq('orderId', req.orderId)\
+            .eq('sellerId', user_id)\
+            .execute()
+        
+        if deposit_result.data:
+            # Update existing
+            supabase_admin.table('order_deposits')\
+                .update({
+                    'depositedAmount': required_deposit,
+                    'isDepositComplete': True,
+                    'depositedAt': datetime.now(timezone.utc).isoformat()
+                })\
+                .eq('orderId', req.orderId)\
+                .eq('sellerId', user_id)\
+                .execute()
+        else:
+            # Create new
+            supabase_admin.table('order_deposits').insert({
+                'orderId': req.orderId,
+                'sellerId': user_id,
+                'requiredAmount': required_deposit,
+                'depositedAmount': required_deposit,
+                'isDepositComplete': True,
+                'depositedAt': datetime.now(timezone.utc).isoformat()
+            }).execute()
+        
+        # 7. Update order status to 'deposit_received'
+        supabase_admin.table('orders')\
+            .update({'escrowStatus': 'deposit_received'})\
+            .eq('id', req.orderId)\
+            .execute()
+        
+        return {
+            "success": True,
+            "message": f"Deposit of ${required_deposit:.2f} completed successfully",
+            "depositAmount": required_deposit,
+            "newBalance": new_balance,
+            "depositBalance": new_deposit_balance,
+            "orderStatus": "deposit_received"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Deposit for order error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/orders/{order_id}/ship-by-platform")
+async def ship_order_by_platform(order_id: str, req: ShipByPlatformRequest, current_user: dict = Depends(get_current_user)):
+    """Platform ships the order (admin only)"""
+    try:
+        user_role = current_user.get('role')
+        
+        if user_role != 'admin':
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        # 1. Verify order exists and deposit is received
+        order_result = supabase_admin.table('orders')\
+            .select('*')\
+            .eq('id', order_id)\
+            .execute()
+        
+        if not order_result.data:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        order = order_result.data[0]
+        
+        if order.get('escrowStatus') != 'deposit_received':
+            raise HTTPException(status_code=400, detail="Order must have deposit received before shipping")
+        
+        # 2. Update order status to 'shipped'
+        update_data = {
+            'escrowStatus': 'shipped',
+            'orderStatus': 'shipped',
+            'autoDeliveryAt': (datetime.now(timezone.utc) + asyncio.sleep(0)).isoformat()  # 48 hours from now
+        }
+        
+        # Note: Setting auto-delivery to current time for now, will implement proper 48h auto-confirm later
+        supabase_admin.table('orders')\
+            .update(update_data)\
+            .eq('id', order_id)\
+            .execute()
+        
+        # 3. Create or update shipment record if needed
+        if req.trackingNumber:
+            # Check if shipments table exists
+            try:
+                supabase_admin.table('shipments').upsert({
+                    'orderId': order_id,
+                    'trackingNumber': req.trackingNumber,
+                    'courierName': req.courierName or 'Platform Courier',
+                    'courierCode': 'platform',
+                    'status': 'shipped',
+                    'shippedAt': datetime.now(timezone.utc).isoformat()
+                }, on_conflict='orderId').execute()
+            except:
+                logging.warning("Shipments table may not exist, skipping shipment record")
+        
+        return {
+            "success": True,
+            "message": "Order marked as shipped by platform",
+            "orderId": order_id,
+            "trackingNumber": req.trackingNumber,
+            "status": "shipped"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Ship by platform error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/orders/{order_id}/confirm-delivery")
+async def confirm_delivery(order_id: str, current_user: dict = Depends(get_current_user)):
+    """Buyer confirms delivery and triggers settlement"""
+    try:
+        user_id = current_user['id']
+        user_role = current_user.get('role')
+        
+        # 1. Verify order exists and is shipped
+        order_result = supabase_admin.table('orders')\
+            .select('*, order_items(*, store_products(stores(*)))')\
+            .eq('id', order_id)\
+            .execute()
+        
+        if not order_result.data:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        order = order_result.data[0]
+        
+        # Verify buyer owns this order
+        if order.get('buyerId') != user_id:
+            raise HTTPException(status_code=403, detail="You can only confirm your own orders")
+        
+        if order.get('escrowStatus') not in ['shipped', 'delivered']:
+            raise HTTPException(status_code=400, detail="Order must be shipped before confirming delivery")
+        
+        # 2. Update order to delivered
+        supabase_admin.table('orders')\
+            .update({
+                'escrowStatus': 'delivered',
+                'deliveryConfirmedAt': datetime.now(timezone.utc).isoformat()
+            })\
+            .eq('id', order_id)\
+            .execute()
+        
+        # 3. Get all sellers for this order and trigger settlement
+        sellers = {}
+        for item in order.get('order_items', []):
+            store_product = item.get('store_products')
+            if store_product:
+                store = store_product.get('stores')
+                if store:
+                    seller_id = store.get('seller_id')
+                    if seller_id not in sellers:
+                        sellers[seller_id] = 0
+                    # Calculate seller's portion (item price * quantity)
+                    sellers[seller_id] += float(item.get('price', 0)) * int(item.get('quantity', 1))
+        
+        # 4. Trigger settlement for each seller
+        settlement_results = []
+        for seller_id, seller_amount in sellers.items():
+            deposit_amount = seller_amount * 0.8  # 80% deposit
+            
+            try:
+                # Call the database function for atomic settlement
+                result = supabase_admin.rpc('settle_order_after_delivery', {
+                    'p_order_id': order_id,
+                    'p_seller_id': seller_id,
+                    'p_order_amount': seller_amount,
+                    'p_deposit_amount': deposit_amount
+                }).execute()
+                
+                settlement_results.append({
+                    'sellerId': seller_id,
+                    'success': True,
+                    'amount': seller_amount,
+                    'deposit': deposit_amount,
+                    'profit': seller_amount - deposit_amount
+                })
+            except Exception as settle_error:
+                logging.error(f"Settlement error for seller {seller_id}: {str(settle_error)}")
+                settlement_results.append({
+                    'sellerId': seller_id,
+                    'success': False,
+                    'error': str(settle_error)
+                })
+        
+        return {
+            "success": True,
+            "message": "Delivery confirmed and settlement processed",
+            "orderId": order_id,
+            "settlements": settlement_results
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Confirm delivery error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/admin/platform-wallet")
+async def get_platform_wallet(current_user: dict = Depends(get_current_user)):
+    """Get platform wallet balance (admin only)"""
+    try:
+        user_role = current_user.get('role')
+        
+        if user_role != 'admin':
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        result = supabase_admin.table('platform_wallet')\
+            .select('*')\
+            .eq('id', '00000000-0000-0000-0000-000000000001')\
+            .execute()
+        
+        if not result.data:
+            return {
+                "balance": 0.00,
+                "totalReceived": 0.00,
+                "totalPaidOut": 0.00
+            }
+        
+        wallet = result.data[0]
+        
+        return {
+            "balance": float(wallet.get('balance', 0)),
+            "totalReceived": float(wallet.get('totalReceived', 0)),
+            "totalPaidOut": float(wallet.get('totalPaidOut', 0)),
+            "updatedAt": wallet.get('updatedAt')
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Get platform wallet error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/seller/deposit-status/{order_id}")
+async def get_deposit_status(order_id: str, current_user: dict = Depends(get_current_user)):
+    """Get deposit status for a specific order"""
+    try:
+        user_id = current_user['id']
+        
+        result = supabase_admin.table('order_deposits')\
+            .select('*')\
+            .eq('orderId', order_id)\
+            .eq('sellerId', user_id)\
+            .execute()
+        
+        if not result.data:
+            return {
+                "found": False,
+                "message": "No deposit required for this order"
+            }
+        
+        deposit = result.data[0]
+        
+        return {
+            "found": True,
+            "orderId": deposit.get('orderId'),
+            "requiredAmount": float(deposit.get('requiredAmount', 0)),
+            "depositedAmount": float(deposit.get('depositedAmount', 0)),
+            "isComplete": deposit.get('isDepositComplete', False),
+            "depositedAt": deposit.get('depositedAt'),
+            "createdAt": deposit.get('createdAt')
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Get deposit status error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Include router
 app.include_router(api_router)
 
