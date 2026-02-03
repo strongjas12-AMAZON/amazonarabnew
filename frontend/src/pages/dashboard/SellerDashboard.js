@@ -907,6 +907,62 @@ const SellerDashboard = () => {
                       ${order.orderItems?.reduce((sum, item) => sum + (item.price * item.quantity), 0).toFixed(2)}
                     </span>
                   </div>
+                  
+                  {/* NEW: Deposit Required Section */}
+                  {order.escrowStatus === 'awaiting_seller_deposit' && order.depositRequired && (
+                    <div className="mt-4 p-4 bg-gradient-to-r from-orange-500/10 to-red-500/10 border-2 border-orange-500/30 rounded-lg">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <AlertCircle className="w-5 h-5 text-orange-400" />
+                            <span className="text-orange-400 font-bold">Deposit Required</span>
+                          </div>
+                          <p className="text-sm text-gray-300 mb-1">
+                            Deposit <strong className="text-[#D4AF37]">${order.depositRequired.toFixed(2)} USDT (TRC20)</strong> to unlock this order
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            Platform will ship on your behalf. You'll earn ${(order.totalAmount - order.depositRequired).toFixed(2)} (20% profit) after delivery.
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            // Navigate to Order Center for deposit
+                            setActiveTab('orderCenter');
+                            toast.info('Please complete deposit in Order Center tab');
+                          }}
+                          className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-lg font-semibold transition-all shadow-lg hover:shadow-orange-500/50 flex items-center gap-2 whitespace-nowrap"
+                        >
+                          <DollarSign className="w-5 h-5" />
+                          Deposit 80% of Amount
+                        </button>
+                      </div>
+                      <div className="mt-3 pt-3 border-t border-orange-500/20">
+                        <p className="text-xs text-gray-400">
+                          💡 Click the button above to view deposit instructions and complete payment via USDT (TRC20)
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Deposit Confirmed Status */}
+                  {order.escrowStatus === 'deposit_received' && (
+                    <div className="mt-4 p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="w-5 h-5 text-green-400" />
+                        <span className="text-green-400 font-semibold">Deposit Confirmed - Platform Will Ship</span>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Platform Shipped Status */}
+                  {order.escrowStatus === 'shipped' && (
+                    <div className="mt-4 p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <Truck className="w-5 h-5 text-purple-400" />
+                        <span className="text-purple-400 font-semibold">Shipped by Platform - Awaiting Buyer Confirmation</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
