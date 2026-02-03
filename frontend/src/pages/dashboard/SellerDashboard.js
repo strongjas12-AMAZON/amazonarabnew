@@ -915,41 +915,43 @@ const SellerDashboard = () => {
                       </div>
                     </div>
                   
-                  {/* NEW: Deposit Required Section */}
-                  {order.escrowStatus === 'awaiting_seller_deposit' && order.depositRequired && (
-                    <div className="mt-4 p-4 bg-gradient-to-r from-orange-500/10 to-red-500/10 border-2 border-orange-500/30 rounded-lg">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <AlertCircle className="w-5 h-5 text-orange-400" />
-                            <span className="text-orange-400 font-bold">Deposit Required</span>
+                    {/* NEW: Deposit Required Section - Overlays blurred content */}
+                    {needsDeposit && (
+                      <div className="mt-4 p-6 bg-gradient-to-br from-orange-500/20 to-red-500/20 border-2 border-orange-500/50 rounded-xl shadow-xl">
+                        <div className="text-center mb-4">
+                          <div className="flex items-center justify-center gap-2 mb-3">
+                            <AlertCircle className="w-6 h-6 text-orange-400" />
+                            <span className="text-orange-400 font-bold text-xl">🔒 Order Locked - Deposit Required</span>
                           </div>
-                          <p className="text-sm text-gray-300 mb-1">
-                            Deposit <strong className="text-[#D4AF37]">${order.depositRequired.toFixed(2)} USDT (TRC20)</strong> to unlock this order
+                          <p className="text-gray-300 text-lg mb-2">
+                            Deposit <strong className="text-[#D4AF37] text-2xl">${order.depositRequired.toFixed(2)}</strong> to unlock this order
                           </p>
-                          <p className="text-xs text-gray-400">
-                            Platform will ship on your behalf. You'll earn ${(order.totalAmount - order.depositRequired).toFixed(2)} (20% profit) after delivery.
+                          <p className="text-sm text-gray-400 mb-4">
+                            Platform ships on your behalf • You earn <strong className="text-green-400">${(order.totalAmount - order.depositRequired).toFixed(2)} (20% profit)</strong> after delivery
                           </p>
                         </div>
+                        
                         <button
                           onClick={() => {
                             // Navigate to Order Center for deposit
                             setActiveTab('orderCenter');
-                            toast.info('Please complete deposit in Order Center tab');
+                            toast.info('Opening Order Center for deposit payment', {
+                              description: 'Please complete USDT (TRC20) deposit to unlock this order'
+                            });
                           }}
-                          className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-lg font-semibold transition-all shadow-lg hover:shadow-orange-500/50 flex items-center gap-2 whitespace-nowrap"
+                          className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white px-8 py-4 rounded-lg font-bold text-lg transition-all shadow-2xl hover:shadow-orange-500/50 hover:scale-105 transform flex items-center justify-center gap-3"
                         >
-                          <DollarSign className="w-5 h-5" />
+                          <DollarSign className="w-6 h-6" />
                           Deposit 80% of Amount
                         </button>
+                        
+                        <div className="mt-4 pt-4 border-t border-orange-500/30">
+                          <p className="text-xs text-gray-400 text-center flex items-center justify-center gap-1">
+                            💡 Click to view QR code and payment instructions • USDT (TRC20) only
+                          </p>
+                        </div>
                       </div>
-                      <div className="mt-3 pt-3 border-t border-orange-500/20">
-                        <p className="text-xs text-gray-400">
-                          💡 Click the button above to view deposit instructions and complete payment via USDT (TRC20)
-                        </p>
-                      </div>
-                    </div>
-                  )}
+                    )}
                   
                   {/* Deposit Confirmed Status */}
                   {order.escrowStatus === 'deposit_received' && (
