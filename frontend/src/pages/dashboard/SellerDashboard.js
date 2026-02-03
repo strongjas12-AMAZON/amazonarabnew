@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { useDropzone } from 'react-dropzone';
 import { 
   Package, Plus, Edit, Trash2, Upload, AlertCircle, CheckCircle, Tag, 
-  ShoppingCart, Clock, DollarSign, Wallet, Search, Store, Check, ClipboardList
+  ShoppingCart, Clock, DollarSign, Wallet, Search, Store, Check, ClipboardList, Truck
 } from 'lucide-react';
 import OrderCenter from './OrderCenter';
 
