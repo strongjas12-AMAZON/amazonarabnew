@@ -461,8 +461,52 @@ const OrderCenter = () => {
 
         {/* Actions */}
         <div className="flex flex-wrap gap-2 pt-3 border-t border-[rgba(212,175,55,0.1)]">
+          {/* NEW: Deposit Required Alert & Button */}
+          {order.escrowStatus === 'awaiting_seller_deposit' && order.depositRequired && (
+            <div className="w-full p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg mb-2">
+              <div className="flex items-center gap-2 mb-2">
+                <AlertTriangle className="w-5 h-5 text-orange-400" />
+                <span className="text-orange-400 font-bold">Deposit Required to Unlock Order</span>
+              </div>
+              <p className="text-sm text-gray-300 mb-3">
+                Deposit 80% of order value (${order.depositRequired.toFixed(2)}) to confirm this order and qualify for payout after delivery.
+              </p>
+              <button
+                onClick={() => handleDepositForOrder(order.id, order.depositRequired)}
+                disabled={depositingOrderId === order.id || !walletBalance || walletBalance.balance < order.depositRequired}
+                className="w-full bg-orange-500 hover:bg-orange-600 text-white px-4 py-3 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-orange-500/50 flex items-center justify-center gap-2"
+              >
+                {depositingOrderId === order.id ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Processing Deposit...
+                  </>
+                ) : walletBalance && walletBalance.balance < order.depositRequired ? (
+                  <>
+                    <AlertTriangle className="w-4 h-4" />
+                    Insufficient Balance (Need ${(order.depositRequired - walletBalance.balance).toFixed(2)} more)
+                  </>
+                ) : (
+                  <>
+                    <DollarSign className="w-4 h-4" />
+                    Deposit ${order.depositRequired.toFixed(2)} to Unlock Order
+                  </>
+                )}
+              </button>
+              {walletBalance && walletBalance.balance < order.depositRequired && (
+                <p className="text-xs text-red-400 mt-2 text-center">
+                  Please recharge your wallet first. Current balance: ${walletBalance.balance.toFixed(2)}
+                </p>
+              )}
+              <div className="mt-3 p-2 bg-blue-500/10 border border-blue-500/30 rounded text-xs text-blue-300">
+                <strong>How it works:</strong> After delivery confirmation, you'll receive the full order amount (${ order.totalAmount.toFixed(2)}). 
+                Your deposit will be deducted, giving you a net profit of ${(order.totalAmount - order.depositRequired).toFixed(2)} (20%).
+              </div>
+            </div>
+          )}
+          
           {/* Ship Order Button */}
-          {orderStatus === 'to_be_shipped' && order.paymentStatus === 'paid' && !order.shipment && (
+          {orderStatus === 'to_be_shipped' && order.paymentStatus === 'paid' && !order.shipment && order.escrowStatus !== 'awaiting_seller_deposit' && (
             <button
               onClick={() => {
                 setSelectedOrder(order);
@@ -474,9 +518,35 @@ const OrderCenter = () => {
               Ship Order
             </button>
           )}
+          
+          {/* Platform will ship - waiting for deposit confirmation */}
+          {order.escrowStatus === 'deposit_received' && (
+            <div className="w-full p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-5 h-5 text-green-400" />
+                <span className="text-green-400 font-semibold">Deposit Confirmed - Platform Will Ship</span>
+              </div>
+              <p className="text-sm text-gray-300 mt-1">
+                Your deposit is confirmed. The platform will handle shipping for this order.
+              </p>
+            </div>
+          )}
+          
+          {/* Platform has shipped */}
+          {order.escrowStatus === 'shipped' && (
+            <div className="w-full p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg">
+              <div className="flex items-center gap-2">
+                <Truck className="w-5 h-5 text-purple-400" />
+                <span className="text-purple-400 font-semibold">Shipped by Platform</span>
+              </div>
+              <p className="text-sm text-gray-300 mt-1">
+                Order shipped. Waiting for buyer to confirm delivery.
+              </p>
+            </div>
+          )}
 
           {/* Mark Delivered Button */}
-          {orderStatus === 'to_be_received' && order.shipment?.deliveryStatus !== 'delivered' && (
+          {orderStatus === 'to_be_received' && order.shipment?.deliveryStatus !== 'delivered' && !order.escrowStatus && (
             <button
               onClick={() => handleMarkDelivered(order.id)}
               className="flex-1 sm:flex-none btn-gold text-sm py-2 px-4 flex items-center justify-center gap-2"
