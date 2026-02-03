@@ -836,7 +836,11 @@ const SellerDashboard = () => {
 
               {/* Orders List */}
               {orders.map((order) => {
-                const needsDeposit = order.escrowStatus === 'awaiting_seller_deposit' && order.depositRequired;
+                // Check if deposit is needed - with fallback for orders without escrow_status
+                const hasEscrowStatus = order.escrowStatus === 'awaiting_seller_deposit';
+                const isPaidButNoDeposit = order.paymentStatus === 'paid' && !order.escrowStatus; // Fallback for old orders
+                const needsDeposit = (hasEscrowStatus || isPaidButNoDeposit) && order.totalAmount > 0;
+                const depositAmount = order.depositRequired || (order.totalAmount * 0.8); // Calculate if not in DB
                 
                 return (
                   <div 
