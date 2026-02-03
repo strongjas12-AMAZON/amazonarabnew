@@ -67,6 +67,43 @@ const SellerDashboard = () => {
       console.error('Failed to load wallet balance', error);
     }
   };
+  
+  // NEW: Fetch orders pending deposit
+  const fetchPendingDepositOrders = async () => {
+    try {
+      setLoadingDeposits(true);
+      const res = await api.get('/seller/orders/pending-deposit');
+      setPendingDepositOrders(res.data.orders || []);
+    } catch (error) {
+      console.error('Failed to load pending deposit orders', error);
+    } finally {
+      setLoadingDeposits(false);
+    }
+  };
+  
+  // NEW: Handle deposit for order
+  const handleDepositForOrder = async (orderId, depositAmount) => {
+    if (!window.confirm(`Deposit $${depositAmount.toFixed(2)} to unlock this order?`)) {
+      return;
+    }
+    
+    try {
+      setDepositingOrderId(orderId);
+      await api.post('/seller/wallet/deposit-for-order', {
+        orderId: orderId,
+        amount: depositAmount
+      });
+      toast.success('Deposit successful! Order unlocked.');
+      await fetchPendingDepositOrders();
+      await fetchWalletBalance();
+      await fetchData();
+    } catch (error) {
+      const errorMsg = error.response?.data?.detail || 'Failed to deposit';
+      toast.error(errorMsg);
+    } finally {
+      setDepositingOrderId(null);
+    }
+  };
 
   const fetchCategories = async () => {
     try {
