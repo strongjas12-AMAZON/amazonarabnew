@@ -2613,6 +2613,73 @@ async def update_order_status(order_id: str, request: UpdateOrderStatusRequest, 
             update_data['order_status'] = 'to_be_shipped'
             # NEW: Also set escrow status to awaiting_seller_deposit
             update_data['escrow_status'] = 'awaiting_seller_deposit'
+            
+            # NEW: Record payment to platform wallet and create deposit requirements
+            try:
+                # Get order details first
+                order_query = supabase_admin.table('orders')\
+                    .select('*, order_items(*, store_products(stores(seller_id)))')\
+                    .eq('id', order_id)\
+                    .execute()
+                
+                if order_query.data:
+                    order = order_query.data[0]
+                    total_amount = float(order.get('total_amount', 0))
+                    
+                    # Update platform wallet
+                    platform_wallet = supabase_admin.table('platform_wallet')\
+                        .select('*')\
+                        .eq('id', '00000000-0000-0000-0000-000000000001')\
+                        .execute()
+                    
+                    if platform_wallet.data:
+                        current_balance = float(platform_wallet.data[0].get('balance', 0))
+                        new_balance = current_balance + total_amount
+                        
+                        supabase_admin.table('platform_wallet').update({
+                            'balance': new_balance,
+                            'total_received': float(platform_wallet.data[0].get('totalReceived', 0)) + total_amount,
+                            'updated_at': datetime.now(timezone.utc).isoformat()
+                        }).eq('id', '00000000-0000-0000-0000-000000000001').execute()
+                        
+                        # Record transaction
+                        supabase_admin.table('platform_transactions').insert({
+                            'type': 'buyer_payment',
+                            'amount': total_amount,
+                            'order_id': order_id,
+                            'user_id': order.get('buyer_id'),
+                            'description': f'Admin confirmed payment for order {order_id[:8]}',
+                            'previous_balance': current_balance,
+                            'new_balance': new_balance
+                        }).execute()
+                    
+                    # Create deposit requirements per seller
+                    seller_amounts = {}
+                    for item in order.get('order_items', []):
+                        store_product = item.get('store_products')
+                        if store_product:
+                            store = store_product.get('stores')
+                            if store:
+                                seller_id = store.get('seller_id')
+                                item_total = float(item.get('price', 0)) * int(item.get('quantity', 1))
+                                if seller_id not in seller_amounts:
+                                    seller_amounts[seller_id] = 0
+                                seller_amounts[seller_id] += item_total
+                    
+                    for seller_id, seller_amount in seller_amounts.items():
+                        seller_deposit = seller_amount * 0.8
+                        try:
+                            supabase_admin.table('order_deposits').insert({
+                                'order_id': order_id,
+                                'seller_id': seller_id,
+                                'required_amount': seller_deposit,
+                                'deposited_amount': 0,
+                                'is_deposit_complete': False
+                            }).execute()
+                        except Exception as e:
+                            logging.warning(f"Deposit requirement may already exist for seller {seller_id}: {str(e)}")
+            except Exception as e:
+                logging.error(f"Error creating deposit requirements: {str(e)}")
         elif request.status == 'completed':
             # When completed, set both statuses to completed
             update_data['order_status'] = 'completed'
