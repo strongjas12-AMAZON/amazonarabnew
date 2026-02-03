@@ -2071,6 +2071,28 @@ async def get_my_orders(current_user: dict = Depends(get_current_user)):
                 
                 if seller_items:
                     order['order_items'] = seller_items
+                    
+                    # Fetch deposit status for this order and seller
+                    try:
+                        deposit_result = supabase_admin.table('order_deposits')\
+                            .select('*')\
+                            .eq('order_id', order['id'])\
+                            .eq('seller_id', current_user['id'])\
+                            .execute()
+                        
+                        if deposit_result.data:
+                            deposit = deposit_result.data[0]
+                            order['depositInfo'] = {
+                                'depositStatus': deposit.get('deposit_status'),
+                                'depositMethod': deposit.get('deposit_method'),
+                                'transactionHash': deposit.get('transaction_hash'),
+                                'submittedAt': deposit.get('submitted_at'),
+                                'isComplete': deposit.get('is_deposit_complete')
+                            }
+                    except Exception as e:
+                        logging.warning(f"Could not fetch deposit for order {order['id']}: {str(e)}")
+                        order['depositInfo'] = None
+                    
                     filtered_orders.append(order)
             
             return {"success": True, "orders": [format_order_response(o) for o in filtered_orders]}
