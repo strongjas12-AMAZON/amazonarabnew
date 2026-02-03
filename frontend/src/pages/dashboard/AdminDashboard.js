@@ -407,7 +407,13 @@ const AdminDashboard = () => {
             {tab === 'users' && <Users className="w-4 h-4 inline mr-2" />}
             {tab === 'verifications' && <CheckCircle className="w-4 h-4 inline mr-2" />}
             {tab === 'inviteCodes' && <Code className="w-4 h-4 inline mr-2" />}
+            {tab === 'depositConfirmations' && <DollarSign className="w-4 h-4 inline mr-2" />}
             {tab.charAt(0).toUpperCase() + tab.slice(1).replace(/([A-Z])/g, ' $1')}
+            {tab === 'depositConfirmations' && depositConfirmations.length > 0 && (
+              <span className="ml-2 bg-orange-500 text-white text-xs px-2 py-0.5 rounded-full">
+                {depositConfirmations.length}
+              </span>
+            )}
           </button>
         ))}
       </div>
