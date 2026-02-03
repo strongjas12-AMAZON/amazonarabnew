@@ -5539,11 +5539,10 @@ async def ship_order_by_platform(order_id: str, req: ShipByPlatformRequest, curr
         
         # 2. Update order status to 'shipped'
         update_data = {
-            'escrow_status': 'shipped',
-            'orderStatus': 'shipped'
+            'escrow_status': 'shipped'
         }
         
-        # Note: Auto-delivery feature requires adding autoDeliveryAt column to orders table
+        # Note: Only updating escrow_status (orderStatus column doesn't exist in current schema)
         supabase_admin.table('orders')\
             .update(update_data)\
             .eq('id', order_id)\
