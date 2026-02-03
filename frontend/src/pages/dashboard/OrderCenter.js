@@ -593,6 +593,19 @@ const OrderCenter = () => {
                   After buyer confirms delivery, you receive the full ${order.totalAmount.toFixed(2)} and your ${order.depositRequired.toFixed(2)} deposit is deducted.
                 </p>
               </div>
+              
+              {/* Submit Payment Proof Button */}
+              <button
+                onClick={() => {
+                  setSelectedOrder(order);
+                  setShowUsdtDepositModal(true);
+                  setUsdtDepositForm({ transactionHash: '', notes: '' });
+                }}
+                className="w-full bg-gradient-to-r from-[#D4AF37] to-[#F4D03F] hover:from-[#F4D03F] hover:to-[#D4AF37] text-black font-bold py-3 px-6 rounded-lg transition-all transform hover:scale-105 flex items-center justify-center gap-2 shadow-lg"
+              >
+                <Send className="w-5 h-5" />
+                Submit Payment Proof
+              </button>
             </div>
           )}
           
