@@ -1194,6 +1194,170 @@ const OrderCenter = () => {
         </div>
       )}
     </div>
+
+      {/* USDT Deposit Payment Modal */}
+      {showUsdtDepositModal && selectedOrder && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+          <div className="bg-gradient-to-br from-[#1a1a1a] to-[#2d2d2d] border-2 border-[#D4AF37] rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+            <div className="p-6">
+              {/* Header */}
+              <div className="flex justify-between items-center mb-6 pb-4 border-b border-[#D4AF37]/30">
+                <div>
+                  <h2 className="text-2xl font-bold bg-gradient-to-r from-[#D4AF37] to-[#F4D03F] text-transparent bg-clip-text">
+                    Submit USDT Payment Proof
+                  </h2>
+                  <p className="text-gray-400 text-sm mt-1">Order #{selectedOrder.id?.slice(0, 8)}</p>
+                </div>
+                <button
+                  onClick={() => setShowUsdtDepositModal(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* Deposit Amount */}
+              <div className="bg-gradient-to-br from-orange-500/10 to-yellow-500/10 border border-orange-500/30 rounded-lg p-4 mb-6">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="text-gray-400 text-sm">Deposit Amount Required</p>
+                    <p className="text-3xl font-bold text-[#D4AF37] mt-1">
+                      ${selectedOrder.depositRequired?.toFixed(2)} USDT
+                    </p>
+                  </div>
+                  <DollarSign className="w-12 h-12 text-[#D4AF37] opacity-50" />
+                </div>
+                <div className="mt-3 pt-3 border-t border-orange-500/20">
+                  <p className="text-xs text-gray-400">Network: USDT (TRC20) Only</p>
+                </div>
+              </div>
+
+              {/* Payment Instructions */}
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-6">
+                <p className="text-blue-300 font-semibold mb-2 flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5" />
+                  Payment Instructions
+                </p>
+                <ol className="text-sm text-gray-300 space-y-2 list-decimal list-inside">
+                  <li>Transfer <strong>${selectedOrder.depositRequired?.toFixed(2)} USDT</strong> via <strong>TRC20 network</strong></li>
+                  <li>Use wallet address: <code className="text-[#D4AF37] font-mono text-xs">TY8Z91NMCjREyZVj9NjDsF8hVjyqfxFFRU</code></li>
+                  <li>After transfer, copy your transaction hash from your wallet</li>
+                  <li>Paste the transaction hash in the form below</li>
+                  <li>Admin will verify and confirm within 24 hours</li>
+                </ol>
+              </div>
+
+              {/* Wallet Address Display */}
+              <div className="bg-[#0a0a0a] border border-[#D4AF37]/30 rounded-lg p-4 mb-6">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-gray-400 text-sm font-semibold">Platform Wallet Address:</p>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText('TY8Z91NMCjREyZVj9NjDsF8hVjyqfxFFRU');
+                      toast.success('Wallet address copied!');
+                    }}
+                    className="text-[#D4AF37] hover:text-[#F4D03F] text-xs flex items-center gap-1"
+                  >
+                    📋 Copy
+                  </button>
+                </div>
+                <p className="font-mono text-[#D4AF37] text-xs break-all bg-black/50 p-3 rounded">
+                  TY8Z91NMCjREyZVj9NjDsF8hVjyqfxFFRU
+                </p>
+              </div>
+
+              {/* Form */}
+              <div className="space-y-4 mb-6">
+                {/* Transaction Hash */}
+                <div>
+                  <label className="block text-gray-300 mb-2 font-semibold">
+                    Transaction Hash <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={usdtDepositForm.transactionHash}
+                    onChange={(e) => setUsdtDepositForm({...usdtDepositForm, transactionHash: e.target.value})}
+                    placeholder="Enter transaction hash from your USDT wallet"
+                    className="w-full bg-[#0a0a0a] border border-[#D4AF37]/30 text-white px-4 py-3 rounded-lg focus:outline-none focus:border-[#D4AF37] font-mono text-sm"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Example: 0x1234567890abcdef... or abc123def456...
+                  </p>
+                </div>
+
+                {/* Notes (Optional) */}
+                <div>
+                  <label className="block text-gray-300 mb-2 font-semibold">
+                    Additional Notes <span className="text-gray-500">(Optional)</span>
+                  </label>
+                  <textarea
+                    value={usdtDepositForm.notes}
+                    onChange={(e) => setUsdtDepositForm({...usdtDepositForm, notes: e.target.value})}
+                    placeholder="Any additional information (e.g., wallet used, time of transfer)"
+                    rows={3}
+                    className="w-full bg-[#0a0a0a] border border-[#D4AF37]/30 text-white px-4 py-3 rounded-lg focus:outline-none focus:border-[#D4AF37] resize-none"
+                  />
+                </div>
+              </div>
+
+              {/* Verification Link Helper */}
+              {usdtDepositForm.transactionHash.trim().length > 30 && (
+                <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 mb-6">
+                  <p className="text-green-300 text-sm font-semibold mb-2">✓ Verify Your Transaction:</p>
+                  <a
+                    href={`https://tronscan.org/#/transaction/${usdtDepositForm.transactionHash.trim()}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-400 hover:text-blue-300 text-xs underline break-all"
+                  >
+                    https://tronscan.org/#/transaction/{usdtDepositForm.transactionHash.trim()}
+                  </a>
+                  <p className="text-xs text-gray-400 mt-2">
+                    Click to verify your transaction on TronScan blockchain explorer
+                  </p>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowUsdtDepositModal(false)}
+                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+                  disabled={submittingUsdtDeposit}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSubmitUsdtDeposit}
+                  disabled={submittingUsdtDeposit || !usdtDepositForm.transactionHash.trim()}
+                  className="flex-1 bg-gradient-to-r from-[#D4AF37] to-[#F4D03F] hover:from-[#F4D03F] hover:to-[#D4AF37] text-black font-bold py-3 px-6 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {submittingUsdtDeposit ? (
+                    <>
+                      <RefreshCw className="w-5 h-5 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-5 h-5" />
+                      Submit Payment Proof
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Footer Note */}
+              <div className="mt-6 pt-4 border-t border-[#D4AF37]/20">
+                <p className="text-xs text-gray-500 text-center">
+                  After submission, our admin will verify your transaction on the blockchain and confirm your deposit within 24 hours.
+                  You will receive an email notification once confirmed.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
   );
 };
 
