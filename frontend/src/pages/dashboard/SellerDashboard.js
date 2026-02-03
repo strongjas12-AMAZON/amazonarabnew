@@ -970,8 +970,49 @@ const SellerDashboard = () => {
                 <div>
                   <h3 className="text-xl font-bold text-white">Orders Awaiting Your Deposit</h3>
                   <p className="text-sm text-gray-300">
-                    Deposit 80% of order value to unlock and qualify for payout
+                    Send USDT (TRC20) deposit to unlock these orders
                   </p>
+                </div>
+              </div>
+              
+              {/* Platform Deposit Wallet Info */}
+              <div className="bg-[#1a1a1a] rounded-lg p-4 mb-4">
+                <h4 className="text-white font-semibold mb-3">Platform Deposit Wallet (USDT TRC20)</h4>
+                <div className="grid md:grid-cols-2 gap-4">
+                  {/* QR Code */}
+                  <div className="flex flex-col items-center">
+                    <p className="text-gray-400 text-sm mb-2">Scan QR Code</p>
+                    <div className="bg-white p-3 rounded-lg">
+                      <img 
+                        src="/deposit-wallet-qr.png" 
+                        alt="Deposit Wallet QR Code" 
+                        className="w-40 h-40 object-contain"
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Wallet Address */}
+                  <div className="flex flex-col justify-center">
+                    <div className="bg-[rgba(30,30,30,0.8)] p-4 rounded-lg border border-[#D4AF37]/30">
+                      <p className="text-gray-400 text-sm mb-2">Wallet Address:</p>
+                      <p className="text-[#D4AF37] font-mono text-sm break-all mb-3">
+                        TY8Z91NMCjREyZVj9NjDsF8hVjyqfxFFRU
+                      </p>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText('TY8Z91NMCjREyZVj9NjDsF8hVjyqfxFFRU');
+                          toast.success('Wallet address copied to clipboard!');
+                        }}
+                        className="w-full bg-[#D4AF37] hover:bg-[#B8941F] text-black px-4 py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+                      >
+                        📋 Copy Wallet Address
+                      </button>
+                    </div>
+                    <p className="text-yellow-400 text-xs mt-2 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      Important: Use USDT (TRC20) network only
+                    </p>
+                  </div>
                 </div>
               </div>
               
@@ -993,7 +1034,7 @@ const SellerDashboard = () => {
                           </div>
                           <div>
                             <span className="text-gray-400">Required Deposit:</span>
-                            <span className="text-orange-400 font-bold ml-2">${order.depositRequired.toFixed(2)}</span>
+                            <span className="text-orange-400 font-bold ml-2">${order.depositRequired.toFixed(2)} USDT</span>
                           </div>
                         </div>
                         {order.createdAt && (
@@ -1003,43 +1044,24 @@ const SellerDashboard = () => {
                         )}
                       </div>
                       
-                      <button
-                        onClick={() => handleDepositForOrder(order.id, order.depositRequired)}
-                        disabled={depositingOrderId === order.id || !walletBalance || walletBalance.balance < order.depositRequired}
-                        className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-orange-500/50 whitespace-nowrap"
-                      >
-                        {depositingOrderId === order.id ? (
-                          'Processing...'
-                        ) : walletBalance && walletBalance.balance < order.depositRequired ? (
-                          `Need $${(order.depositRequired - walletBalance.balance).toFixed(2)} More`
-                        ) : (
-                          `Deposit $${order.depositRequired.toFixed(2)}`
-                        )}
-                      </button>
-                    </div>
-                    
-                    {walletBalance && walletBalance.balance < order.depositRequired && (
-                      <div className="mt-3 p-3 bg-red-500/10 border border-red-500/30 rounded text-sm text-red-400">
-                        ⚠️ Insufficient balance. Please recharge your wallet first.
-                        <button
-                          onClick={() => setShowRechargeModal(true)}
-                          className="ml-2 underline hover:text-red-300"
-                        >
-                          Recharge Now
-                        </button>
+                      <div className="text-right">
+                        <p className="text-green-400 font-bold text-lg">Net Profit: ${(order.totalAmount - order.depositRequired).toFixed(2)}</p>
+                        <p className="text-xs text-gray-400">(20% of order value)</p>
                       </div>
-                    )}
+                    </div>
                   </div>
                 ))}
               </div>
               
               <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg text-sm">
-                <p className="text-blue-300 font-semibold mb-2">💡 How it works:</p>
-                <ol className="list-decimal list-inside text-gray-300 space-y-1">
-                  <li>Deposit 80% of order value from your wallet balance</li>
-                  <li>Platform ships the order on your behalf</li>
-                  <li>After buyer confirms delivery, you receive 100% of order amount</li>
-                  <li>Your deposit is deducted, net profit = 20% of order value</li>
+                <p className="text-blue-300 font-semibold mb-2">📝 Deposit Instructions:</p>
+                <ol className="list-decimal list-inside text-gray-300 space-y-1.5 text-sm">
+                  <li>Send the exact deposit amount in USDT via TRC20 network</li>
+                  <li>Use the QR code or wallet address shown above</li>
+                  <li>Save your transaction hash after completing the transfer</li>
+                  <li>Admin will verify your deposit within 24 hours</li>
+                  <li>Once verified, platform will ship the order on your behalf</li>
+                  <li>After buyer confirms delivery, you receive full order amount minus deposit</li>
                 </ol>
               </div>
             </div>
