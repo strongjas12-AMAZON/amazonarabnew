@@ -1666,7 +1666,7 @@ class ComprehensiveAPITester:
                                 delivered_order = next((o for o in updated_orders if o.get("id") == test_order_id), None)
                                 
                                 if delivered_order:
-                                    escrow_status = delivered_order.get("escrowStatus")
+                                    escrow_status = delivered_order.get("escrowStatus") or delivered_order.get("escrow_status")
                                     if escrow_status in ["delivered", "settled"]:
                                         self.log_test(
                                             "Escrow Status Final Update", 
