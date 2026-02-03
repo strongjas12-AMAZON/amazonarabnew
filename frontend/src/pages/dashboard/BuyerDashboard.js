@@ -257,6 +257,61 @@ const BuyerDashboard = () => {
                     </p>
                   )}
                 </div>
+                
+                {/* NEW: Confirm Delivery Button */}
+                {order.escrowStatus === 'shipped' && (
+                  <div className="mt-4">
+                    <button
+                      onClick={() => handleConfirmDelivery(order.id)}
+                      disabled={confirmingDelivery === order.id}
+                      className="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-6 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-green-600/50"
+                    >
+                      {confirmingDelivery === order.id ? 'Processing...' : '✓ Confirm Delivery Received'}
+                    </button>
+                    <p className="text-xs text-gray-400 mt-2 text-center">
+                      Click to confirm you received the order. This will release payment to the seller.
+                    </p>
+                  </div>
+                )}
+                
+                {/* Order Status Info */}
+                {order.escrowStatus && (
+                  <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                    <p className="text-sm text-gray-400 mb-1">Order Status</p>
+                    <div className="flex items-center gap-2">
+                      {order.escrowStatus === 'awaiting_seller_deposit' && (
+                        <>
+                          <Clock className="w-4 h-4 text-orange-400" />
+                          <span className="text-orange-400">Awaiting seller deposit confirmation</span>
+                        </>
+                      )}
+                      {order.escrowStatus === 'deposit_received' && (
+                        <>
+                          <CheckCircle className="w-4 h-4 text-blue-400" />
+                          <span className="text-blue-400">Ready for shipment</span>
+                        </>
+                      )}
+                      {order.escrowStatus === 'shipped' && (
+                        <>
+                          <ShoppingBag className="w-4 h-4 text-purple-400" />
+                          <span className="text-purple-400">Shipped by platform - awaiting your confirmation</span>
+                        </>
+                      )}
+                      {order.escrowStatus === 'delivered' && (
+                        <>
+                          <CheckCircle className="w-4 h-4 text-green-400" />
+                          <span className="text-green-400">Delivered & Confirmed</span>
+                        </>
+                      )}
+                      {order.escrowStatus === 'settled' && (
+                        <>
+                          <CheckCircle className="w-4 h-4 text-green-400" />
+                          <span className="text-green-400">Completed - Seller paid</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
