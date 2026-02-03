@@ -5538,10 +5538,11 @@ async def ship_order_by_platform(order_id: str, req: ShipByPlatformRequest, curr
             raise HTTPException(status_code=400, detail="Order must have deposit received before shipping")
         
         # 2. Update order status to 'shipped'
+        auto_delivery_time = datetime.now(timezone.utc) + timedelta(hours=48)  # 48 hours from now
         update_data = {
             'escrow_status': 'shipped',
             'orderStatus': 'shipped',
-            'autoDeliveryAt': (datetime.now(timezone.utc) + asyncio.sleep(0)).isoformat()  # 48 hours from now
+            'autoDeliveryAt': auto_delivery_time.isoformat()
         }
         
         # Note: Setting auto-delivery to current time for now, will implement proper 48h auto-confirm later
