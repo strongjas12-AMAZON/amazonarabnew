@@ -5321,14 +5321,14 @@ async def confirm_delivery(order_id: str, current_user: dict = Depends(get_curre
 
 @api_router.get("/admin/platform-wallet")
 async def get_platform_wallet(current_user: dict = Depends(get_current_user)):
-    """Get platform wallet balance (admin only)"""
+    """Get platform balance (admin only)"""
     try:
         user_role = current_user.get('role')
         
         if user_role != 'admin':
             raise HTTPException(status_code=403, detail="Admin access required")
         
-        result = supabase_admin.table('platform_wallet')\
+        result = supabase_admin.table('platform_balance')\
             .select('*')\
             .eq('id', '00000000-0000-0000-0000-000000000001')\
             .execute()
@@ -5344,9 +5344,9 @@ async def get_platform_wallet(current_user: dict = Depends(get_current_user)):
         
         return {
             "balance": float(wallet.get('balance', 0)),
-            "totalReceived": float(wallet.get('totalReceived', 0)),
-            "totalPaidOut": float(wallet.get('totalPaidOut', 0)),
-            "updatedAt": wallet.get('updatedAt')
+            "totalReceived": float(wallet.get('total_received', 0)),
+            "totalPaidOut": float(wallet.get('total_paid_out', 0)),
+            "updatedAt": wallet.get('updated_at')
         }
         
     except HTTPException:
