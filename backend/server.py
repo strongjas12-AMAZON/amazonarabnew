@@ -5003,7 +5003,7 @@ async def get_orders_pending_deposit(current_user: dict = Depends(get_current_us
                     'id': order['id'],
                     'totalAmount': float(order['totalAmount']),
                     'depositRequired': float(order.get('depositRequired', 0)),
-                    'escrowStatus': order.get('escrowStatus'),
+                    'escrowStatus': order.get('escrow_status'),
                     'createdAt': order.get('createdAt'),
                     'depositInfo': {
                         'requiredAmount': float(deposit_info['required_amount']) if deposit_info else 0,
