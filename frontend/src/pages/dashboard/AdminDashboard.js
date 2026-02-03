@@ -180,6 +180,13 @@ const AdminDashboard = () => {
       } else {
         setSellerRechargeRequests([]);
       }
+
+      // Deposit Confirmations (results[9])
+      if (results[9].status === 'fulfilled' && !results[9].value.error) {
+        setDepositConfirmations(results[9].value.data?.deposits || []);
+      } else {
+        setDepositConfirmations([]);
+      }
     } catch (error) {
       // Silently handle errors - individual requests already handled above
     } finally {
