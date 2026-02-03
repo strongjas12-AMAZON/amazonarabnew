@@ -390,7 +390,7 @@ const AdminDashboard = () => {
 
       {/* Tabs */}
       <div className="flex gap-2 mb-8 flex-wrap">
-        {['overview', 'products', 'orders', 'users', 'verifications', 'inviteCodes', 'bannedUsers', 'storeRequests', 'payoutRequests', 'wallets'].map((tab) => (
+        {['overview', 'products', 'orders', 'users', 'verifications', 'inviteCodes', 'bannedUsers', 'storeRequests', 'payoutRequests', 'depositConfirmations', 'wallets'].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
