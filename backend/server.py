@@ -2134,11 +2134,12 @@ async def get_seller_earnings(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Only sellers can view earnings")
 
     try:
-        # 1) Fetch all completed/paid orders with items & store_products for this seller
+        # 1) Fetch ONLY COMPLETED orders (not just paid)
+        # Earnings should only be counted when order is completed
         orders_result = (
             supabase_admin.table("orders")
             .select("*, order_items(*, store_products!inner(seller_id))")
-            .in_("payment_status", ["paid", "completed"])
+            .eq("payment_status", "completed")  # Changed: ONLY completed orders
             .execute()
         )
 
