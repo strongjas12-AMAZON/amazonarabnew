@@ -1788,7 +1788,7 @@ class ComprehensiveAPITester:
                         created_order = next((o for o in orders if o.get("id") == escrow_order_id), None)
                         
                         if created_order:
-                            escrow_status = created_order.get("escrowStatus")
+                            escrow_status = created_order.get("escrowStatus") or created_order.get("escrow_status")
                             if escrow_status == "awaiting_seller_deposit":
                                 self.log_test(
                                     "Step B: Verify escrow_status = 'awaiting_seller_deposit'", 
