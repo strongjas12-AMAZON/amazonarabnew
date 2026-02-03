@@ -290,7 +290,8 @@ def format_order_response(order_data: dict) -> dict:
         'confirmedAt': order_data.get('confirmed_at'),
         'createdAt': order_data.get('created_at'),
         'escrowStatus': order_data.get('escrow_status'),
-        'depositRequired': order_data.get('deposit_required')
+        'depositRequired': order_data.get('deposit_required'),
+        'depositInfo': order_data.get('depositInfo')
     }
     if 'users' in order_data and order_data['users']:
         result['users'] = {
