@@ -5364,8 +5364,8 @@ async def get_deposit_status(order_id: str, current_user: dict = Depends(get_cur
         
         result = supabase_admin.table('order_deposits')\
             .select('*')\
-            .eq('orderId', order_id)\
-            .eq('sellerId', user_id)\
+            .eq('order_id', order_id)\
+            .eq('seller_id', user_id)\
             .execute()
         
         if not result.data:
@@ -5378,12 +5378,12 @@ async def get_deposit_status(order_id: str, current_user: dict = Depends(get_cur
         
         return {
             "found": True,
-            "orderId": deposit.get('orderId'),
-            "requiredAmount": float(deposit.get('requiredAmount', 0)),
-            "depositedAmount": float(deposit.get('depositedAmount', 0)),
-            "isComplete": deposit.get('isDepositComplete', False),
-            "depositedAt": deposit.get('depositedAt'),
-            "createdAt": deposit.get('createdAt')
+            "orderId": deposit.get('order_id'),
+            "requiredAmount": float(deposit.get('required_amount', 0)),
+            "depositedAmount": float(deposit.get('deposited_amount', 0)),
+            "isComplete": deposit.get('is_deposit_complete', False),
+            "depositedAt": deposit.get('deposited_at'),
+            "createdAt": deposit.get('created_at')
         }
         
     except HTTPException:
