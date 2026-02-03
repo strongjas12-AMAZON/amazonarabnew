@@ -166,6 +166,20 @@ class UpdateAddressRequest(BaseModel):
     country: Optional[str] = None
     isDefault: Optional[bool] = None
 
+# ============================================================================
+# ESCROW + DEPOSIT SYSTEM MODELS
+# ============================================================================
+class SellerDepositRequest(BaseModel):
+    orderId: str
+    amount: float
+
+class ConfirmDeliveryRequest(BaseModel):
+    orderId: str
+
+class ShipByPlatformRequest(BaseModel):
+    trackingNumber: Optional[str] = None
+    courierName: Optional[str] = None
+
 # Helper functions
 def get_signed_document_url(file_path: str, expires_in: int = 3600) -> Optional[str]:
     """Generate signed URL for private document access (1 hour expiry)"""
