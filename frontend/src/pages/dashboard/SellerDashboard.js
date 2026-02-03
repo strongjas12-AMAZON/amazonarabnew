@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { useDropzone } from 'react-dropzone';
 import { 
   Package, Plus, Edit, Trash2, Upload, AlertCircle, CheckCircle, Tag, 
-  ShoppingCart, Clock, DollarSign, Wallet, Search, Store, Check, ClipboardList
+  ShoppingCart, Clock, DollarSign, Wallet, Search, Store, Check, ClipboardList, Truck
 } from 'lucide-react';
 import OrderCenter from './OrderCenter';
 
@@ -41,6 +41,11 @@ const SellerDashboard = () => {
   const [rechargeSubmitting, setRechargeSubmitting] = useState(false);
   const [rechargeHistory, setRechargeHistory] = useState([]);
   const [walletBalance, setWalletBalance] = useState(null);
+  
+  // NEW: Escrow + Deposit system states
+  const [pendingDepositOrders, setPendingDepositOrders] = useState([]);
+  const [depositingOrderId, setDepositingOrderId] = useState(null);
+  const [loadingDeposits, setLoadingDeposits] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -50,6 +55,7 @@ const SellerDashboard = () => {
       fetchEarnings();
       fetchRechargeHistory();
       fetchWalletBalance();
+      fetchPendingDepositOrders(); // NEW: Fetch orders needing deposits
     }
   }, [user]);
 
@@ -59,6 +65,43 @@ const SellerDashboard = () => {
       setWalletBalance(res.data.wallet || null);
     } catch (error) {
       console.error('Failed to load wallet balance', error);
+    }
+  };
+  
+  // NEW: Fetch orders pending deposit
+  const fetchPendingDepositOrders = async () => {
+    try {
+      setLoadingDeposits(true);
+      const res = await api.get('/seller/orders/pending-deposit');
+      setPendingDepositOrders(res.data.orders || []);
+    } catch (error) {
+      console.error('Failed to load pending deposit orders', error);
+    } finally {
+      setLoadingDeposits(false);
+    }
+  };
+  
+  // NEW: Handle deposit for order
+  const handleDepositForOrder = async (orderId, depositAmount) => {
+    if (!window.confirm(`Deposit $${depositAmount.toFixed(2)} to unlock this order?`)) {
+      return;
+    }
+    
+    try {
+      setDepositingOrderId(orderId);
+      await api.post('/seller/wallet/deposit-for-order', {
+        orderId: orderId,
+        amount: depositAmount
+      });
+      toast.success('Deposit successful! Order unlocked.');
+      await fetchPendingDepositOrders();
+      await fetchWalletBalance();
+      await fetchData();
+    } catch (error) {
+      const errorMsg = error.response?.data?.detail || 'Failed to deposit';
+      toast.error(errorMsg);
+    } finally {
+      setDepositingOrderId(null);
     }
   };
 
@@ -864,6 +907,62 @@ const SellerDashboard = () => {
                       ${order.orderItems?.reduce((sum, item) => sum + (item.price * item.quantity), 0).toFixed(2)}
                     </span>
                   </div>
+                  
+                  {/* NEW: Deposit Required Section */}
+                  {order.escrowStatus === 'awaiting_seller_deposit' && order.depositRequired && (
+                    <div className="mt-4 p-4 bg-gradient-to-r from-orange-500/10 to-red-500/10 border-2 border-orange-500/30 rounded-lg">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <AlertCircle className="w-5 h-5 text-orange-400" />
+                            <span className="text-orange-400 font-bold">Deposit Required</span>
+                          </div>
+                          <p className="text-sm text-gray-300 mb-1">
+                            Deposit <strong className="text-[#D4AF37]">${order.depositRequired.toFixed(2)} USDT (TRC20)</strong> to unlock this order
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            Platform will ship on your behalf. You'll earn ${(order.totalAmount - order.depositRequired).toFixed(2)} (20% profit) after delivery.
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            // Navigate to Order Center for deposit
+                            setActiveTab('orderCenter');
+                            toast.info('Please complete deposit in Order Center tab');
+                          }}
+                          className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-lg font-semibold transition-all shadow-lg hover:shadow-orange-500/50 flex items-center gap-2 whitespace-nowrap"
+                        >
+                          <DollarSign className="w-5 h-5" />
+                          Deposit 80% of Amount
+                        </button>
+                      </div>
+                      <div className="mt-3 pt-3 border-t border-orange-500/20">
+                        <p className="text-xs text-gray-400">
+                          💡 Click the button above to view deposit instructions and complete payment via USDT (TRC20)
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Deposit Confirmed Status */}
+                  {order.escrowStatus === 'deposit_received' && (
+                    <div className="mt-4 p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="w-5 h-5 text-green-400" />
+                        <span className="text-green-400 font-semibold">Deposit Confirmed - Platform Will Ship</span>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Platform Shipped Status */}
+                  {order.escrowStatus === 'shipped' && (
+                    <div className="mt-4 p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <Truck className="w-5 h-5 text-purple-400" />
+                        <span className="text-purple-400 font-semibold">Shipped by Platform - Awaiting Buyer Confirmation</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -919,15 +1018,138 @@ const SellerDashboard = () => {
             </div>
           </div>
 
+          {/* NEW: Orders Pending Deposit Section */}
+          {pendingDepositOrders.length > 0 && (
+            <div className="mb-8 p-6 bg-gradient-to-br from-orange-500/10 to-red-500/10 border-2 border-orange-500/30 rounded-xl">
+              <div className="flex items-center gap-3 mb-4">
+                <AlertCircle className="w-6 h-6 text-orange-400" />
+                <div>
+                  <h3 className="text-xl font-bold text-white">Orders Awaiting Your Deposit</h3>
+                  <p className="text-sm text-gray-300">
+                    Send USDT (TRC20) deposit to unlock these orders
+                  </p>
+                </div>
+              </div>
+              
+              {/* Platform Deposit Wallet Info */}
+              <div className="bg-[#1a1a1a] rounded-lg p-4 mb-4">
+                <h4 className="text-white font-semibold mb-3">Platform Deposit Wallet (USDT TRC20)</h4>
+                <div className="grid md:grid-cols-2 gap-4">
+                  {/* QR Code */}
+                  <div className="flex flex-col items-center">
+                    <p className="text-gray-400 text-sm mb-2">Scan QR Code</p>
+                    <div className="bg-white p-3 rounded-lg">
+                      <img 
+                        src="/deposit-wallet-qr.png" 
+                        alt="Deposit Wallet QR Code" 
+                        className="w-40 h-40 object-contain"
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Wallet Address */}
+                  <div className="flex flex-col justify-center">
+                    <div className="bg-[rgba(30,30,30,0.8)] p-4 rounded-lg border border-[#D4AF37]/30">
+                      <p className="text-gray-400 text-sm mb-2">Wallet Address:</p>
+                      <p className="text-[#D4AF37] font-mono text-sm break-all mb-3">
+                        TY8Z91NMCjREyZVj9NjDsF8hVjyqfxFFRU
+                      </p>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText('TY8Z91NMCjREyZVj9NjDsF8hVjyqfxFFRU');
+                          toast.success('Wallet address copied to clipboard!');
+                        }}
+                        className="w-full bg-[#D4AF37] hover:bg-[#B8941F] text-black px-4 py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+                      >
+                        📋 Copy Wallet Address
+                      </button>
+                    </div>
+                    <p className="text-yellow-400 text-xs mt-2 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      Important: Use USDT (TRC20) network only
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="space-y-4">
+                {pendingDepositOrders.map((order) => (
+                  <div key={order.id} className="bg-[#1a1a1a] rounded-lg p-4 border border-orange-500/20">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <span className="text-gray-400 text-sm">Order #{order.id.substring(0, 8).toUpperCase()}</span>
+                          <span className="px-2 py-1 bg-orange-500/20 text-orange-400 text-xs rounded-full">
+                            Pending Deposit
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <span className="text-gray-400">Order Total:</span>
+                            <span className="text-white font-semibold ml-2">${order.totalAmount.toFixed(2)}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">Required Deposit:</span>
+                            <span className="text-orange-400 font-bold ml-2">${order.depositRequired.toFixed(2)} USDT</span>
+                          </div>
+                        </div>
+                        {order.createdAt && (
+                          <p className="text-xs text-gray-500 mt-2">
+                            Created: {new Date(order.createdAt).toLocaleString()}
+                          </p>
+                        )}
+                      </div>
+                      
+                      <div className="text-right">
+                        <p className="text-green-400 font-bold text-lg">Net Profit: ${(order.totalAmount - order.depositRequired).toFixed(2)}</p>
+                        <p className="text-xs text-gray-400">(20% of order value)</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg text-sm">
+                <p className="text-blue-300 font-semibold mb-2">📝 Deposit Instructions:</p>
+                <ol className="list-decimal list-inside text-gray-300 space-y-1.5 text-sm">
+                  <li>Send the exact deposit amount in USDT via TRC20 network</li>
+                  <li>Use the QR code or wallet address shown above</li>
+                  <li>Save your transaction hash after completing the transfer</li>
+                  <li>Admin will verify your deposit within 24 hours</li>
+                  <li>Once verified, platform will ship the order on your behalf</li>
+                  <li>After buyer confirms delivery, you receive full order amount minus deposit</li>
+                </ol>
+              </div>
+            </div>
+          )}
+
           {/* Wallet Summary Stats */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
+            <div className="p-4 bg-[rgba(30,30,30,0.8)] rounded-lg border border-[rgba(212,175,55,0.2)]">
+              <div className="flex items-center gap-2 mb-2">
+                <DollarSign className="w-4 h-4 text-[#D4AF37]" />
+                <p className="text-gray-400 text-sm">Total Balance</p>
+              </div>
+              <p className="text-2xl font-bold text-[#D4AF37]">
+                ${walletBalance ? walletBalance.balance.toFixed(2) : '0.00'}
+              </p>
+            </div>
             <div className="p-4 bg-[rgba(30,30,30,0.8)] rounded-lg border border-[rgba(212,175,55,0.2)]">
               <div className="flex items-center gap-2 mb-2">
                 <CheckCircle className="w-4 h-4 text-green-400" />
-                <p className="text-gray-400 text-sm">Total Approved Recharges</p>
+                <p className="text-gray-400 text-sm">Withdrawable</p>
               </div>
               <p className="text-2xl font-bold text-green-400">
-                ${walletBalance ? walletBalance.approvedRecharges.toFixed(2) : '0.00'}
+                ${walletBalance ? (walletBalance.withdrawableBalance || 0).toFixed(2) : '0.00'}
+              </p>
+            </div>
+            <div className="p-4 bg-[rgba(30,30,30,0.8)] rounded-lg border border-[rgba(212,175,55,0.2)]">
+              <div className="flex items-center gap-2 mb-2">
+                <Clock className="w-4 h-4 text-orange-400" />
+                <p className="text-gray-400 text-sm">Locked (Deposits)</p>
+              </div>
+              <p className="text-2xl font-bold text-orange-400">
+                ${walletBalance ? (walletBalance.depositBalance || 0).toFixed(2) : '0.00'}
               </p>
             </div>
             <div className="p-4 bg-[rgba(30,30,30,0.8)] rounded-lg border border-[rgba(212,175,55,0.2)]">
@@ -937,15 +1159,6 @@ const SellerDashboard = () => {
               </div>
               <p className="text-2xl font-bold text-yellow-400">
                 ${walletBalance ? walletBalance.pendingRecharges.toFixed(2) : '0.00'}
-              </p>
-            </div>
-            <div className="p-4 bg-[rgba(30,30,30,0.8)] rounded-lg border border-[rgba(212,175,55,0.2)]">
-              <div className="flex items-center gap-2 mb-2">
-                <DollarSign className="w-4 h-4 text-[#D4AF37]" />
-                <p className="text-gray-400 text-sm">Available Balance</p>
-              </div>
-              <p className="text-2xl font-bold text-[#D4AF37]">
-                ${walletBalance ? walletBalance.balance.toFixed(2) : '0.00'}
               </p>
             </div>
           </div>
