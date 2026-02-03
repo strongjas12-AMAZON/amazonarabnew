@@ -1511,7 +1511,9 @@ class ComprehensiveAPITester:
                                 updated_orders = order_check_response.json().get("orders", [])
                                 shipped_order = next((o for o in updated_orders if o.get("id") == test_order_id), None)
                                 
-                                if shipped_order and shipped_order.get("escrowStatus") == "shipped":
+                                if shipped_order:
+                                    escrow_status = shipped_order.get("escrowStatus") or shipped_order.get("escrow_status")
+                                    if escrow_status == "shipped":
                                     self.log_test(
                                         "Escrow Status Update to 'shipped'", 
                                         True, 
