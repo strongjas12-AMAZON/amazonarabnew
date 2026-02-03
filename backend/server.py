@@ -1878,6 +1878,12 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
                 description=f"Order payment: ${req.totalAmount:.2f}"
             )
         
+        # Calculate deposit requirement (80% of total)
+        deposit_required = req.totalAmount * 0.8
+        
+        # Set escrow status based on payment
+        escrow_status = 'paid' if req.useWallet or payment_status == 'paid' else 'pending'
+        
         order_data = {
             'id': str(uuid.uuid4()),
             'buyer_id': current_user['id'],
@@ -1891,13 +1897,18 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
             'shipping_name': req.shippingName,
             'shipping_phone': req.shippingPhone,
             'shipping_address_snapshot': req.shippingAddress,
-            'created_at': datetime.now(timezone.utc).isoformat()
+            'created_at': datetime.now(timezone.utc).isoformat(),
+            # NEW: Escrow + Deposit fields
+            'escrow_status': escrow_status,
+            'deposit_required': deposit_required
         }
         
         order_result = supabase_admin.table('orders').insert(order_data).execute()
         order_id = order_result.data[0]['id']
         
         order_items_list = []
+        seller_amounts = {}  # Track amount per seller
+        
         for item in req.items:
             item_data = {
                 'id': str(uuid.uuid4()),
@@ -1908,6 +1919,75 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
             }
             supabase_admin.table('order_items').insert(item_data).execute()
             order_items_list.append(item_data)
+            
+            # Get seller for this product to create deposit requirement
+            try:
+                product_result = supabase_admin.table('store_products')\
+                    .select('*, stores(seller_id)')\
+                    .eq('id', item['productId'])\
+                    .execute()
+                
+                if product_result.data:
+                    store = product_result.data[0].get('stores')
+                    if store:
+                        seller_id = store.get('seller_id')
+                        item_total = float(item['price']) * int(item['quantity'])
+                        if seller_id not in seller_amounts:
+                            seller_amounts[seller_id] = 0
+                        seller_amounts[seller_id] += item_total
+            except Exception as e:
+                logging.warning(f"Could not fetch seller for product {item['productId']}: {str(e)}")
+        
+        # If payment is confirmed (wallet payment), immediately move to awaiting_seller_deposit
+        if req.useWallet or payment_status == 'paid':
+            # Update order to awaiting_seller_deposit
+            supabase_admin.table('orders').update({
+                'escrow_status': 'awaiting_seller_deposit'
+            }).eq('id', order_id).execute()
+            
+            # Record platform wallet transaction (buyer payment received)
+            try:
+                platform_wallet = supabase_admin.table('platform_wallet')\
+                    .select('*')\
+                    .eq('id', '00000000-0000-0000-0000-000000000001')\
+                    .execute()
+                
+                if platform_wallet.data:
+                    current_platform_balance = float(platform_wallet.data[0].get('balance', 0))
+                    new_platform_balance = current_platform_balance + req.totalAmount
+                    
+                    supabase_admin.table('platform_wallet').update({
+                        'balance': new_platform_balance,
+                        'total_received': float(platform_wallet.data[0].get('totalReceived', 0)) + req.totalAmount,
+                        'updated_at': datetime.now(timezone.utc).isoformat()
+                    }).eq('id', '00000000-0000-0000-0000-000000000001').execute()
+                    
+                    # Record transaction
+                    supabase_admin.table('platform_transactions').insert({
+                        'type': 'buyer_payment',
+                        'amount': req.totalAmount,
+                        'order_id': order_id,
+                        'user_id': current_user['id'],
+                        'description': f'Buyer payment for order {order_id[:8]}',
+                        'previous_balance': current_platform_balance,
+                        'new_balance': new_platform_balance
+                    }).execute()
+            except Exception as e:
+                logging.warning(f"Could not update platform wallet: {str(e)}")
+            
+            # Create deposit requirements for each seller
+            for seller_id, seller_amount in seller_amounts.items():
+                seller_deposit = seller_amount * 0.8  # 80% of seller's portion
+                try:
+                    supabase_admin.table('order_deposits').insert({
+                        'order_id': order_id,
+                        'seller_id': seller_id,
+                        'required_amount': seller_deposit,
+                        'deposited_amount': 0,
+                        'is_deposit_complete': False
+                    }).execute()
+                except Exception as e:
+                    logging.warning(f"Could not create deposit requirement for seller {seller_id}: {str(e)}")
         
         # If wallet payment, update transaction with order_id
         if req.useWallet:
