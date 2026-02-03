@@ -100,6 +100,8 @@ const OrderCenter = () => {
     sellerResponse: '',
     approvedAmount: ''
   });
+  const [depositingOrderId, setDepositingOrderId] = useState(null);
+  const [walletBalance, setWalletBalance] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [refunds, setRefunds] = useState([]);
   const [refundCounts, setRefundCounts] = useState({});
