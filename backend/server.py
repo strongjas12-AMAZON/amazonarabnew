@@ -1945,20 +1945,20 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
                 'escrow_status': 'awaiting_seller_deposit'
             }).eq('id', order_id).execute()
             
-            # Record platform wallet transaction (buyer payment received)
+            # Record platform balance transaction (buyer payment received)
             try:
-                platform_wallet = supabase_admin.table('platform_wallet')\
+                platform_balance = supabase_admin.table('platform_balance')\
                     .select('*')\
                     .eq('id', '00000000-0000-0000-0000-000000000001')\
                     .execute()
                 
-                if platform_wallet.data:
-                    current_platform_balance = float(platform_wallet.data[0].get('balance', 0))
+                if platform_balance.data:
+                    current_platform_balance = float(platform_balance.data[0].get('balance', 0))
                     new_platform_balance = current_platform_balance + req.totalAmount
                     
-                    supabase_admin.table('platform_wallet').update({
+                    supabase_admin.table('platform_balance').update({
                         'balance': new_platform_balance,
-                        'total_received': float(platform_wallet.data[0].get('totalReceived', 0)) + req.totalAmount,
+                        'total_received': float(platform_balance.data[0].get('total_received', 0)) + req.totalAmount,
                         'updated_at': datetime.now(timezone.utc).isoformat()
                     }).eq('id', '00000000-0000-0000-0000-000000000001').execute()
                     
