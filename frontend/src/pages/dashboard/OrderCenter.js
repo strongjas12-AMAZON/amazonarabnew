@@ -138,6 +138,7 @@ const OrderCenter = () => {
     if (user) {
       fetchOrders(activeTab === 'after_sales' ? null : activeTab);
       fetchRefunds();
+      fetchWalletBalance();
     }
   }, [user, activeTab, fetchOrders, fetchRefunds]);
 
