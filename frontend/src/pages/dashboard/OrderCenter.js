@@ -527,7 +527,7 @@ const OrderCenter = () => {
                     <p className="text-gray-400 text-sm mb-2 font-semibold">Scan QR Code</p>
                     <div className="bg-white p-3 rounded-lg">
                       <img 
-                        src="/deposit-wallet-qr.png" 
+                        src="/assets/usdt-wallet-qr.png" 
                         alt="Deposit Wallet QR Code" 
                         className="w-40 h-40 object-contain"
                       />
