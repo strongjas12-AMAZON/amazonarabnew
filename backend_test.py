@@ -1514,19 +1514,19 @@ class ComprehensiveAPITester:
                                 if shipped_order:
                                     escrow_status = shipped_order.get("escrowStatus") or shipped_order.get("escrow_status")
                                     if escrow_status == "shipped":
-                                    self.log_test(
-                                        "Escrow Status Update to 'shipped'", 
-                                        True, 
-                                        f"Order {test_order_id} escrow status correctly updated to 'shipped'",
-                                        {"order_id": test_order_id, "escrow_status": "shipped"}
-                                    )
-                                else:
-                                    self.log_test(
-                                        "Escrow Status Update to 'shipped'", 
-                                        False, 
-                                        f"Order {test_order_id} escrow status not updated correctly",
-                                        {"order_id": test_order_id, "current_status": shipped_order.get("escrowStatus") if shipped_order else "order_not_found"}
-                                    )
+                                        self.log_test(
+                                            "Escrow Status Update to 'shipped'", 
+                                            True, 
+                                            f"Order {test_order_id} escrow status correctly updated to 'shipped'",
+                                            {"order_id": test_order_id, "escrow_status": "shipped"}
+                                        )
+                                    else:
+                                        self.log_test(
+                                            "Escrow Status Update to 'shipped'", 
+                                            False, 
+                                            f"Order {test_order_id} escrow status not updated correctly",
+                                            {"order_id": test_order_id, "current_status": escrow_status}
+                                        )
                         else:
                             self.log_test("POST /api/orders/{orderId}/ship-by-platform (with tracking)", False, "Response missing success=true", data)
                     else:
