@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { 
   Users, Package, ShoppingCart, Code, CheckCircle, XCircle, Eye, 
   Clock, DollarSign, Trash2, Plus, Edit, Search, Database, 
-  ToggleLeft, ToggleRight, X, Save
+  ToggleLeft, ToggleRight, X, Save, AlertTriangle
 } from 'lucide-react';
 
 const AdminDashboard = () => {
