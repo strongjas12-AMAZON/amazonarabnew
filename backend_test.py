@@ -1480,7 +1480,8 @@ class ComprehensiveAPITester:
                 # Look for an order with deposit_received status
                 test_order_id = None
                 for order in orders:
-                    if order.get("escrowStatus") == "deposit_received":
+                    escrow_status = order.get("escrowStatus") or order.get("escrow_status")
+                    if escrow_status == "deposit_received":
                         test_order_id = order.get("id")
                         break
                 
