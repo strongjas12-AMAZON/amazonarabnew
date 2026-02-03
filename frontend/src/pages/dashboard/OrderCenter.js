@@ -1357,7 +1357,7 @@ const OrderCenter = () => {
           </div>
         </div>
       )}
-
+    </div>
   );
 };
 
