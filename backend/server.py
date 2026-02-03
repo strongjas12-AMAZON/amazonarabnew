@@ -5143,7 +5143,7 @@ async def deposit_for_order(req: SellerDepositRequest, current_user: dict = Depe
         
         # 7. Update order status to 'deposit_received'
         supabase_admin.table('orders')\
-            .update({'escrowStatus': 'deposit_received'})\
+            .update({'escrow_status': 'deposit_received'})\
             .eq('id', req.orderId)\
             .execute()
         
