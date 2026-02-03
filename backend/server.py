@@ -173,6 +173,15 @@ class SellerDepositRequest(BaseModel):
     orderId: str
     amount: float
 
+class SubmitUSDTDepositRequest(BaseModel):
+    orderId: str
+    transactionHash: str
+    notes: Optional[str] = None
+
+class ConfirmDepositRequest(BaseModel):
+    approved: bool
+    rejectionReason: Optional[str] = None
+
 class ConfirmDeliveryRequest(BaseModel):
     orderId: str
 
