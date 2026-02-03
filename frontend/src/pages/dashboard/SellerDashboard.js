@@ -962,6 +962,89 @@ const SellerDashboard = () => {
             </div>
           </div>
 
+          {/* NEW: Orders Pending Deposit Section */}
+          {pendingDepositOrders.length > 0 && (
+            <div className="mb-8 p-6 bg-gradient-to-br from-orange-500/10 to-red-500/10 border-2 border-orange-500/30 rounded-xl">
+              <div className="flex items-center gap-3 mb-4">
+                <AlertCircle className="w-6 h-6 text-orange-400" />
+                <div>
+                  <h3 className="text-xl font-bold text-white">Orders Awaiting Your Deposit</h3>
+                  <p className="text-sm text-gray-300">
+                    Deposit 80% of order value to unlock and qualify for payout
+                  </p>
+                </div>
+              </div>
+              
+              <div className="space-y-4">
+                {pendingDepositOrders.map((order) => (
+                  <div key={order.id} className="bg-[#1a1a1a] rounded-lg p-4 border border-orange-500/20">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <span className="text-gray-400 text-sm">Order #{order.id.substring(0, 8).toUpperCase()}</span>
+                          <span className="px-2 py-1 bg-orange-500/20 text-orange-400 text-xs rounded-full">
+                            Pending Deposit
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <span className="text-gray-400">Order Total:</span>
+                            <span className="text-white font-semibold ml-2">${order.totalAmount.toFixed(2)}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">Required Deposit:</span>
+                            <span className="text-orange-400 font-bold ml-2">${order.depositRequired.toFixed(2)}</span>
+                          </div>
+                        </div>
+                        {order.createdAt && (
+                          <p className="text-xs text-gray-500 mt-2">
+                            Created: {new Date(order.createdAt).toLocaleString()}
+                          </p>
+                        )}
+                      </div>
+                      
+                      <button
+                        onClick={() => handleDepositForOrder(order.id, order.depositRequired)}
+                        disabled={depositingOrderId === order.id || !walletBalance || walletBalance.balance < order.depositRequired}
+                        className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-orange-500/50 whitespace-nowrap"
+                      >
+                        {depositingOrderId === order.id ? (
+                          'Processing...'
+                        ) : walletBalance && walletBalance.balance < order.depositRequired ? (
+                          `Need $${(order.depositRequired - walletBalance.balance).toFixed(2)} More`
+                        ) : (
+                          `Deposit $${order.depositRequired.toFixed(2)}`
+                        )}
+                      </button>
+                    </div>
+                    
+                    {walletBalance && walletBalance.balance < order.depositRequired && (
+                      <div className="mt-3 p-3 bg-red-500/10 border border-red-500/30 rounded text-sm text-red-400">
+                        ⚠️ Insufficient balance. Please recharge your wallet first.
+                        <button
+                          onClick={() => setShowRechargeModal(true)}
+                          className="ml-2 underline hover:text-red-300"
+                        >
+                          Recharge Now
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              
+              <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg text-sm">
+                <p className="text-blue-300 font-semibold mb-2">💡 How it works:</p>
+                <ol className="list-decimal list-inside text-gray-300 space-y-1">
+                  <li>Deposit 80% of order value from your wallet balance</li>
+                  <li>Platform ships the order on your behalf</li>
+                  <li>After buyer confirms delivery, you receive 100% of order amount</li>
+                  <li>Your deposit is deducted, net profit = 20% of order value</li>
+                </ol>
+              </div>
+            </div>
+          )}
+
           {/* Wallet Summary Stats */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
             <div className="p-4 bg-[rgba(30,30,30,0.8)] rounded-lg border border-[rgba(212,175,55,0.2)]">
