@@ -2741,18 +2741,33 @@ async def update_order_status(order_id: str, request: UpdateOrderStatusRequest, 
             for seller_id, earnings_amount in seller_earnings.items():
                 seller_wallet = await get_or_create_seller_wallet(seller_id)
                 current_balance = float(seller_wallet.get('balance', 0))
+                current_deposit_balance = float(seller_wallet.get('depositBalance', 0))
                 current_total_earnings = float(seller_wallet.get('totalEarnings') or seller_wallet.get('total_earnings', 0))
                 
+                # Get deposit for this order to return it
+                deposit_result = supabase_admin.table('order_deposits')\
+                    .select('*')\
+                    .eq('order_id', order_id)\
+                    .eq('seller_id', seller_id)\
+                    .execute()
+                
+                deposit_to_return = 0.0
+                if deposit_result.data:
+                    deposit_to_return = float(deposit_result.data[0].get('deposited_amount', 0))
+                
+                # Add earnings to balance + return deposit from depositBalance
                 new_balance = current_balance + earnings_amount
+                new_deposit_balance = max(current_deposit_balance - deposit_to_return, 0)
                 new_total_earnings = current_total_earnings + earnings_amount
                 
                 supabase_admin.table('seller_wallets').update({
                     'balance': new_balance,
+                    'depositBalance': new_deposit_balance,
                     'totalEarnings': new_total_earnings,
                     'updatedAt': datetime.now(timezone.utc).isoformat()
                 }).eq('userId', seller_id).execute()
                 
-                # Create transaction record
+                # Create transaction record for earnings
                 await create_wallet_transaction(
                     user_id=seller_id,
                     user_role='seller',
@@ -2763,6 +2778,19 @@ async def update_order_status(order_id: str, request: UpdateOrderStatusRequest, 
                     order_id=order_id,
                     description=f"Earnings from order: ${earnings_amount:.2f}"
                 )
+                
+                # Create transaction record for deposit return (if any)
+                if deposit_to_return > 0:
+                    await create_wallet_transaction(
+                        user_id=seller_id,
+                        user_role='seller',
+                        transaction_type='deposit_return',
+                        amount=deposit_to_return,
+                        previous_balance=new_balance,
+                        new_balance=new_balance,  # Balance already updated with earnings
+                        order_id=order_id,
+                        description=f"Deposit returned: ${deposit_to_return:.2f}"
+                    )
         
         # Send email notifications based on status change
         if result.data:
