@@ -594,18 +594,65 @@ const OrderCenter = () => {
                 </p>
               </div>
               
-              {/* Submit Payment Proof Button */}
-              <button
-                onClick={() => {
-                  setSelectedOrder(order);
-                  setShowUsdtDepositModal(true);
-                  setUsdtDepositForm({ transactionHash: '', notes: '' });
-                }}
-                className="w-full bg-gradient-to-r from-[#D4AF37] to-[#F4D03F] hover:from-[#F4D03F] hover:to-[#D4AF37] text-black font-bold py-3 px-6 rounded-lg transition-all transform hover:scale-105 flex items-center justify-center gap-2 shadow-lg"
-              >
-                <Send className="w-5 h-5" />
-                Submit Payment Proof
-              </button>
+              {/* Deposit Payment Options */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Option 1: Use Wallet Balance */}
+                <button
+                  onClick={async () => {
+                    try {
+                      if (!order.depositRequired) {
+                        toast.error('Deposit amount not found');
+                        return;
+                      }
+                      
+                      if (!window.confirm(`Use wallet balance to deposit $${order.depositRequired.toFixed(2)}?\n\nThis will deduct from your available wallet balance.`)) {
+                        return;
+                      }
+                      
+                      setDepositingOrderId(order.id);
+                      await api.post('/seller/wallet/deposit-for-order', {
+                        orderId: order.id,
+                        amount: order.depositRequired
+                      });
+                      
+                      toast.success('Deposit successful! Order unlocked.');
+                      fetchOrders(activeTab === 'after_sales' ? null : activeTab);
+                    } catch (error) {
+                      const errorMsg = error.response?.data?.detail || 'Failed to deposit';
+                      toast.error(errorMsg);
+                    } finally {
+                      setDepositingOrderId(null);
+                    }
+                  }}
+                  disabled={depositingOrderId === order.id}
+                  className="w-full bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 text-white font-bold py-3 px-6 rounded-lg transition-all transform hover:scale-105 flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {depositingOrderId === order.id ? (
+                    <>
+                      <RefreshCw className="w-5 h-5 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <Wallet className="w-5 h-5" />
+                      Use Wallet Balance
+                    </>
+                  )}
+                </button>
+                
+                {/* Option 2: Pay via USDT */}
+                <button
+                  onClick={() => {
+                    setSelectedOrder(order);
+                    setShowUsdtDepositModal(true);
+                    setUsdtDepositForm({ transactionHash: '', notes: '' });
+                  }}
+                  className="w-full bg-gradient-to-r from-[#D4AF37] to-[#F4D03F] hover:from-[#F4D03F] hover:to-[#D4AF37] text-black font-bold py-3 px-6 rounded-lg transition-all transform hover:scale-105 flex items-center justify-center gap-2 shadow-lg"
+                >
+                  <Send className="w-5 h-5" />
+                  Pay via USDT
+                </button>
+              </div>
             </div>
           )}
           
