@@ -577,7 +577,45 @@ const AdminDashboard = () => {
 
       {/* Overview Tab */}
       {activeTab === 'overview' && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div>
+          {/* NEW: Platform Balance Card */}
+          {platformBalance && (
+            <div className="luxury-card mb-6 bg-gradient-to-br from-[#D4AF37]/10 to-[#1a1a1a] border-2 border-[#D4AF37]">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-['Playfair_Display'] text-xl font-bold text-white">Platform Balance (Escrow)</h3>
+                <button
+                  onClick={fetchPlatformBalance}
+                  className="text-gray-400 hover:text-[#D4AF37] transition-colors p-2"
+                  title="Refresh Balance"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 12a9 9 0 11-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+                    <path d="M21 3v5h-5" />
+                  </svg>
+                </button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <p className="text-gray-400 text-sm mb-1">Current Balance</p>
+                  <p className="text-4xl font-bold text-[#D4AF37]">${platformBalance.balance.toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400 text-sm mb-1">Total Received</p>
+                  <p className="text-2xl font-bold text-green-400">${platformBalance.totalReceived.toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400 text-sm mb-1">Total Paid Out</p>
+                  <p className="text-2xl font-bold text-blue-400">${platformBalance.totalPaidOut.toFixed(2)}</p>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 mt-3">
+                Platform balance includes buyer payments in escrow and collected seller deposits
+              </p>
+            </div>
+          )}
+          
+          {/* Stats Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           <div className="luxury-card">
             <p className="text-gray-400 text-sm mb-1">Total Products</p>
             <p className="text-3xl font-bold text-[#D4AF37]">{stats.totalProducts}</p>
