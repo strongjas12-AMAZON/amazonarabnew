@@ -1046,14 +1046,32 @@ const SellerDashboard = () => {
           )}
 
           {/* Wallet Summary Stats */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
+            <div className="p-4 bg-[rgba(30,30,30,0.8)] rounded-lg border border-[rgba(212,175,55,0.2)]">
+              <div className="flex items-center gap-2 mb-2">
+                <DollarSign className="w-4 h-4 text-[#D4AF37]" />
+                <p className="text-gray-400 text-sm">Total Balance</p>
+              </div>
+              <p className="text-2xl font-bold text-[#D4AF37]">
+                ${walletBalance ? walletBalance.balance.toFixed(2) : '0.00'}
+              </p>
+            </div>
             <div className="p-4 bg-[rgba(30,30,30,0.8)] rounded-lg border border-[rgba(212,175,55,0.2)]">
               <div className="flex items-center gap-2 mb-2">
                 <CheckCircle className="w-4 h-4 text-green-400" />
-                <p className="text-gray-400 text-sm">Total Approved Recharges</p>
+                <p className="text-gray-400 text-sm">Withdrawable</p>
               </div>
               <p className="text-2xl font-bold text-green-400">
-                ${walletBalance ? walletBalance.approvedRecharges.toFixed(2) : '0.00'}
+                ${walletBalance ? (walletBalance.withdrawableBalance || 0).toFixed(2) : '0.00'}
+              </p>
+            </div>
+            <div className="p-4 bg-[rgba(30,30,30,0.8)] rounded-lg border border-[rgba(212,175,55,0.2)]">
+              <div className="flex items-center gap-2 mb-2">
+                <Clock className="w-4 h-4 text-orange-400" />
+                <p className="text-gray-400 text-sm">Locked (Deposits)</p>
+              </div>
+              <p className="text-2xl font-bold text-orange-400">
+                ${walletBalance ? (walletBalance.depositBalance || 0).toFixed(2) : '0.00'}
               </p>
             </div>
             <div className="p-4 bg-[rgba(30,30,30,0.8)] rounded-lg border border-[rgba(212,175,55,0.2)]">
@@ -1063,15 +1081,6 @@ const SellerDashboard = () => {
               </div>
               <p className="text-2xl font-bold text-yellow-400">
                 ${walletBalance ? walletBalance.pendingRecharges.toFixed(2) : '0.00'}
-              </p>
-            </div>
-            <div className="p-4 bg-[rgba(30,30,30,0.8)] rounded-lg border border-[rgba(212,175,55,0.2)]">
-              <div className="flex items-center gap-2 mb-2">
-                <DollarSign className="w-4 h-4 text-[#D4AF37]" />
-                <p className="text-gray-400 text-sm">Available Balance</p>
-              </div>
-              <p className="text-2xl font-bold text-[#D4AF37]">
-                ${walletBalance ? walletBalance.balance.toFixed(2) : '0.00'}
               </p>
             </div>
           </div>
