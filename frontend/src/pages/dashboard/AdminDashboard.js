@@ -1274,7 +1274,7 @@ const AdminDashboard = () => {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     {order.paymentStatus === 'pending_payment' && (
                       <button
                         onClick={() => handleConfirmPayment(order.id)}
@@ -1283,6 +1283,21 @@ const AdminDashboard = () => {
                       >
                         <DollarSign className="w-4 h-4 inline mr-1" />
                         Confirm Payment
+                      </button>
+                    )}
+                    {/* NEW: Ship by Platform button for orders with deposit received */}
+                    {order.escrowStatus === 'deposit_received' && (
+                      <button
+                        onClick={() => handleShipByPlatform(order.id)}
+                        disabled={shippingOrderId === order.id}
+                        className="bg-purple-500/20 text-purple-400 text-sm px-4 py-2 rounded-lg hover:bg-purple-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {shippingOrderId === order.id ? 'Shipping...' : (
+                          <>
+                            <ShoppingCart className="w-4 h-4 inline mr-1" />
+                            Ship by Platform
+                          </>
+                        )}
                       </button>
                     )}
                     {order.paymentStatus === 'paid' && (
@@ -1299,6 +1314,12 @@ const AdminDashboard = () => {
                       <span className="text-green-400 text-sm flex items-center">
                         <CheckCircle className="w-4 h-4 mr-1" />
                         Order Fulfilled
+                      </span>
+                    )}
+                    {/* NEW: Display escrow status */}
+                    {order.escrowStatus && (
+                      <span className="text-xs text-gray-400 border border-gray-600 px-2 py-1 rounded">
+                        Escrow: {order.escrowStatus.replace(/_/g, ' ')}
                       </span>
                     )}
                   </div>
