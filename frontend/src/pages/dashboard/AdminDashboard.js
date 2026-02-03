@@ -64,6 +64,37 @@ const AdminDashboard = () => {
       console.error('Failed to load categories');
     }
   };
+  
+  // NEW: Fetch platform balance
+  const fetchPlatformBalance = async () => {
+    try {
+      const res = await api.get('/admin/platform-wallet');
+      setPlatformBalance(res.data || null);
+    } catch (error) {
+      console.error('Failed to load platform balance', error);
+    }
+  };
+  
+  // NEW: Ship order by platform
+  const handleShipByPlatform = async (orderId) => {
+    const trackingNumber = prompt('Enter tracking number (optional):');
+    const courierName = prompt('Enter courier name (optional):');
+    
+    try {
+      setShippingOrderId(orderId);
+      await api.post(`/orders/${orderId}/ship-by-platform`, {
+        trackingNumber: trackingNumber || undefined,
+        courierName: courierName || undefined
+      });
+      toast.success('Order marked as shipped by platform!');
+      await fetchData();
+    } catch (error) {
+      const errorMsg = error.response?.data?.detail || 'Failed to ship order';
+      toast.error(errorMsg);
+    } finally {
+      setShippingOrderId(null);
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
