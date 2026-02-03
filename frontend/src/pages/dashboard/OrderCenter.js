@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import {
   Package, Truck, Clock, CheckCircle, AlertTriangle, RefreshCw,
   ShoppingBag, MapPin, Calendar, DollarSign, User, ChevronRight,
-  Send, X, Search, Filter, Eye, MessageSquare
+  Send, X, Search, Filter, Eye, MessageSquare, Wallet
 } from 'lucide-react';
 
 // Order status configuration
