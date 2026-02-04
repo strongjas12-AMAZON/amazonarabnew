@@ -148,7 +148,7 @@ class SellerDepositVisibilityTester:
             
         try:
             headers = {"Authorization": f"Bearer {self.buyer_token}"}
-            response = self.session.get(f"{self.base_url}/buyer/wallet/balance", headers=headers)
+            response = self.session.get(f"{self.base_url}/wallet/balance", headers=headers)
             
             if response.status_code == 200:
                 data = response.json()
