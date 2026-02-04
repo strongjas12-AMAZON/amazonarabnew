@@ -1893,13 +1893,10 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
         # Calculate deposit requirement (80% of total)
         deposit_required = req.totalAmount * 0.8
         
-        # Set escrow status based on payment
-        # If payment is confirmed (wallet or paid), immediately set to awaiting_seller_deposit
-        # So seller sees deposit requirement right away in Order Center
-        if req.useWallet or payment_status == 'paid':
-            escrow_status = 'awaiting_seller_deposit'
-        else:
-            escrow_status = 'pending'
+        # NEW FLOW: Always create order with 'pending' status
+        # Seller can deposit immediately, even before buyer payment is confirmed
+        # This allows parallel processing: seller deposits while waiting for buyer payment
+        escrow_status = 'pending'
         
         order_data = {
             'id': str(uuid.uuid4()),
@@ -1915,7 +1912,7 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
             'shipping_phone': req.shippingPhone,
             'shipping_address_snapshot': req.shippingAddress,
             'created_at': datetime.now(timezone.utc).isoformat(),
-            # NEW: Escrow + Deposit fields
+            # NEW: Escrow + Deposit fields - seller sees deposit option immediately
             'escrow_status': escrow_status,
             'deposit_required': deposit_required
         }
