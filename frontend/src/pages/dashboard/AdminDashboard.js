@@ -1896,7 +1896,7 @@ const AdminDashboard = () => {
                       <td className="p-3 text-[#D4AF37] font-semibold">${deposit.orderAmount?.toFixed(2)}</td>
                       <td className="p-3 text-orange-400 font-bold">${deposit.depositRequired?.toFixed(2)}</td>
                       <td className="p-3">
-                        {deposit.depositMethod === 'wallet_balance' ? (
+                        {deposit.depositMethod === 'internal_wallet' ? (
                           <div className="flex flex-col gap-1">
                             <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-400">
                               <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
