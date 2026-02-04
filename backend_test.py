@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """
-Comprehensive Backend API Testing for Arab Shopping Platform
-Tests ALL admin, buyer, and seller functionalities as requested in the audit.
+FIXES VERIFICATION TESTING - Arab Shopping Platform
+RE-TEST FIXED ISSUES - Verify the two backend fixes are working correctly:
+
+1. Order Completion (HIGH PRIORITY) - Previously failed with 520 error
+2. Order Creation (MEDIUM PRIORITY) - Previously failed with "Missing productId" error
 """
 
 import requests
@@ -16,7 +19,7 @@ BASE_URL = "https://repo-copy-3.preview.emergentagent.com/api"
 # Test Credentials from review request
 ADMIN_EMAIL = "support@arabshopping.org"
 ADMIN_PASSWORD = "Hadi1247@"
-SELLER_EMAIL = "testseller@test.com"  # Using existing test seller
+SELLER_EMAIL = "testseller_new@test.com"  # Updated to match review request
 SELLER_PASSWORD = "TestPass123!"
 BUYER_EMAIL = "testbuyer@test.com"
 BUYER_PASSWORD = "TestPass123!"
