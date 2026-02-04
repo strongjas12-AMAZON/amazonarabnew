@@ -52,7 +52,7 @@ EXPECTED_DEPOSIT_AMOUNT = 39.99  # Updated to match review request
 EXPECTED_INITIAL_BALANCE = 1000.00  # Expected initial wallet balance
 EXPECTED_FINAL_BALANCE = 960.01  # Expected balance after deduction (approximately)
 
-class SellerWalletBalanceDeductionTester:
+class OrderCenterStatusUpdateTester:
     def __init__(self):
         self.base_url = BASE_URL
         self.session = requests.Session()
