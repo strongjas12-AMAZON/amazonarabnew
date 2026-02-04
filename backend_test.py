@@ -2443,12 +2443,5 @@ if __name__ == "__main__":
         print("=" * 80)
 
 if __name__ == "__main__":
-    import sys
-    
-    tester = ComprehensiveAPITester()
-    
-    # Check if escrow testing is requested
-    if len(sys.argv) > 1 and sys.argv[1] == "escrow":
-        tester.run_escrow_system_tests()
-    else:
-        tester.run_comprehensive_audit()
+    tester = FixesVerificationTester()
+    tester.run_fixes_verification()
