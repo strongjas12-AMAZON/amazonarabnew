@@ -195,8 +195,8 @@ class OrderCenterStatusUpdateTester:
             
         try:
             headers = {"Authorization": f"Bearer {self.seller_token}"}
-            # The API expects both orderId and amount, so we provide the expected amount
-            deposit_data = {"orderId": EXPECTED_ORDER_ID, "amount": EXPECTED_DEPOSIT_AMOUNT}
+            # The API expects orderId only according to review request
+            deposit_data = {"orderId": EXPECTED_ORDER_ID}
             
             response = self.session.post(f"{self.base_url}/seller/wallet/deposit-for-order", json=deposit_data, headers=headers)
             
@@ -204,15 +204,18 @@ class OrderCenterStatusUpdateTester:
                 data = response.json()
                 if data.get("success"):
                     deposit_amount = data.get("depositAmount", 0)
+                    message = data.get("message", "")
                     deposit_amount_float = float(deposit_amount)
                     
                     # Check if deposit amount is correct (not $0)
                     amount_correct = abs(deposit_amount_float - EXPECTED_DEPOSIT_AMOUNT) < 0.01
                     amount_not_zero = deposit_amount_float > 0
+                    awaiting_admin = "awaiting admin" in message.lower() or "admin confirmation" in message.lower()
                     
                     success_details = []
                     success_details.append(f"Deposit amount: ${deposit_amount_float:.2f}")
                     success_details.append(f"Expected amount: ${EXPECTED_DEPOSIT_AMOUNT:.2f}")
+                    success_details.append(f"Message: {message}")
                     
                     if amount_not_zero:
                         success_details.append("✅ Amount is NOT $0 (fix working)")
@@ -223,6 +226,11 @@ class OrderCenterStatusUpdateTester:
                         success_details.append("✅ Amount matches expected value")
                     else:
                         success_details.append("⚠️  Amount differs from expected value")
+                        
+                    if awaiting_admin:
+                        success_details.append("✅ Message indicates awaiting admin confirmation")
+                    else:
+                        success_details.append("⚠️  Message doesn't mention admin confirmation")
                     
                     # The main fix is working if amount is not zero
                     fix_working = amount_not_zero
@@ -236,6 +244,8 @@ class OrderCenterStatusUpdateTester:
                             "expected_amount": EXPECTED_DEPOSIT_AMOUNT,
                             "amount_not_zero": amount_not_zero,
                             "amount_correct": amount_correct,
+                            "message": message,
+                            "awaiting_admin": awaiting_admin,
                             "order_id": EXPECTED_ORDER_ID,
                             "full_response": data
                         }
@@ -248,22 +258,22 @@ class OrderCenterStatusUpdateTester:
                 # Order not found - this is expected if the test order doesn't exist
                 self.log_test(
                     "Deposit For Order", 
-                    True, 
-                    f"Order {EXPECTED_ORDER_ID} not found (expected - test order may not exist). Testing with a different approach.",
+                    False, 
+                    f"Order {EXPECTED_ORDER_ID} not found. Need to reset test data first.",
                     {"status_code": 404, "order_id": EXPECTED_ORDER_ID}
                 )
-                return self.test_deposit_with_mock_scenario()
+                return None
             elif response.status_code == 400:
                 # Check if it's because order is not in correct state
                 error_detail = response.json().get("detail", "")
                 if "not awaiting deposit" in error_detail.lower():
                     self.log_test(
                         "Deposit For Order", 
-                        True, 
-                        f"Order exists but not in awaiting_seller_deposit state: {error_detail}. This indicates the endpoint is working.",
+                        False, 
+                        f"Order exists but not in awaiting_seller_deposit state: {error_detail}. Need to reset order status first.",
                         {"status_code": 400, "error": error_detail}
                     )
-                    return EXPECTED_DEPOSIT_AMOUNT  # Return expected amount for balance test
+                    return None
                 else:
                     self.log_test("Deposit For Order", False, f"HTTP 400: {error_detail}", response.json())
             else:
