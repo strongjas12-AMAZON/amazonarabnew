@@ -5513,7 +5513,7 @@ async def confirm_seller_deposit(
             # This moves the order from 'Pending Payment' to 'To Be Shipped' in Order Center
             supabase_admin.table('orders')\
                 .update({
-                    'escrowStatus': 'deposit_received',
+                    'escrow_status': 'deposit_received',
                     'order_status': 'to_be_shipped'  # Move to 'To Be Shipped' column in Order Center
                 })\
                 .eq('id', order_id)\
