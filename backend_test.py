@@ -888,7 +888,7 @@ class OrderStatusTransitionTester:
     def generate_summary(self):
         """Generate test summary"""
         print("\n" + "=" * 70)
-        print("📊 ORDER CENTER STATUS UPDATE TEST SUMMARY")
+        print("📊 ORDER STATUS TRANSITION TEST SUMMARY")
         print("=" * 70)
         
         total_tests = len(self.test_results)
@@ -917,45 +917,45 @@ class OrderStatusTransitionTester:
         print("\n" + "=" * 70)
         
         # Key findings
+        admin_login_working = any(r["success"] and "Admin Login" in r["test"] for r in self.test_results)
         seller_login_working = any(r["success"] and "Seller Login" in r["test"] for r in self.test_results)
-        deposit_working = any(r["success"] and "Deposit For Order" in r["test"] for r in self.test_results)
-        order_center_structure = any(r["success"] and "Order Center DepositInfo Structure" in r["test"] for r in self.test_results)
-        order_center_working = any(r["success"] and "Order Center Status" in r["test"] for r in self.test_results)
-        balance_deducted = any(r["success"] and "Final Wallet Balance" in r["test"] for r in self.test_results)
-        admin_access = any(r["success"] and "Admin Login" in r["test"] for r in self.test_results)
+        deposit_confirmations_working = any(r["success"] and "Admin Get Deposit Confirmations" in r["test"] for r in self.test_results)
+        deposit_confirmed = any(r["success"] and "Admin Confirm Deposit" in r["test"] for r in self.test_results)
+        order_center_working = any(r["success"] and "Seller Order Center Status" in r["test"] for r in self.test_results)
+        backend_fix_verified = any(r["success"] and "Backend Code Fix Verification" in r["test"] for r in self.test_results)
         
         print("🎯 KEY FINDINGS:")
+        print(f"   • Admin Authentication: {'✅ WORKING' if admin_login_working else '❌ BROKEN'}")
         print(f"   • Seller Authentication: {'✅ WORKING' if seller_login_working else '❌ BROKEN'}")
-        print(f"   • POST /api/seller/wallet/deposit-for-order: {'✅ WORKING' if deposit_working else '❌ BROKEN'}")
-        print(f"   • GET /api/seller/order-center (endpoint): {'✅ WORKING' if order_center_structure else '❌ BROKEN'}")
-        print(f"   • GET /api/seller/order-center (depositInfo): {'✅ WORKING' if order_center_working else '❌ BROKEN'}")
-        print(f"   • Wallet Balance Deduction: {'✅ WORKING' if balance_deducted else '❌ BROKEN'}")
-        print(f"   • Admin Deposit Confirmations Access: {'✅ WORKING' if admin_access else '❌ BROKEN'}")
-        
-        # Balance summary
-        if self.initial_balance is not None and self.final_balance is not None:
-            actual_deduction = self.initial_balance - self.final_balance
-            print(f"\n💰 BALANCE SUMMARY:")
-            print(f"   • Initial Balance: ${self.initial_balance:.2f}")
-            print(f"   • Final Balance: ${self.final_balance:.2f}")
-            print(f"   • Actual Deduction: ${actual_deduction:.2f}")
-            print(f"   • Expected Deduction: ${EXPECTED_DEPOSIT_AMOUNT:.2f}")
+        print(f"   • GET /api/admin/deposit-confirmations: {'✅ WORKING' if deposit_confirmations_working else '❌ BROKEN'}")
+        print(f"   • POST /api/admin/orders/{{id}}/confirm-deposit: {'✅ WORKING' if deposit_confirmed else '❌ BROKEN'}")
+        print(f"   • GET /api/seller/order-center: {'✅ WORKING' if order_center_working else '❌ BROKEN'}")
+        print(f"   • Backend Code Fix: {'✅ VERIFIED' if backend_fix_verified else '❌ NOT FOUND'}")
         
         # Overall assessment
-        if order_center_structure and deposit_working:
-            print("\n🎉 ORDER CENTER STATUS UPDATE SYSTEM IS FUNCTIONAL!")
-            print("   ✅ Order Center endpoint is accessible and working")
-            print("   ✅ Backend code includes depositInfo fetching capability")
-            print("   ✅ Deposit endpoint exists (though test order validation failed)")
-            print("   ✅ Frontend can potentially display 'Confirmation Awaiting Admin Review'")
-        elif order_center_structure:
-            print("\n⚠️  PARTIAL SUCCESS - Order Center endpoint works but deposit testing incomplete")
-            print("   ✅ Order Center endpoint accessible")
-            print("   ✅ Backend includes depositInfo support")
-            print("   ❌ Could not test full deposit flow (order validation issue)")
+        if backend_fix_verified and admin_login_working and deposit_confirmations_working:
+            if deposit_confirmed and order_center_working:
+                print("\n🎉 ORDER STATUS TRANSITION FIX IS WORKING!")
+                print("   ✅ Backend code includes the fix (order_status update)")
+                print("   ✅ Admin can confirm deposits")
+                print("   ✅ Order status transitions correctly after confirmation")
+                print("   ✅ Orders appear in 'To Be Shipped' column as expected")
+            else:
+                print("\n⚠️  PARTIAL SUCCESS - Fix is implemented but testing incomplete")
+                print("   ✅ Backend code includes the fix")
+                print("   ✅ Admin endpoints are accessible")
+                if not deposit_confirmed:
+                    print("   ❌ Could not test deposit confirmation (no pending deposits)")
+                if not order_center_working:
+                    print("   ❌ Could not verify order status change")
         else:
             print("\n🚨 SYSTEM ISSUES DETECTED")
-            print("   ❌ Order Center endpoint or depositInfo support may be broken")
+            if not backend_fix_verified:
+                print("   ❌ Backend fix not found in code")
+            if not admin_login_working:
+                print("   ❌ Admin authentication broken")
+            if not deposit_confirmations_working:
+                print("   ❌ Admin deposit confirmations endpoint broken")
 
 
 if __name__ == "__main__":
