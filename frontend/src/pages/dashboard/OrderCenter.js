@@ -224,11 +224,14 @@ const OrderCenter = ({ onDepositSubmitted }) => {
       fetchRefunds();
       fetchWalletBalance();
     }
-  }, [user, activeTab, fetchOrders, fetchRefunds]);
+  }, [user, activeTab]); // Removed fetchOrders and fetchRefunds from dependencies
 
   // Real-time subscription for order updates
   useEffect(() => {
     if (!user) return;
+
+    // Use a ref to track the latest activeTab value
+    const currentTabRef = { current: activeTab };
 
     const ordersChannel = supabase
       .channel('orders-changes')
@@ -238,7 +241,8 @@ const OrderCenter = ({ onDepositSubmitted }) => {
         table: 'orders'
       }, (payload) => {
         console.log('Order update:', payload);
-        fetchOrders(activeTab === 'after_sales' ? null : activeTab);
+        // Use the ref to get the latest activeTab value
+        fetchOrders(currentTabRef.current === 'after_sales' ? null : currentTabRef.current);
       })
       .subscribe();
 
@@ -250,7 +254,7 @@ const OrderCenter = ({ onDepositSubmitted }) => {
         table: 'shipments'
       }, (payload) => {
         console.log('Shipment update:', payload);
-        fetchOrders(activeTab === 'after_sales' ? null : activeTab);
+        fetchOrders(currentTabRef.current === 'after_sales' ? null : currentTabRef.current);
       })
       .subscribe();
 
@@ -263,18 +267,21 @@ const OrderCenter = ({ onDepositSubmitted }) => {
       }, (payload) => {
         console.log('Refund update:', payload);
         fetchRefunds();
-        if (activeTab === 'after_sales') {
+        if (currentTabRef.current === 'after_sales') {
           fetchOrders(null);
         }
       })
       .subscribe();
+
+    // Update the ref when activeTab changes
+    currentTabRef.current = activeTab;
 
     return () => {
       supabase.removeChannel(ordersChannel);
       supabase.removeChannel(shipmentsChannel);
       supabase.removeChannel(refundsChannel);
     };
-  }, [user, activeTab, fetchOrders, fetchRefunds]);
+  }, [user]); // Only depend on user, not activeTab
 
   // Handle ship order
   const handleShipOrder = async () => {
