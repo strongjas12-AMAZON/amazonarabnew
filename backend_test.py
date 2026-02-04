@@ -26,11 +26,16 @@ BASE_URL = "https://repo-twin-2.preview.emergentagent.com/api"
 
 # Test Credentials from review request
 ADMIN_EMAIL = "support@arabshopping.org"
-ADMIN_PASSWORD = "Hadi1247@"
-SELLER_EMAIL = "testseller@test.com"  # Updated to match existing test user
+ADMIN_PASSWORD = "TestPass123!"  # Updated password from review request
+SELLER_EMAIL = "testseller@test.com"
 SELLER_PASSWORD = "TestPass123!"
 BUYER_EMAIL = "testbuyer@test.com"
 BUYER_PASSWORD = "TestPass123!"
+
+# Expected test data from review request
+EXPECTED_ORDER_ID = "b6229b1b-d2b4-4b8e-ab20-cb75947b203e"
+EXPECTED_DEPOSIT_AMOUNT = 31.99
+EXPECTED_DEPOSIT_METHOD = "internal_wallet"
 
 class FixesVerificationTester:
     def __init__(self):
