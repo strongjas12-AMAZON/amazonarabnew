@@ -1856,10 +1856,10 @@ const AdminDashboard = () => {
       {activeTab === 'depositConfirmations' && (
         <div>
           <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white mb-4">
-            USDT Deposit Confirmations
+            Seller Deposit Confirmations
           </h2>
           <p className="text-gray-400 mb-6">
-            Review and confirm seller USDT TRC20 deposit payments for orders
+            Review and confirm seller deposit payments for orders (USDT TRC20 and Wallet Balance)
           </p>
 
           {depositConfirmations.length === 0 ? (
