@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 """
-ADMIN DEPOSIT CONFIRMATIONS TESTING - Arab Shopping Platform
-TEST SPECIFIC FIX: Admin Deposit Confirmations not showing seller deposits
+SELLER WALLET BALANCE DEDUCTION TESTING - Arab Shopping Platform
+TEST SPECIFIC FIX: Seller wallet balance not being deducted when paying 80% order deposit
 
-ISSUE: When sellers submit payment proof or pay via wallet balance, admin was not seeing 
-these requests in the deposit confirmation section.
+ISSUE: After a seller uses their wallet balance for the 80% order deposit, the wallet balance 
+was not being deducted (it was deducting $0 instead of the actual deposit amount).
+
+ROOT CAUSE: Database column is 'deposit_required' (snake_case) but code was using 
+'depositRequired' (camelCase).
 
 TEST SCENARIO:
-1. Login as admin (support@arabshopping.org / TestPass123!)
-2. Call GET /api/admin/deposit-confirmations
-3. Verify response includes pending deposits with both methods:
-   - deposit_method: 'usdt_payment' (if any)
-   - deposit_method: 'internal_wallet' (wallet balance payments)
-4. Test confirm-deposit endpoint
+1. Login as seller (testseller_new@test.com / TestPass123!)
+2. Check current wallet balance using GET /api/seller/wallet/balance - should show $1000
+3. Call POST /api/seller/wallet/deposit-for-order with body: { "orderId": "a32d8ad7-d07b-4fea-be48-f661cc2dd357" }
+4. Verify response shows depositAmount is $39.99 (not $0)
+5. Check wallet balance again - should show approximately $960.01 (deducted by $39.99)
+6. Verify the deposit record appears in GET /api/admin/deposit-confirmations (login as admin: support@arabshopping.org / TestPass123!)
 """
 
 import requests
