@@ -5340,8 +5340,9 @@ async def submit_usdt_deposit_payment(
         if not has_seller_product:
             raise HTTPException(status_code=403, detail="This order does not contain your products")
         
-        if order.get('escrow_status') not in ['awaiting_seller_deposit', 'deposit_received']:
-            raise HTTPException(status_code=400, detail="Order is not awaiting deposit")
+        # NEW FLOW: Allow USDT deposit when escrow_status is 'pending'
+        if order.get('escrow_status') not in ['pending', 'deposit_received']:
+            raise HTTPException(status_code=400, detail="Order is not available for deposit")
         
         required_deposit = float(order.get('deposit_required', 0))
         
