@@ -583,19 +583,19 @@ class SellerDepositVisibilityTester:
         # Specific validation points from review request
         print("\n🔍 VALIDATION POINTS FROM REVIEW REQUEST:")
         
-        # Check admin orders result for field presence
-        admin_orders_result = next((r for r in self.test_results if "Admin Get Orders" in r["test"]), None)
-        if admin_orders_result and admin_orders_result["success"]:
-            response_data = admin_orders_result.get("response_data", {})
-            total_orders = response_data.get("total_orders", 0)
-            orders_with_escrow = response_data.get("orders_with_escrow_status", 0)
-            orders_with_deposit = response_data.get("orders_with_deposit_required", 0)
-            awaiting_deposit = response_data.get("awaiting_deposit_orders", 0)
+        # Check admin deposit confirmations result for field presence
+        admin_deposits_result = next((r for r in self.test_results if "Admin Get Deposit" in r["test"]), None)
+        if admin_deposits_result and admin_deposits_result["success"]:
+            response_data = admin_deposits_result.get("response_data", {})
+            total_deposits = response_data.get("total_deposits", 0)
+            deposits_with_escrow = response_data.get("deposits_with_escrow_status", 0)
+            deposits_with_deposit_required = response_data.get("deposits_with_deposit_required", 0)
+            awaiting_confirmations = response_data.get("awaiting_deposit_confirmations", 0)
             
-            print(f"   • Total orders in system: {total_orders}")
-            print(f"   • escrowStatus field present: {'✅ YES' if orders_with_escrow > 0 else '❌ NO'} ({orders_with_escrow} orders)")
-            print(f"   • depositRequired field present: {'✅ YES' if orders_with_deposit > 0 else '❌ NO'} ({orders_with_deposit} orders)")
-            print(f"   • escrowStatus = 'awaiting_seller_deposit': {'✅ YES' if awaiting_deposit > 0 else '❌ NO'} ({awaiting_deposit} orders)")
+            print(f"   • Total deposit confirmations in system: {total_deposits}")
+            print(f"   • escrowStatus field present: {'✅ YES' if deposits_with_escrow > 0 else '❌ NO'} ({deposits_with_escrow} deposits)")
+            print(f"   • depositRequired field present: {'✅ YES' if deposits_with_deposit_required > 0 else '❌ NO'} ({deposits_with_deposit_required} deposits)")
+            print(f"   • Pending deposit confirmations: {'✅ YES' if awaiting_confirmations > 0 else '❌ NO'} ({awaiting_confirmations} deposits)")
         else:
             print("   • escrowStatus field present: ❌ COULD NOT VERIFY (admin access failed)")
             print("   • depositRequired field present: ❌ COULD NOT VERIFY (admin access failed)") 
