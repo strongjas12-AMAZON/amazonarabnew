@@ -5429,11 +5429,11 @@ async def confirm_seller_deposit(
         if current_user.get('role') != 'admin':
             raise HTTPException(status_code=403, detail="Admin access required")
         
-        # 1. Get deposit record (both USDT and wallet balance methods)
+        # 1. Get deposit record (both USDT and internal wallet methods)
         deposit_result = supabase_admin.table('order_deposits')\
             .select('*, users!seller_id(name, email)')\
             .eq('order_id', order_id)\
-            .in_('deposit_method', ['usdt_payment', 'wallet_balance'])\
+            .in_('deposit_method', ['usdt_payment', 'internal_wallet'])\
             .eq('deposit_status', 'pending')\
             .execute()
         
