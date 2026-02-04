@@ -226,12 +226,17 @@ const OrderCenter = ({ onDepositSubmitted }) => {
     }
   }, [user, activeTab]); // Removed fetchOrders and fetchRefunds from dependencies
 
-  // Real-time subscription for order updates
+  // Real-time subscription for order updates - STABLE subscription without activeTab dependency
   useEffect(() => {
     if (!user) return;
 
-    // Use a ref to track the latest activeTab value
-    const currentTabRef = { current: activeTab };
+    // Create a stable function that always fetches all orders
+    // The filtering happens on the frontend anyway
+    const refreshOrders = () => {
+      // Fetch all orders without status filter
+      // Let frontend filtering handle the display
+      fetchOrders(null);
+    };
 
     const ordersChannel = supabase
       .channel('orders-changes')
@@ -241,8 +246,7 @@ const OrderCenter = ({ onDepositSubmitted }) => {
         table: 'orders'
       }, (payload) => {
         console.log('Order update:', payload);
-        // Use the ref to get the latest activeTab value
-        fetchOrders(currentTabRef.current === 'after_sales' ? null : currentTabRef.current);
+        refreshOrders();
       })
       .subscribe();
 
@@ -254,7 +258,7 @@ const OrderCenter = ({ onDepositSubmitted }) => {
         table: 'shipments'
       }, (payload) => {
         console.log('Shipment update:', payload);
-        fetchOrders(currentTabRef.current === 'after_sales' ? null : currentTabRef.current);
+        refreshOrders();
       })
       .subscribe();
 
@@ -267,21 +271,16 @@ const OrderCenter = ({ onDepositSubmitted }) => {
       }, (payload) => {
         console.log('Refund update:', payload);
         fetchRefunds();
-        if (currentTabRef.current === 'after_sales') {
-          fetchOrders(null);
-        }
+        refreshOrders();
       })
       .subscribe();
-
-    // Update the ref when activeTab changes
-    currentTabRef.current = activeTab;
 
     return () => {
       supabase.removeChannel(ordersChannel);
       supabase.removeChannel(shipmentsChannel);
       supabase.removeChannel(refundsChannel);
     };
-  }, [user]); // Only depend on user, not activeTab
+  }, [user]); // Only depend on user - subscription stays stable
 
   // Handle ship order
   const handleShipOrder = async () => {
