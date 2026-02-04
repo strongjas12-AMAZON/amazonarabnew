@@ -104,6 +104,22 @@
 
 user_problem_statement: Build a Buyer Store Search & Store Detail system connected to Supabase, with STRICT access control so buyers can ONLY see products that a seller has explicitly added to their store. Buyers must NOT see the master product catalog. Additionally, ensure sellers can request payouts with required USDT TRC20 wallet addresses.
 
+backend:
+  - task: "Admin Deposit Confirmations - Show Both USDT and Wallet Balance Deposits"
+    implemented: true
+    working: "NA"
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "user"
+        comment: "USER REPORTED: When a seller submits payment proof or pays via wallet balance, the admin account does not receive these requests in the deposit confirmation section."
+      - working: "NA"
+        agent: "main"
+        comment: "ROOT CAUSE FOUND: Admin endpoint GET /api/admin/deposit-confirmations was only filtering for deposit_method='usdt_payment'. When sellers paid via wallet balance, the code was setting deposit_method='internal_wallet' but not setting deposit_status='pending', and admin endpoint didn't include internal_wallet in the query. FIX APPLIED: 1) Updated wallet deposit endpoint (/seller/wallet/deposit-for-order) to set deposit_method='internal_wallet', deposit_status='pending', and is_deposit_complete=False so deposits require admin confirmation. 2) Updated admin endpoint to query both 'usdt_payment' AND 'internal_wallet' deposit methods. 3) Updated confirm-deposit endpoint to handle both methods. 4) Added refund logic when admin rejects wallet balance deposit - returns funds to seller's wallet. 5) Updated frontend AdminDashboard to show payment method (Wallet Balance or USDT TRC20) with proper UI. 6) Fixed existing database record to show pending status."
+
   - task: "Admin Add Product Modal - Duplicate Modal Overlay"
     implemented: true
     working: true
