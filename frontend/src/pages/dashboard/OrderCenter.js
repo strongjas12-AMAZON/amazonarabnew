@@ -513,7 +513,8 @@ const OrderCenter = ({ onDepositSubmitted }) => {
         {/* Actions */}
         <div className="flex flex-wrap gap-2 pt-3 border-t border-[rgba(212,175,55,0.1)]">
           {/* NEW: Deposit Required Alert & Instructions */}
-          {order.escrowStatus === 'awaiting_seller_deposit' && order.depositRequired && (
+          {/* Show deposit UI when escrow_status is 'pending' - seller can deposit immediately */}
+          {order.escrowStatus === 'pending' && order.depositRequired && (
             <div className="w-full p-4 bg-gradient-to-br from-orange-500/10 to-red-500/10 border-2 border-orange-500/30 rounded-xl mb-2">
               <div className="flex items-center gap-2 mb-3">
                 <AlertTriangle className="w-6 h-6 text-orange-400" />
