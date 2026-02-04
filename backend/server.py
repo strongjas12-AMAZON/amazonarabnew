@@ -5176,7 +5176,7 @@ async def deposit_for_order(req: SellerDepositRequest, current_user: dict = Depe
         if not has_seller_product:
             raise HTTPException(status_code=403, detail="This order does not contain your products")
         
-        if order.get('escrowStatus') != 'awaiting_seller_deposit':
+        if order.get('escrow_status') != 'awaiting_seller_deposit':
             raise HTTPException(status_code=400, detail="Order is not awaiting deposit")
         
         # 2. Get or create seller wallet
