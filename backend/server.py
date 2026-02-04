@@ -2761,14 +2761,14 @@ async def update_order_status(order_id: str, request: UpdateOrderStatusRequest, 
                 if deposit_result.data:
                     deposit_to_return = float(deposit_result.data[0].get('deposited_amount', 0))
                 
-                # Add earnings to balance + return deposit from depositBalance
-                new_balance = current_balance + earnings_amount
+                # IMPORTANT: Balance should ONLY change through approved recharge requests
+                # Do NOT add earnings to balance - only track in totalEarnings
+                # Do NOT modify balance for deposit returns
                 new_deposit_balance = max(current_deposit_balance - deposit_to_return, 0)
                 new_total_earnings = current_total_earnings + earnings_amount
                 
-                # Prepare update data - only include deposit columns if they exist
+                # Prepare update data - DO NOT UPDATE BALANCE, only totalEarnings and depositBalance
                 wallet_update = {
-                    'balance': new_balance,
                     'totalEarnings': new_total_earnings,
                     'updatedAt': datetime.now(timezone.utc).isoformat()
                 }
@@ -2779,16 +2779,17 @@ async def update_order_status(order_id: str, request: UpdateOrderStatusRequest, 
                 
                 supabase_admin.table('seller_wallets').update(wallet_update).eq('userId', seller_id).execute()
                 
-                # Create transaction record for earnings
+                # Create transaction record for earnings tracking (not balance change)
+                # NOTE: This records the earning but does NOT change wallet balance
                 await create_wallet_transaction(
                     user_id=seller_id,
                     user_role='seller',
                     transaction_type='earning',
                     amount=earnings_amount,
                     previous_balance=current_balance,
-                    new_balance=new_balance,
+                    new_balance=current_balance,  # Balance unchanged - only recharge requests change balance
                     order_id=order_id,
-                    description=f"Earnings from order: ${earnings_amount:.2f} (Deposit: ${deposit_to_return:.2f} returned)"
+                    description=f"Earnings from order: ${earnings_amount:.2f} (Deposit: ${deposit_to_return:.2f} returned) [Balance unchanged - only recharge requests modify balance]"
                 )
         
         # Send email notifications based on status change
