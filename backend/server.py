@@ -5173,8 +5173,9 @@ async def deposit_for_order(req: SellerDepositRequest, current_user: dict = Depe
         if not has_seller_product:
             raise HTTPException(status_code=403, detail="This order does not contain your products")
         
-        if order.get('escrow_status') != 'awaiting_seller_deposit':
-            raise HTTPException(status_code=400, detail="Order is not awaiting deposit")
+        # NEW FLOW: Allow deposit when escrow_status is 'pending'
+        if order.get('escrow_status') != 'pending':
+            raise HTTPException(status_code=400, detail="Order is not available for deposit")
         
         # 2. Get or create seller wallet
         wallet_result = supabase_admin.table('seller_wallets')\
