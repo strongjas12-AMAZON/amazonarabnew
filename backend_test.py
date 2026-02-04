@@ -263,31 +263,63 @@ class SellerWalletBalanceDeductionTester:
         
         return None
 
-    def test_deposit_with_mock_scenario(self):
-        """Test the deposit calculation logic by checking if the fix prevents $0 deposits"""
+    def test_backend_code_fix_verification(self):
+        """Verify the fix is applied in the backend code"""
         try:
-            # Since the specific test order doesn't exist, we can test the logic by 
-            # examining the error messages and endpoint behavior
+            # Read the backend server.py file to verify the fix
+            with open('/app/backend/server.py', 'r') as f:
+                content = f.read()
             
-            # The key fix was changing from order.get('depositRequired', 0) to order.get('deposit_required', 0)
-            # If the fix is working, the endpoint should properly read the deposit_required column
+            # Check if the fix is present at line 5147
+            lines = content.split('\n')
+            
+            # Look for the fixed line around line 5147
+            fix_found = False
+            fix_line = ""
+            for i, line in enumerate(lines):
+                if 'deposit_required' in line and 'order.get(' in line and i > 5140 and i < 5160:
+                    fix_found = True
+                    fix_line = line.strip()
+                    break
+            
+            # Also check that the old camelCase version is not present in the deposit logic
+            old_camelcase_found = False
+            for i, line in enumerate(lines):
+                if 'depositRequired' in line and 'order.get(' in line and i > 5140 and i < 5160:
+                    old_camelcase_found = True
+                    break
+            
+            success_details = []
+            if fix_found:
+                success_details.append(f"✅ Fix found: {fix_line}")
+                success_details.append("✅ Backend uses correct snake_case 'deposit_required' column")
+            else:
+                success_details.append("❌ Fix not found in expected location")
+                
+            if not old_camelcase_found:
+                success_details.append("✅ Old camelCase 'depositRequired' not found in deposit logic")
+            else:
+                success_details.append("⚠️  Old camelCase 'depositRequired' still present")
+            
+            fix_verified = fix_found and not old_camelcase_found
             
             self.log_test(
-                "Deposit Calculation Logic Test", 
-                True, 
-                "✅ Fix verified: Backend now uses correct snake_case column 'deposit_required' instead of camelCase 'depositRequired'. This prevents $0 deposit amounts when reading from database.",
+                "Backend Code Fix Verification", 
+                fix_verified, 
+                "; ".join(success_details),
                 {
-                    "fix_location": "backend/server.py line 5147",
-                    "fix_description": "Changed order.get('depositRequired', 0) to order.get('deposit_required', 0)",
-                    "impact": "Prevents deposit amount from being $0 due to column name mismatch"
+                    "fix_found": fix_found,
+                    "fix_line": fix_line,
+                    "old_camelcase_found": old_camelcase_found,
+                    "file_location": "/app/backend/server.py around line 5147"
                 }
             )
             
-            return EXPECTED_DEPOSIT_AMOUNT
+            return fix_verified
             
         except Exception as e:
-            self.log_test("Deposit Calculation Logic Test", False, f"Exception: {str(e)}", None)
-            return None
+            self.log_test("Backend Code Fix Verification", False, f"Exception: {str(e)}", None)
+            return False
 
     def test_final_wallet_balance(self, deposit_amount):
         """Test wallet balance after deposit - Verify deduction occurred"""
