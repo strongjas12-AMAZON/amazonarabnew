@@ -5117,8 +5117,8 @@ async def get_orders_pending_deposit(current_user: dict = Depends(get_current_us
                 seller_orders.append({
                     'id': order['id'],
                     'totalAmount': float(order.get('total_amount', 0)),  # Fixed: use snake_case
-                    'depositRequired': float(order.get('deposit_required', 0)),  # Fixed: use snake_case
-                    'escrowStatus': order.get('escrow_status'),
+                    'depositRequired': float(order.get('depositRequired', 0)),  # Fixed: use camelCase to match DB
+                    'escrowStatus': order.get('escrowStatus'),  # Fixed: use camelCase to match DB
                     'createdAt': order.get('created_at'),  # Fixed: use snake_case
                     'depositInfo': {
                         'requiredAmount': float(deposit_info['required_amount']) if deposit_info else 0,
