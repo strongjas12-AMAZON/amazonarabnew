@@ -741,11 +741,14 @@ class OrderCenterStatusUpdateTester:
         # Step 4: Test deposit for order (main fix)
         deposit_amount = self.test_deposit_for_order()
         
-        # Step 5: Test Order Center status (KEY TEST - this is what the review is about)
+        # Step 5: Test Order Center structure (verify endpoint can handle depositInfo)
+        order_center_structure = self.test_order_center_depositinfo_structure()
+        
+        # Step 6: Test Order Center status (KEY TEST - this is what the review is about)
         if deposit_amount is not None and deposit_amount > 0:
             order_center_result = self.test_order_center_status()
         else:
-            print("\n⚠️  Skipping Order Center test - deposit test did not complete successfully")
+            print("\n⚠️  Skipping specific Order Center test - deposit test did not complete successfully")
             order_center_result = None
         
         # Step 6: Check final wallet balance (verify deduction) - only if deposit was successful
