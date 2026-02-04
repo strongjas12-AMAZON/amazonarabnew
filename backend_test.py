@@ -716,5 +716,5 @@ class OrderCenterStatusUpdateTester:
 
 
 if __name__ == "__main__":
-    tester = SellerWalletBalanceDeductionTester()
-    tester.run_wallet_balance_deduction_test()
+    tester = OrderCenterStatusUpdateTester()
+    tester.run_order_center_status_test()
