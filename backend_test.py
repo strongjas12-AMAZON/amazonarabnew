@@ -126,7 +126,7 @@ class FixesVerificationTester:
             headers = {"Authorization": f"Bearer {self.admin_token}"}
             
             # Step 1: Get an order to test completion
-            response = self.session.get(f"{self.base_url}/admin/orders", headers=headers)
+            response = self.session.get(f"{self.base_url}/orders/my", headers=headers)
             
             if response.status_code != 200:
                 self.log_test("Get Admin Orders", False, f"HTTP {response.status_code}: {response.text}")
