@@ -5568,7 +5568,7 @@ async def confirm_seller_deposit(
                         <p><strong>Reason:</strong> {req.rejectionReason}</p>
                         <p><strong>Payment Method:</strong> {method_display.title()}</p>
                         {f"<p><strong>Transaction Hash:</strong> {deposit.get('transaction_hash')}</p>" if deposit.get('transaction_hash') else ""}
-                        {"<p>Your wallet balance has been restored.</p>" if deposit_method == 'wallet_balance' else "<p>Please verify the transaction details and submit again, or contact support if you believe this is an error.</p>"}
+                        {"<p>Your wallet balance has been restored.</p>" if deposit_method == 'internal_wallet' else "<p>Please verify the transaction details and submit again, or contact support if you believe this is an error.</p>"}
                         """
                     })
             except Exception as e:
