@@ -5429,11 +5429,11 @@ async def confirm_seller_deposit(
         if current_user.get('role') != 'admin':
             raise HTTPException(status_code=403, detail="Admin access required")
         
-        # 1. Get deposit record
+        # 1. Get deposit record (both USDT and wallet balance methods)
         deposit_result = supabase_admin.table('order_deposits')\
             .select('*, users!seller_id(name, email)')\
             .eq('order_id', order_id)\
-            .eq('deposit_method', 'usdt_payment')\
+            .in_('deposit_method', ['usdt_payment', 'wallet_balance'])\
             .eq('deposit_status', 'pending')\
             .execute()
         
@@ -5442,6 +5442,7 @@ async def confirm_seller_deposit(
         
         deposit = deposit_result.data[0]
         seller_info = deposit.get('users', {})
+        deposit_method = deposit.get('deposit_method', 'unknown')
         
         if req.approved:
             # APPROVE DEPOSIT
@@ -5465,6 +5466,7 @@ async def confirm_seller_deposit(
             # Send confirmation email to seller
             try:
                 if RESEND_API_KEY and seller_info.get('email'):
+                    method_display = "USDT" if deposit_method == 'usdt_payment' else "wallet balance"
                     resend.Emails.send({
                         "from": SENDER_EMAIL,
                         "to": seller_info['email'],
@@ -5472,9 +5474,10 @@ async def confirm_seller_deposit(
                         "html": f"""
                         <h2>Your Deposit Has Been Confirmed!</h2>
                         <p>Hello {seller_info.get('name', 'Seller')},</p>
-                        <p>Your USDT deposit of <strong>${float(deposit['required_amount']):.2f}</strong> has been confirmed by the admin.</p>
+                        <p>Your {method_display} deposit of <strong>${float(deposit['required_amount']):.2f}</strong> has been confirmed by the admin.</p>
                         <p><strong>Order ID:</strong> {order_id}</p>
-                        <p><strong>Transaction Hash:</strong> {deposit.get('transaction_hash')}</p>
+                        <p><strong>Payment Method:</strong> {method_display.title()}</p>
+                        {f"<p><strong>Transaction Hash:</strong> {deposit.get('transaction_hash')}</p>" if deposit.get('transaction_hash') else ""}
                         <p>You can now ship this order. Once the order is completed, you will receive 100% of the order amount in your earnings.</p>
                         <p>Thank you for using our platform!</p>
                         """
