@@ -5610,7 +5610,7 @@ async def confirm_delivery(order_id: str, current_user: dict = Depends(get_curre
         supabase_admin.table('orders')\
             .update({
                 'escrow_status': 'delivered',
-                'deliveryConfirmedAt': datetime.now(timezone.utc).isoformat()
+                'delivery_confirmed_at': datetime.now(timezone.utc).isoformat()
             })\
             .eq('id', order_id)\
             .execute()
