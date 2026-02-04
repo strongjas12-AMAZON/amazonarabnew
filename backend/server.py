@@ -1922,12 +1922,17 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
         seller_amounts = {}  # Track amount per seller
         
         for item in req.items:
+            # Handle both productId (camelCase) and product_id (snake_case)
+            product_id = item.get('productId') or item.get('product_id')
+            if not product_id:
+                raise HTTPException(status_code=400, detail="Missing productId or product_id in order items")
+            
             item_data = {
                 'id': str(uuid.uuid4()),
                 'order_id': order_id,
-                'product_id': item['productId'],
-                'quantity': item['quantity'],
-                'price': item['price']
+                'product_id': product_id,
+                'quantity': item.get('quantity', 1),
+                'price': item.get('price', 0)
             }
             supabase_admin.table('order_items').insert(item_data).execute()
             order_items_list.append(item_data)
@@ -1936,14 +1941,14 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
             try:
                 product_result = supabase_admin.table('store_products')\
                     .select('*, stores(seller_id)')\
-                    .eq('id', item['productId'])\
+                    .eq('id', product_id)\
                     .execute()
                 
                 if product_result.data:
                     store = product_result.data[0].get('stores')
                     if store:
                         seller_id = store.get('seller_id')
-                        item_total = float(item['price']) * int(item['quantity'])
+                        item_total = float(item.get('price', 0)) * int(item.get('quantity', 1))
                         if seller_id not in seller_amounts:
                             seller_amounts[seller_id] = 0
                         seller_amounts[seller_id] += item_total
