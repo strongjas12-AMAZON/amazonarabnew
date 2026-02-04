@@ -1894,7 +1894,12 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
         deposit_required = req.totalAmount * 0.8
         
         # Set escrow status based on payment
-        escrow_status = 'paid' if req.useWallet or payment_status == 'paid' else 'pending'
+        # If payment is confirmed (wallet or paid), immediately set to awaiting_seller_deposit
+        # So seller sees deposit requirement right away in Order Center
+        if req.useWallet or payment_status == 'paid':
+            escrow_status = 'awaiting_seller_deposit'
+        else:
+            escrow_status = 'pending'
         
         order_data = {
             'id': str(uuid.uuid4()),
