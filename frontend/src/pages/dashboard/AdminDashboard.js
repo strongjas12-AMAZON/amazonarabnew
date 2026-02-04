@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../lib/api';
+import { supabase } from '../../lib/supabase';
 import { toast } from 'sonner';
 import { 
   Users, Package, ShoppingCart, Code, CheckCircle, XCircle, Eye, 
@@ -56,6 +57,100 @@ const AdminDashboard = () => {
     fetchCategories();
     fetchPlatformBalance(); // NEW: Fetch platform balance
   }, []);
+
+  // Real-time subscription for platform balance updates
+  useEffect(() => {
+    if (!user) return;
+
+    console.log('Setting up admin real-time subscriptions...');
+
+    // Subscribe to platform_balance table updates
+    const platformBalanceChannel = supabase
+      .channel('admin-platform-balance-changes')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'platform_balance'
+      }, (payload) => {
+        console.log('Platform balance update received:', payload.eventType);
+        fetchPlatformBalance();
+      })
+      .subscribe((status) => {
+        console.log('Platform balance channel subscription status:', status);
+      });
+
+    // Subscribe to platform_transactions (affects platform balance)
+    const platformTransactionsChannel = supabase
+      .channel('admin-platform-transactions-changes')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'platform_transactions'
+      }, (payload) => {
+        console.log('Platform transaction update received:', payload.eventType);
+        fetchPlatformBalance();
+      })
+      .subscribe((status) => {
+        console.log('Platform transactions channel subscription status:', status);
+      });
+
+    // Subscribe to orders table (order payments affect balance)
+    const ordersChannel = supabase
+      .channel('admin-orders-changes')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'orders'
+      }, (payload) => {
+        console.log('Order update received:', payload.eventType);
+        fetchPlatformBalance();
+        fetchData(); // Refresh all data
+      })
+      .subscribe((status) => {
+        console.log('Orders channel subscription status:', status);
+      });
+
+    // Subscribe to order_deposits table (seller deposits affect balance)
+    const depositsChannel = supabase
+      .channel('admin-deposits-changes')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'order_deposits'
+      }, (payload) => {
+        console.log('Deposit update received:', payload.eventType);
+        fetchPlatformBalance();
+        fetchData(); // Refresh deposit confirmations
+      })
+      .subscribe((status) => {
+        console.log('Deposits channel subscription status:', status);
+      });
+
+    // Subscribe to wallet_transactions (buyer/seller wallet changes)
+    const walletTransactionsChannel = supabase
+      .channel('admin-wallet-transactions-changes')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'wallet_transactions'
+      }, (payload) => {
+        console.log('Wallet transaction update received:', payload.eventType);
+        fetchPlatformBalance();
+      })
+      .subscribe((status) => {
+        console.log('Wallet transactions channel subscription status:', status);
+      });
+
+    // Cleanup function
+    return () => {
+      console.log('Cleaning up admin real-time subscriptions...');
+      supabase.removeChannel(platformBalanceChannel);
+      supabase.removeChannel(platformTransactionsChannel);
+      supabase.removeChannel(ordersChannel);
+      supabase.removeChannel(depositsChannel);
+      supabase.removeChannel(walletTransactionsChannel);
+    };
+  }, [user]);
 
   const fetchCategories = async () => {
     try {

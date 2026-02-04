@@ -1893,8 +1893,10 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
         # Calculate deposit requirement (80% of total)
         deposit_required = req.totalAmount * 0.8
         
-        # Set escrow status based on payment
-        escrow_status = 'paid' if req.useWallet or payment_status == 'paid' else 'pending'
+        # NEW FLOW: Always create order with 'pending' status
+        # Seller can deposit immediately, even before buyer payment is confirmed
+        # This allows parallel processing: seller deposits while waiting for buyer payment
+        escrow_status = 'pending'
         
         order_data = {
             'id': str(uuid.uuid4()),
@@ -1910,7 +1912,7 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
             'shipping_phone': req.shippingPhone,
             'shipping_address_snapshot': req.shippingAddress,
             'created_at': datetime.now(timezone.utc).isoformat(),
-            # NEW: Escrow + Deposit fields
+            # NEW: Escrow + Deposit fields - seller sees deposit option immediately
             'escrow_status': escrow_status,
             'deposit_required': deposit_required
         }
@@ -1955,13 +1957,8 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
             except Exception as e:
                 logging.warning(f"Could not fetch seller for product {item['productId']}: {str(e)}")
         
-        # If payment is confirmed (wallet payment), immediately move to awaiting_seller_deposit
+        # If payment is confirmed (wallet payment), record platform balance and create deposit requirements
         if req.useWallet or payment_status == 'paid':
-            # Update order to awaiting_seller_deposit
-            supabase_admin.table('orders').update({
-                'escrow_status': 'awaiting_seller_deposit'
-            }).eq('id', order_id).execute()
-            
             # Record platform balance transaction (buyer payment received)
             try:
                 platform_balance = supabase_admin.table('platform_balance')\
@@ -1991,20 +1988,6 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
                     }).execute()
             except Exception as e:
                 logging.warning(f"Could not update platform wallet: {str(e)}")
-            
-            # Create deposit requirements for each seller
-            for seller_id, seller_amount in seller_amounts.items():
-                seller_deposit = seller_amount * 0.8  # 80% of seller's portion
-                try:
-                    supabase_admin.table('order_deposits').insert({
-                        'order_id': order_id,
-                        'seller_id': seller_id,
-                        'required_amount': seller_deposit,
-                        'deposited_amount': 0,
-                        'is_deposit_complete': False
-                    }).execute()
-                except Exception as e:
-                    logging.warning(f"Could not create deposit requirement for seller {seller_id}: {str(e)}")
         
         # If wallet payment, update transaction with order_id
         if req.useWallet:
@@ -2651,10 +2634,9 @@ async def update_order_status(order_id: str, request: UpdateOrderStatusRequest, 
             update_data['confirmed_at'] = datetime.now(timezone.utc).isoformat()
             # When paid, set order_status to 'to_be_shipped' so seller can ship
             update_data['order_status'] = 'to_be_shipped'
-            # NEW: Also set escrow status to awaiting_seller_deposit
-            update_data['escrow_status'] = 'awaiting_seller_deposit'
+            # NOTE: escrow_status remains 'pending' - seller needs to deposit first
             
-            # NEW: Record payment to platform wallet and create deposit requirements
+            # Record payment to platform wallet (optional - for accounting)
             try:
                 # Get order details first
                 order_query = supabase_admin.table('orders')\
@@ -2692,34 +2674,8 @@ async def update_order_status(order_id: str, request: UpdateOrderStatusRequest, 
                             'previous_balance': current_balance,
                             'new_balance': new_balance
                         }).execute()
-                    
-                    # Create deposit requirements per seller
-                    seller_amounts = {}
-                    for item in order.get('order_items', []):
-                        store_product = item.get('store_products')
-                        if store_product:
-                            store = store_product.get('stores')
-                            if store:
-                                seller_id = store.get('seller_id')
-                                item_total = float(item.get('price', 0)) * int(item.get('quantity', 1))
-                                if seller_id not in seller_amounts:
-                                    seller_amounts[seller_id] = 0
-                                seller_amounts[seller_id] += item_total
-                    
-                    for seller_id, seller_amount in seller_amounts.items():
-                        seller_deposit = seller_amount * 0.8
-                        try:
-                            supabase_admin.table('order_deposits').insert({
-                                'order_id': order_id,
-                                'seller_id': seller_id,
-                                'required_amount': seller_deposit,
-                                'deposited_amount': 0,
-                                'is_deposit_complete': False
-                            }).execute()
-                        except Exception as e:
-                            logging.warning(f"Deposit requirement may already exist for seller {seller_id}: {str(e)}")
             except Exception as e:
-                logging.error(f"Error creating deposit requirements: {str(e)}")
+                logging.error(f"Error recording payment to platform wallet: {str(e)}")
         elif request.status == 'completed':
             # When completed, set both statuses to completed
             update_data['order_status'] = 'completed'
@@ -5081,10 +5037,10 @@ async def get_orders_pending_deposit(current_user: dict = Depends(get_current_us
         if user_role != 'seller':
             raise HTTPException(status_code=403, detail="Seller access required")
         
-        # Get orders with escrow_status = 'awaiting_seller_deposit'
+        # Get orders with escrow_status = 'pending' (NEW FLOW: seller can deposit immediately)
         orders_result = supabase_admin.table('orders')\
             .select('*, order_items(*, store_products(*, product_catalog(*), stores(*)))')\
-            .eq('escrow_status', 'awaiting_seller_deposit')\
+            .eq('escrow_status', 'pending')\
             .execute()
         
         if not orders_result.data:
@@ -5176,8 +5132,9 @@ async def deposit_for_order(req: SellerDepositRequest, current_user: dict = Depe
         if not has_seller_product:
             raise HTTPException(status_code=403, detail="This order does not contain your products")
         
-        if order.get('escrow_status') != 'awaiting_seller_deposit':
-            raise HTTPException(status_code=400, detail="Order is not awaiting deposit")
+        # NEW FLOW: Allow deposit when escrow_status is 'pending'
+        if order.get('escrow_status') != 'pending':
+            raise HTTPException(status_code=400, detail="Order is not available for deposit")
         
         # 2. Get or create seller wallet
         wallet_result = supabase_admin.table('seller_wallets')\
@@ -5342,8 +5299,9 @@ async def submit_usdt_deposit_payment(
         if not has_seller_product:
             raise HTTPException(status_code=403, detail="This order does not contain your products")
         
-        if order.get('escrow_status') not in ['awaiting_seller_deposit', 'deposit_received']:
-            raise HTTPException(status_code=400, detail="Order is not awaiting deposit")
+        # NEW FLOW: Allow USDT deposit when escrow_status is 'pending'
+        if order.get('escrow_status') not in ['pending', 'deposit_received']:
+            raise HTTPException(status_code=400, detail="Order is not available for deposit")
         
         required_deposit = float(order.get('deposit_required', 0))
         

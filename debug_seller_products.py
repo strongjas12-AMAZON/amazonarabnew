@@ -6,7 +6,7 @@ Debug seller store products response
 import requests
 import json
 
-BASE_URL = "https://repo-twin-2.preview.emergentagent.com/api"
+BASE_URL = "https://repo-duplicator-11.preview.emergentagent.com/api"
 SELLER_EMAIL = "testseller_new@test.com"
 SELLER_PASSWORD = "TestPass123!"
 
