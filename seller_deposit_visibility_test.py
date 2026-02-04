@@ -109,78 +109,79 @@ class SellerDepositVisibilityTester:
             self.log_test("Admin Login", False, f"Exception: {str(e)}", None)
         return False
 
-    def test_admin_get_orders_with_deposit_info(self):
-        """Test GET /api/admin/orders - Check existing orders for deposit information"""
+    def test_admin_get_deposit_confirmations(self):
+        """Test GET /api/admin/deposit-confirmations - Check existing deposit confirmations"""
         if not self.admin_token:
-            self.log_test("Admin Get Orders with Deposit Info", False, "No admin token available", None)
+            self.log_test("Admin Get Deposit Confirmations", False, "No admin token available", None)
             return None
             
         try:
             headers = {"Authorization": f"Bearer {self.admin_token}"}
-            response = self.session.get(f"{self.base_url}/admin/orders", headers=headers)
+            response = self.session.get(f"{self.base_url}/admin/deposit-confirmations", headers=headers)
             
             if response.status_code == 200:
                 data = response.json()
                 if data.get("success"):
-                    orders = data.get("orders", [])
+                    deposits = data.get("deposits", [])
                     
                     success_details = []
-                    success_details.append(f"Total orders in system: {len(orders)}")
+                    success_details.append(f"Total deposit confirmations in system: {len(deposits)}")
                     
-                    # Check for escrowStatus and depositRequired fields
-                    orders_with_escrow_status = 0
-                    orders_with_deposit_required = 0
-                    awaiting_deposit_orders = 0
+                    # Check for escrowStatus and depositRequired fields in deposit confirmations
+                    deposits_with_escrow_status = 0
+                    deposits_with_deposit_required = 0
+                    awaiting_deposit_confirmations = 0
                     
-                    for order in orders:
-                        escrow_status = order.get("escrowStatus")
-                        deposit_required = order.get("depositRequired")
+                    for deposit in deposits:
+                        escrow_status = deposit.get("escrowStatus")
+                        deposit_required = deposit.get("depositRequired")
+                        deposit_status = deposit.get("deposit_status")
                         
                         if escrow_status is not None:
-                            orders_with_escrow_status += 1
+                            deposits_with_escrow_status += 1
                         if deposit_required is not None:
-                            orders_with_deposit_required += 1
-                        if escrow_status == "awaiting_seller_deposit":
-                            awaiting_deposit_orders += 1
+                            deposits_with_deposit_required += 1
+                        if deposit_status == "pending":
+                            awaiting_deposit_confirmations += 1
                     
-                    success_details.append(f"Orders with escrowStatus: {orders_with_escrow_status}/{len(orders)}")
-                    success_details.append(f"Orders with depositRequired: {orders_with_deposit_required}/{len(orders)}")
-                    success_details.append(f"Orders awaiting seller deposit: {awaiting_deposit_orders}")
+                    success_details.append(f"Deposits with escrowStatus: {deposits_with_escrow_status}/{len(deposits)}")
+                    success_details.append(f"Deposits with depositRequired: {deposits_with_deposit_required}/{len(deposits)}")
+                    success_details.append(f"Pending deposit confirmations: {awaiting_deposit_confirmations}")
                     
-                    # Show sample orders
-                    if orders:
-                        success_details.append("Sample orders:")
-                        for i, order in enumerate(orders[:3]):
-                            order_id = order.get("id", "unknown")[:8]
-                            escrow_status = order.get("escrowStatus", "N/A")
-                            deposit_required = order.get("depositRequired", "N/A")
-                            total_amount = order.get("totalAmount", 0)
-                            success_details.append(f"   {i+1}. {order_id}: escrow={escrow_status}, deposit=${deposit_required}, total=${total_amount}")
+                    # Show sample deposits
+                    if deposits:
+                        success_details.append("Sample deposit confirmations:")
+                        for i, deposit in enumerate(deposits[:3]):
+                            order_id = deposit.get("orderId", "unknown")[:8]
+                            escrow_status = deposit.get("escrowStatus", "N/A")
+                            deposit_required = deposit.get("depositRequired", "N/A")
+                            deposit_status = deposit.get("deposit_status", "N/A")
+                            success_details.append(f"   {i+1}. Order {order_id}: escrow={escrow_status}, deposit=${deposit_required}, status={deposit_status}")
                     
-                    # Success if we can access orders and see the fields
-                    fix_working = len(orders) >= 0  # Even 0 orders is OK, means endpoint works
+                    # Success if we can access deposits and see the fields
+                    fix_working = len(deposits) >= 0  # Even 0 deposits is OK, means endpoint works
                     
                     self.log_test(
-                        "Admin Get Orders with Deposit Info", 
+                        "Admin Get Deposit Confirmations", 
                         fix_working, 
                         "; ".join(success_details),
                         {
-                            "total_orders": len(orders),
-                            "orders_with_escrow_status": orders_with_escrow_status,
-                            "orders_with_deposit_required": orders_with_deposit_required,
-                            "awaiting_deposit_orders": awaiting_deposit_orders,
-                            "sample_orders": orders[:5]
+                            "total_deposits": len(deposits),
+                            "deposits_with_escrow_status": deposits_with_escrow_status,
+                            "deposits_with_deposit_required": deposits_with_deposit_required,
+                            "awaiting_deposit_confirmations": awaiting_deposit_confirmations,
+                            "sample_deposits": deposits[:5]
                         }
                     )
                     
-                    return orders
+                    return deposits
                 else:
-                    self.log_test("Admin Get Orders with Deposit Info", False, "Response missing success=true", data)
+                    self.log_test("Admin Get Deposit Confirmations", False, "Response missing success=true", data)
             else:
-                self.log_test("Admin Get Orders with Deposit Info", False, f"HTTP {response.status_code}: {response.text}", None)
+                self.log_test("Admin Get Deposit Confirmations", False, f"HTTP {response.status_code}: {response.text}", None)
                 
         except Exception as e:
-            self.log_test("Admin Get Orders with Deposit Info", False, f"Exception: {str(e)}", None)
+            self.log_test("Admin Get Deposit Confirmations", False, f"Exception: {str(e)}", None)
         
         return None
 
