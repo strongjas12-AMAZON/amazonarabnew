@@ -105,6 +105,21 @@
 user_problem_statement: Build a Buyer Store Search & Store Detail system connected to Supabase, with STRICT access control so buyers can ONLY see products that a seller has explicitly added to their store. Buyers must NOT see the master product catalog. Additionally, ensure sellers can request payouts with required USDT TRC20 wallet addresses.
 
 backend:
+  - task: "Seller 80% Deposit Option Not Visible After Order - CRITICAL DATABASE COLUMN MISMATCH"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "user"
+        comment: "USER REPORTED: Sellers are unable to see the 80% deposit option on their dashboard after receiving an order."
+      - working: true
+        agent: "main"
+        comment: "ROOT CAUSE IDENTIFIED: Database column name mismatch between backend code and database schema. The escrow_deposit_system.sql migration created columns with camelCase names ('escrowStatus', 'depositRequired') but backend code was using snake_case names ('escrow_status', 'deposit_required'). This caused: 1) Order creation to NOT save escrow status and deposit amount, 2) Order fetching to return NULL for these fields, 3) Frontend condition order.escrowStatus === 'awaiting_seller_deposit' to NEVER be true, 4) Deposit UI to never display. FIX APPLIED: Updated ALL 16 occurrences in backend/server.py to use camelCase column names matching database schema. Changed: format_order_response() lines 292-293, order creation line 1914-1915, order updates lines 1962/2655/5516/5674/5741, order queries lines 5087/5179/5345/5669/5735, deposit endpoint lines 5120-5121/5348. Backend restarted successfully. NEW ORDERS will now correctly save escrowStatus='awaiting_seller_deposit' and depositRequired=$X.XX. Sellers will now see deposit option with QR code, wallet address, and two payment methods. Complete documentation in /app/SELLER_DEPOSIT_OPTION_FIX.md"
+
   - task: "Admin Deposit Confirmations - Show Both USDT and Wallet Balance Deposits"
     implemented: true
     working: true
