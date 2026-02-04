@@ -579,16 +579,14 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Comprehensive Backend API Audit - All Functionalities"
-    - "Admin Add Product Feature database schema fix"
-    - "Order creation stock validation issue"
+    - "Admin Deposit Confirmations - Show Both USDT and Wallet Balance Deposits"
   stuck_tasks: []
-  test_all: true
-  test_priority: "comprehensive_audit_complete"
+  test_all: false
+  test_priority: "high_first"
 
 agent_communication:
   - agent: "main"
-    message: "Implemented complete Buyer Store Search & Store Detail system with strict access control. CRITICAL SECURITY: Buyers can ONLY query store_products table, NOT product_catalog. RLS policies enforce this at database level. Created migration SQL, 8 backend APIs, and 2 frontend pages. IMPORTANT: User MUST run the migration SQL in Supabase before testing. Please test backend APIs first: 1) POST /api/admin/seed-catalog (admin auth required to seed 100 products), 2) GET /api/stores/search (public), 3) GET /api/stores/{id} (public), 4) GET /api/stores/{id}/products (public - this is the CRITICAL endpoint that enforces buyer access control). Test credentials: admin - support@arabshopping.org, testseller_new@test.com / TestPass123!, testbuyer@test.com / TestPass123!"
+    message: "FIX IMPLEMENTED for admin deposit confirmations not showing seller deposits. ISSUE: Admin endpoint was only filtering for usdt_payment method, missing internal_wallet deposits from wallet balance payments. CHANGES: 1) Backend: Updated GET /api/admin/deposit-confirmations to include both usdt_payment and internal_wallet methods. 2) Backend: Updated POST /seller/wallet/deposit-for-order to set deposit_status='pending' so wallet deposits require admin confirmation. 3) Backend: Updated confirm-deposit endpoint to handle both methods with refund logic for rejected wallet deposits. 4) Frontend: Updated AdminDashboard to display payment method badge (Wallet Balance vs USDT). 5) Database: Fixed existing record to show as pending. TEST FOCUS: Login as admin (support@arabshopping.org), navigate to Deposit Confirmations tab, verify the pending wallet balance deposit is visible (order b6229b1b..., amount $31.99, method: internal_wallet)."
   - agent: "testing"
     message: "COMPREHENSIVE END-TO-END AUDIT COMPLETE ✅ Tested ALL admin, buyer, and seller functionalities as requested in review. SUCCESS RATE: 91.1% (41/45 tests passed). AUTHENTICATION: ✅ Admin, seller, and buyer login working correctly. ADMIN FUNCTIONALITY: ✅ Dashboard access, product catalog CRUD (create/read/update/delete), order management, user management, payout requests, seller wallet recharge requests all working. BUYER FUNCTIONALITY: ✅ Product browsing (11 products from store_products NOT catalog), store system (3 stores, search/detail/products), shipping addresses (create/update), wallet functionality all working. SELLER FUNCTIONALITY: ✅ Catalog browsing, store management (add/update products), order center with status filtering, earnings calculation, wallet operations, TRC20 payout validation all working. CRITICAL VALIDATIONS PASSED: ✅ Buyers see store_products with store names (NOT catalog) ✅ Admin can manage product catalog and orders ✅ Seller order center functional ✅ TRC20 wallet validation working ✅ USDT deposit endpoints available ✅ Delivery confirmation working (no 'buyerId' error). ISSUES FOUND: ❌ Admin catalog clearing blocked by foreign key constraints (expected) ❌ Order completion endpoint returns 520 error (needs investigation) ❌ Order creation fails with 'productId' error (data format issue) ❌ Seller payout requests fail due to insufficient balance (expected) ❌ Database migration QUICK_FIX_DEPOSIT_COLUMNS.sql needs to be run (depositBalance/withdrawableBalance columns missing). OVERALL: Core marketplace functionality operational and secure. System enforces proper access control and all major features working correctly."
   - agent: "main"
