@@ -5506,9 +5506,57 @@ async def confirm_seller_deposit(
                 .eq('order_id', order_id)\
                 .execute()
             
+            # If wallet balance deposit was rejected, return the funds to seller's wallet
+            if deposit_method == 'wallet_balance':
+                try:
+                    seller_id = deposit.get('seller_id')
+                    deposit_amount = float(deposit.get('deposited_amount', 0))
+                    
+                    if seller_id and deposit_amount > 0:
+                        # Get seller wallet
+                        wallet_result = supabase_admin.table('seller_wallets')\
+                            .select('*')\
+                            .eq('userId', seller_id)\
+                            .execute()
+                        
+                        if wallet_result.data:
+                            wallet = wallet_result.data[0]
+                            current_balance = float(wallet.get('balance', 0))
+                            current_deposit_balance = float(wallet.get('depositBalance', 0))
+                            
+                            # Return funds: move from depositBalance back to balance
+                            new_balance = current_balance + deposit_amount
+                            new_deposit_balance = max(current_deposit_balance - deposit_amount, 0)
+                            
+                            supabase_admin.table('seller_wallets')\
+                                .update({
+                                    'balance': new_balance,
+                                    'depositBalance': new_deposit_balance,
+                                    'updatedAt': datetime.now(timezone.utc).isoformat()
+                                })\
+                                .eq('userId', seller_id)\
+                                .execute()
+                            
+                            # Record refund transaction
+                            supabase_admin.table('wallet_transactions').insert({
+                                'userId': seller_id,
+                                'userRole': 'seller',
+                                'type': 'recharge',  # Use recharge type for returning funds
+                                'amount': deposit_amount,
+                                'previousBalance': current_balance,
+                                'newBalance': new_balance,
+                                'orderId': order_id,
+                                'description': f'Deposit refund - rejected by admin for order {order_id[:8]}'
+                            }).execute()
+                            
+                            logging.info(f"Refunded ${deposit_amount:.2f} to seller {seller_id} for rejected deposit")
+                except Exception as e:
+                    logging.error(f"Failed to refund wallet balance deposit: {str(e)}")
+            
             # Send rejection email to seller
             try:
                 if RESEND_API_KEY and seller_info.get('email'):
+                    method_display = "USDT" if deposit_method == 'usdt_payment' else "wallet balance"
                     resend.Emails.send({
                         "from": SENDER_EMAIL,
                         "to": seller_info['email'],
@@ -5516,10 +5564,11 @@ async def confirm_seller_deposit(
                         "html": f"""
                         <h2>Deposit Payment Rejected</h2>
                         <p>Hello {seller_info.get('name', 'Seller')},</p>
-                        <p>Unfortunately, your USDT deposit payment for Order <strong>{order_id[:8]}</strong> could not be confirmed.</p>
+                        <p>Unfortunately, your {method_display} deposit payment for Order <strong>{order_id[:8]}</strong> could not be confirmed.</p>
                         <p><strong>Reason:</strong> {req.rejectionReason}</p>
-                        <p><strong>Transaction Hash:</strong> {deposit.get('transaction_hash')}</p>
-                        <p>Please verify the transaction details and submit again, or contact support if you believe this is an error.</p>
+                        <p><strong>Payment Method:</strong> {method_display.title()}</p>
+                        {f"<p><strong>Transaction Hash:</strong> {deposit.get('transaction_hash')}</p>" if deposit.get('transaction_hash') else ""}
+                        {"<p>Your wallet balance has been restored.</p>" if deposit_method == 'wallet_balance' else "<p>Please verify the transaction details and submit again, or contact support if you believe this is an error.</p>"}
                         """
                     })
             except Exception as e:
