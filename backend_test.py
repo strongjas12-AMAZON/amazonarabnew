@@ -599,11 +599,11 @@ class OrderCenterStatusUpdateTester:
         
         return None
 
-    def run_wallet_balance_deduction_test(self):
-        """Run the complete seller wallet balance deduction test"""
-        print("🔍 SELLER WALLET BALANCE DEDUCTION FIX VERIFICATION")
+    def run_order_center_status_test(self):
+        """Run the complete Order Center status update test"""
+        print("🔍 ORDER CENTER STATUS UPDATE AFTER DEPOSIT TESTING")
         print("=" * 70)
-        print(f"Testing fix for: Seller wallet balance not being deducted on 80% deposit")
+        print(f"Testing fix for: Order Center not showing 'Confirmation Awaiting Admin Review' status")
         print(f"Test order: {EXPECTED_ORDER_ID}")
         print(f"Expected deposit amount: ${EXPECTED_DEPOSIT_AMOUNT}")
         print(f"Expected initial balance: ${EXPECTED_INITIAL_BALANCE}")
@@ -626,13 +626,20 @@ class OrderCenterStatusUpdateTester:
         # Step 4: Test deposit for order (main fix)
         deposit_amount = self.test_deposit_for_order()
         
-        # Step 5: Check final wallet balance (verify deduction) - only if deposit was successful
+        # Step 5: Test Order Center status (KEY TEST - this is what the review is about)
+        if deposit_amount is not None and deposit_amount > 0:
+            order_center_result = self.test_order_center_status()
+        else:
+            print("\n⚠️  Skipping Order Center test - deposit test did not complete successfully")
+            order_center_result = None
+        
+        # Step 6: Check final wallet balance (verify deduction) - only if deposit was successful
         if deposit_amount is not None and deposit_amount > 0:
             final_balance = self.test_final_wallet_balance(deposit_amount)
         else:
             print("\n⚠️  Skipping balance deduction test - deposit test did not complete successfully")
         
-        # Step 6: Admin login and check deposit confirmations
+        # Step 7: Admin login and check deposit confirmations
         if self.test_admin_login():
             self.test_admin_deposit_confirmations()
         else:
