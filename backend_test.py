@@ -42,7 +42,7 @@ from typing import Dict, Any, Optional
 import time
 
 # Configuration
-BASE_URL = "https://repo-twin-2.preview.emergentagent.com/api"
+BASE_URL = "https://repo-duplicator-11.preview.emergentagent.com/api"
 
 # Test Credentials from review request
 ADMIN_EMAIL = "support@arabshopping.org"
