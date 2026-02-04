@@ -185,6 +185,40 @@ class SellerDepositVisibilityTester:
         
         return None
 
+    def test_create_test_seller_if_needed(self):
+        """Create test seller user if it doesn't exist"""
+        if not self.admin_token:
+            self.log_test("Create Test Seller", False, "No admin token available", None)
+            return False
+            
+        try:
+            # First try to login as seller to see if user exists
+            login_data = {"email": SELLER_EMAIL, "password": SELLER_PASSWORD}
+            response = self.session.post(f"{self.base_url}/auth/login", json=login_data)
+            
+            if response.status_code == 200:
+                # User exists and can login
+                self.log_test("Create Test Seller", True, f"Seller user {SELLER_EMAIL} already exists", None)
+                return True
+            
+            # User doesn't exist, try to create via setup-test-users endpoint
+            response = self.session.post(f"{self.base_url}/setup-test-users")
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    self.log_test("Create Test Seller", True, f"Test users created successfully", data)
+                    return True
+                else:
+                    self.log_test("Create Test Seller", False, "Setup test users failed", data)
+            else:
+                self.log_test("Create Test Seller", False, f"HTTP {response.status_code}: {response.text}", None)
+                
+        except Exception as e:
+            self.log_test("Create Test Seller", False, f"Exception: {str(e)}", None)
+        
+        return False
+
     def test_seller_login(self):
         """Test seller authentication"""
         try:
