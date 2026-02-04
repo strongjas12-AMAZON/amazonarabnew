@@ -5081,10 +5081,10 @@ async def get_orders_pending_deposit(current_user: dict = Depends(get_current_us
         if user_role != 'seller':
             raise HTTPException(status_code=403, detail="Seller access required")
         
-        # Get orders with escrow_status = 'awaiting_seller_deposit'
+        # Get orders with escrowStatus = 'awaiting_seller_deposit'
         orders_result = supabase_admin.table('orders')\
             .select('*, order_items(*, store_products(*, product_catalog(*), stores(*)))')\
-            .eq('escrow_status', 'awaiting_seller_deposit')\
+            .eq('escrowStatus', 'awaiting_seller_deposit')\
             .execute()
         
         if not orders_result.data:
