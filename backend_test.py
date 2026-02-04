@@ -838,54 +838,49 @@ class OrderStatusTransitionTester:
         
         return None
 
-    def run_order_center_status_test(self):
-        """Run the complete Order Center status update test"""
-        print("🔍 ORDER CENTER STATUS UPDATE AFTER DEPOSIT TESTING")
+    def run_order_status_transition_test(self):
+        """Run the complete Order Status Transition test"""
+        print("🔍 ORDER STATUS TRANSITION TESTING")
         print("=" * 70)
-        print(f"Testing fix for: Order Center not showing 'Confirmation Awaiting Admin Review' status")
-        print(f"Test order: {EXPECTED_ORDER_ID}")
-        print(f"Expected deposit amount: ${EXPECTED_DEPOSIT_AMOUNT}")
-        print(f"Expected initial balance: ${EXPECTED_INITIAL_BALANCE}")
+        print(f"Testing fix for: Order not moving from 'Pending Payment' to 'To Be Shipped' after admin confirms deposit")
+        print(f"Expected behavior: After admin confirms deposit, order_status should be 'to_be_shipped'")
         print("=" * 70)
         
         # Step 1: Verify the fix in backend code
         self.test_backend_code_fix_verification()
         
-        # Step 2: Seller login
-        if not self.test_seller_login():
-            print("\n❌ CRITICAL: Seller login failed - cannot proceed with testing")
+        # Step 2: Admin login
+        if not self.test_admin_login():
+            print("\n❌ CRITICAL: Admin login failed - cannot proceed with testing")
             return
         
-        # Step 3: Check initial wallet balance
-        initial_balance = self.test_initial_wallet_balance()
-        if initial_balance is None:
-            print("\n❌ CRITICAL: Could not retrieve initial wallet balance")
+        # Step 3: Get pending deposit confirmations
+        pending_deposit = self.test_admin_get_deposit_confirmations()
+        
+        if not pending_deposit:
+            print("\n⚠️  No pending deposits found - testing with mock scenario")
+            # We can still test the seller order center to see current state
+            if self.test_seller_login():
+                self.test_seller_order_center_status()
             return
         
-        # Step 4: Test deposit for order (main fix)
-        deposit_amount = self.test_deposit_for_order()
-        
-        # Step 5: Test Order Center structure (verify endpoint can handle depositInfo)
-        order_center_structure = self.test_order_center_depositinfo_structure()
-        
-        # Step 6: Test Order Center status (KEY TEST - this is what the review is about)
-        if deposit_amount is not None and deposit_amount > 0:
-            order_center_result = self.test_order_center_status()
+        # Step 4: Confirm the deposit (main test)
+        order_id = pending_deposit.get('orderId')
+        if order_id:
+            deposit_confirmed = self.test_admin_confirm_deposit(order_id)
+            
+            if deposit_confirmed:
+                # Step 5: Login as seller and check order center
+                if self.test_seller_login():
+                    # Wait a moment for the status to update
+                    time.sleep(2)
+                    self.test_seller_order_center_status(order_id)
+                else:
+                    print("\n❌ Seller login failed - cannot verify order status change")
+            else:
+                print("\n❌ Deposit confirmation failed - cannot test status transition")
         else:
-            print("\n⚠️  Skipping specific Order Center test - deposit test did not complete successfully")
-            order_center_result = None
-        
-        # Step 6: Check final wallet balance (verify deduction) - only if deposit was successful
-        if deposit_amount is not None and deposit_amount > 0:
-            final_balance = self.test_final_wallet_balance(deposit_amount)
-        else:
-            print("\n⚠️  Skipping balance deduction test - deposit test did not complete successfully")
-        
-        # Step 7: Admin login and check deposit confirmations
-        if self.test_admin_login():
-            self.test_admin_deposit_confirmations()
-        else:
-            print("\n⚠️  Admin login failed - skipping deposit confirmations check")
+            print("\n❌ No order ID found in pending deposit - cannot proceed")
         
         # Generate summary
         self.generate_summary()
