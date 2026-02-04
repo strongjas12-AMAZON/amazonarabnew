@@ -5666,12 +5666,12 @@ async def ship_order_by_platform(order_id: str, req: ShipByPlatformRequest, curr
         
         order = order_result.data[0]
         
-        if order.get('escrowStatus') != 'deposit_received':
+        if order.get('escrow_status') != 'deposit_received':
             raise HTTPException(status_code=400, detail="Order must have deposit received before shipping")
         
         # 2. Update order status to 'shipped'
         update_data = {
-            'escrowStatus': 'shipped'
+            'escrow_status': 'shipped'
         }
         
         # Note: Only updating escrow_status (orderStatus column doesn't exist in current schema)
