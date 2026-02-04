@@ -128,7 +128,7 @@ const OrderCenter = ({ onDepositSubmitted }) => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, []); // Remove all dependencies to prevent recreation
 
   // Fetch refunds
   const fetchRefunds = useCallback(async () => {
@@ -139,7 +139,7 @@ const OrderCenter = ({ onDepositSubmitted }) => {
     } catch (error) {
       console.error('Failed to fetch refunds:', error);
     }
-  }, []);
+  }, []); // Remove all dependencies to prevent recreation
 
   // NEW: Fetch wallet balance
   const fetchWalletBalance = async () => {
