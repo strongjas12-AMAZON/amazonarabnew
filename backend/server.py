@@ -1911,8 +1911,8 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
             'shipping_address_snapshot': req.shippingAddress,
             'created_at': datetime.now(timezone.utc).isoformat(),
             # NEW: Escrow + Deposit fields
-            'escrow_status': escrow_status,
-            'deposit_required': deposit_required
+            'escrowStatus': escrow_status,
+            'depositRequired': deposit_required
         }
         
         order_result = supabase_admin.table('orders').insert(order_data).execute()
