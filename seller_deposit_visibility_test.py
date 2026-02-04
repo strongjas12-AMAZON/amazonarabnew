@@ -49,7 +49,7 @@ SELLER_PASSWORD = "TestPass123!"
 BUYER_EMAIL = "testbuyer@test.com"  
 BUYER_PASSWORD = "TestPass123!"
 ADMIN_EMAIL = "support@arabshopping.org"
-ADMIN_PASSWORD = "TestPass123!"
+ADMIN_PASSWORD = "Hadi1247@"  # Correct admin password from backend
 
 class SellerDepositVisibilityTester:
     def __init__(self):
