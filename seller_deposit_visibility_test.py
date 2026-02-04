@@ -44,7 +44,7 @@ import time
 BASE_URL = "https://repo-duplicator-11.preview.emergentagent.com/api"
 
 # Test Credentials from review request
-SELLER_EMAIL = "testseller_new@test.com"
+SELLER_EMAIL = "testseller@test.com"
 SELLER_PASSWORD = "TestPass123!"
 BUYER_EMAIL = "testbuyer@test.com"  
 BUYER_PASSWORD = "TestPass123!"
