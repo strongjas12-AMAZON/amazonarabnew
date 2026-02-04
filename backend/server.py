@@ -5189,7 +5189,7 @@ async def deposit_for_order(req: SellerDepositRequest, current_user: dict = Depe
         deposit_update_data = {
             'deposited_amount': required_deposit,
             'is_deposit_complete': False,  # Wait for admin confirmation
-            'deposit_method': 'wallet_balance',
+            'deposit_method': 'internal_wallet',  # Use internal_wallet to match DB constraint
             'deposit_status': 'pending',
             'submitted_at': datetime.now(timezone.utc).isoformat()
         }
