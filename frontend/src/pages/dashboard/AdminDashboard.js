@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../lib/api';
+import { supabase } from '../../lib/supabase';
 import { toast } from 'sonner';
 import { 
   Users, Package, ShoppingCart, Code, CheckCircle, XCircle, Eye, 
