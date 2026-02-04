@@ -277,57 +277,70 @@ const OrderCenter = ({ onDepositSubmitted }) => {
   useEffect(() => {
     if (!user) return;
 
-    // Create a stable function that always fetches all orders
-    // The filtering happens on the frontend anyway
+    // Create a stable function that uses debounced fetch
     const refreshOrders = () => {
-      // Fetch all orders without status filter
-      // Let frontend filtering handle the display
-      fetchOrders(null);
+      // Fetch all orders without status filter, use debounced version
+      debouncedFetchOrders(null, false);
     };
 
+    console.log('Setting up real-time subscriptions...');
+
     const ordersChannel = supabase
-      .channel('orders-changes')
+      .channel('seller-orders-changes')
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'orders'
       }, (payload) => {
-        console.log('Order update:', payload);
+        console.log('Order update received:', payload.eventType, payload.new?.id);
         refreshOrders();
       })
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Orders channel subscription status:', status);
+      });
 
     const shipmentsChannel = supabase
-      .channel('shipments-changes')
+      .channel('seller-shipments-changes')
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'shipments'
       }, (payload) => {
-        console.log('Shipment update:', payload);
+        console.log('Shipment update received:', payload.eventType);
         refreshOrders();
       })
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Shipments channel subscription status:', status);
+      });
 
     const refundsChannel = supabase
-      .channel('refunds-changes')
+      .channel('seller-refunds-changes')
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'refunds'
       }, (payload) => {
-        console.log('Refund update:', payload);
+        console.log('Refund update received:', payload.eventType);
         fetchRefunds();
         refreshOrders();
       })
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Refunds channel subscription status:', status);
+      });
 
+    // Cleanup function
     return () => {
+      console.log('Cleaning up real-time subscriptions...');
       supabase.removeChannel(ordersChannel);
       supabase.removeChannel(shipmentsChannel);
       supabase.removeChannel(refundsChannel);
+      
+      // Clear any pending fetch timeout
+      if (fetchTimeoutRef.current) {
+        clearTimeout(fetchTimeoutRef.current);
+      }
     };
-  }, [user]); // Only depend on user - subscription stays stable
+  }, [user, debouncedFetchOrders, fetchRefunds]); // Stable dependencies
 
   // Handle ship order
   const handleShipOrder = async () => {
