@@ -20,8 +20,8 @@ Moved the USDT Deposit Modal inside the main container div (before line 1196's `
 - ✅ All services healthy
 
 ### Test URLs:
-- Frontend: https://git-mirror-8.preview.emergentagent.com
-- Backend API: https://git-mirror-8.preview.emergentagent.com/api/categories
+- Frontend: https://repo-copy-3.preview.emergentagent.com
+- Backend API: https://repo-copy-3.preview.emergentagent.com/api/categories
 
 ---
 

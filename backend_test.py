@@ -11,7 +11,7 @@ from typing import Dict, Any, Optional
 import time
 
 # Configuration
-BASE_URL = "https://git-mirror-8.preview.emergentagent.com/api"
+BASE_URL = "https://repo-copy-3.preview.emergentagent.com/api"
 
 # Test Credentials from review request
 ADMIN_EMAIL = "support@arabshopping.org"
