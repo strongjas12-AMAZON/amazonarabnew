@@ -5368,17 +5368,17 @@ async def submit_usdt_deposit_payment(
 @api_router.get("/admin/deposit-confirmations")
 async def get_pending_deposit_confirmations(current_user: dict = Depends(get_current_user)):
     """
-    Admin endpoint to view all pending USDT deposit confirmations
+    Admin endpoint to view all pending deposit confirmations (both USDT and wallet balance)
     """
     try:
         if current_user.get('role') != 'admin':
             raise HTTPException(status_code=403, detail="Admin access required")
         
-        # Get all pending deposit confirmations
+        # Get all pending deposit confirmations (both USDT payment and wallet balance)
         deposits_result = supabase_admin.table('order_deposits')\
             .select('*, orders(id, total_amount, created_at, buyer_id), users!seller_id(id, name, email)')\
-            .eq('deposit_method', 'usdt_payment')\
             .eq('deposit_status', 'pending')\
+            .in_('deposit_method', ['usdt_payment', 'wallet_balance'])\
             .order('submitted_at', desc=True)\
             .execute()
         
@@ -5399,7 +5399,8 @@ async def get_pending_deposit_confirmations(current_user: dict = Depends(get_cur
                 'transactionHash': deposit.get('transaction_hash'),
                 'notes': deposit.get('payment_notes'),
                 'submittedAt': deposit.get('submitted_at'),
-                'orderCreatedAt': order_info.get('created_at')
+                'orderCreatedAt': order_info.get('created_at'),
+                'depositMethod': deposit.get('deposit_method', 'unknown')  # Include deposit method for UI display
             })
         
         return {
