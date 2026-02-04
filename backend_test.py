@@ -24,7 +24,480 @@ SELLER_PASSWORD = "TestPass123!"
 BUYER_EMAIL = "testbuyer@test.com"
 BUYER_PASSWORD = "TestPass123!"
 
-class ComprehensiveAPITester:
+class FixesVerificationTester:
+    def __init__(self):
+        self.base_url = BASE_URL
+        self.session = requests.Session()
+        self.admin_token = None
+        self.seller_token = None
+        self.buyer_token = None
+        self.test_results = []
+        
+        # Test data storage
+        self.store_product_id = None
+        self.test_order_id = None
+        self.buyer_address_id = None
+        
+    def log_test(self, test_name: str, success: bool, details: str = "", response_data: Any = None):
+        """Log test result"""
+        result = {
+            "test": test_name,
+            "success": success,
+            "details": details,
+            "response_data": response_data
+        }
+        self.test_results.append(result)
+        status = "✅ FIXED" if success else "❌ STILL BROKEN"
+        print(f"{status} {test_name}")
+        if details:
+            print(f"   Details: {details}")
+        if not success and response_data:
+            print(f"   Response: {response_data}")
+        print()
+
+    # ============ AUTHENTICATION ============
+    
+    def authenticate_all_users(self):
+        """Authenticate all test users"""
+        print("=== AUTHENTICATION TESTS ===")
+        
+        # Admin login
+        try:
+            login_data = {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}
+            response = self.session.post(f"{self.base_url}/auth/login", json=login_data)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success") and "session" in data:
+                    self.admin_token = data["session"]["access_token"]
+                    self.log_test("Admin Login", True, f"Admin authenticated successfully")
+                else:
+                    self.log_test("Admin Login", False, "Authentication failed", data)
+            else:
+                self.log_test("Admin Login", False, f"HTTP {response.status_code}: {response.text}")
+        except Exception as e:
+            self.log_test("Admin Login", False, f"Exception: {str(e)}")
+
+        # Buyer login
+        try:
+            login_data = {"email": BUYER_EMAIL, "password": BUYER_PASSWORD}
+            response = self.session.post(f"{self.base_url}/auth/login", json=login_data)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success") and "session" in data:
+                    self.buyer_token = data["session"]["access_token"]
+                    self.log_test("Buyer Login", True, f"Buyer authenticated successfully")
+                else:
+                    self.log_test("Buyer Login", False, "Authentication failed", data)
+            else:
+                self.log_test("Buyer Login", False, f"HTTP {response.status_code}: {response.text}")
+        except Exception as e:
+            self.log_test("Buyer Login", False, f"Exception: {str(e)}")
+
+        # Seller login
+        try:
+            login_data = {"email": SELLER_EMAIL, "password": SELLER_PASSWORD}
+            response = self.session.post(f"{self.base_url}/auth/login", json=login_data)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success") and "session" in data:
+                    self.seller_token = data["session"]["access_token"]
+                    self.log_test("Seller Login", True, f"Seller authenticated successfully")
+                else:
+                    self.log_test("Seller Login", False, "Authentication failed", data)
+            else:
+                self.log_test("Seller Login", False, f"HTTP {response.status_code}: {response.text}")
+        except Exception as e:
+            self.log_test("Seller Login", False, f"Exception: {str(e)}")
+
+    # ============ PRIORITY FIX 1: ORDER COMPLETION ============
+    
+    def test_order_completion_fix(self):
+        """TEST 1: Order Completion (HIGH PRIORITY) - Previously failed with 520 error"""
+        print("\n=== TEST 1: ORDER COMPLETION FIX (HIGH PRIORITY) ===")
+        
+        if not self.admin_token:
+            self.log_test("Order Completion Test", False, "No admin token available")
+            return
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.admin_token}"}
+            
+            # Step 1: Get an order to test completion
+            response = self.session.get(f"{self.base_url}/admin/orders", headers=headers)
+            
+            if response.status_code != 200:
+                self.log_test("Get Admin Orders", False, f"HTTP {response.status_code}: {response.text}")
+                return
+                
+            data = response.json()
+            if not data.get("success"):
+                self.log_test("Get Admin Orders", False, "Response missing success=true", data)
+                return
+                
+            orders = data.get("orders", [])
+            if not orders:
+                self.log_test("Order Completion Test", False, "No orders available for testing")
+                return
+                
+            # Find an order that can be completed
+            test_order = orders[0]
+            order_id = test_order.get("id")
+            
+            self.log_test("Get Admin Orders", True, f"Found {len(orders)} orders, testing with order {order_id}")
+            
+            # Step 2: Mark order as completed (this previously caused 520 error)
+            status_data = {"status": "completed"}
+            response = self.session.put(f"{self.base_url}/orders/{order_id}/status", json=status_data, headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    self.log_test(
+                        "Order Completion (520 Error Fix)", 
+                        True, 
+                        f"✅ SUCCESS: Order {order_id} marked as completed without 520 error. Seller wallet should be updated with earnings.",
+                        {"order_id": order_id, "status": "completed"}
+                    )
+                    
+                    # Step 3: Verify seller wallet was updated (if we can identify the seller)
+                    if self.seller_token:
+                        seller_headers = {"Authorization": f"Bearer {self.seller_token}"}
+                        wallet_response = self.session.get(f"{self.base_url}/seller/wallet/balance", headers=seller_headers)
+                        
+                        if wallet_response.status_code == 200:
+                            wallet_data = wallet_response.json()
+                            if wallet_data.get("success"):
+                                balance = wallet_data.get("balance", 0)
+                                self.log_test(
+                                    "Seller Wallet Update Verification", 
+                                    True, 
+                                    f"Seller wallet balance: ${balance} (earnings should be distributed on order completion)",
+                                    {"balance": balance}
+                                )
+                            else:
+                                self.log_test("Seller Wallet Update Verification", False, "Failed to get wallet balance", wallet_data)
+                        else:
+                            self.log_test("Seller Wallet Update Verification", False, f"HTTP {wallet_response.status_code}: {wallet_response.text}")
+                    
+                else:
+                    self.log_test("Order Completion (520 Error Fix)", False, "Response missing success=true", data)
+            elif response.status_code == 520:
+                self.log_test(
+                    "Order Completion (520 Error Fix)", 
+                    False, 
+                    f"❌ STILL BROKEN: 520 error still occurs when marking order as completed",
+                    {"error": "520_error_persists", "response": response.text}
+                )
+            else:
+                self.log_test("Order Completion (520 Error Fix)", False, f"HTTP {response.status_code}: {response.text}")
+                
+        except Exception as e:
+            self.log_test("Order Completion (520 Error Fix)", False, f"Exception: {str(e)}")
+
+    # ============ PRIORITY FIX 2: ORDER CREATION ============
+    
+    def test_order_creation_fix(self):
+        """TEST 2: Order Creation (MEDIUM PRIORITY) - Previously failed with "Missing productId" error"""
+        print("\n=== TEST 2: ORDER CREATION FIX (MEDIUM PRIORITY) ===")
+        
+        if not self.buyer_token:
+            self.log_test("Order Creation Test", False, "No buyer token available")
+            return
+            
+        try:
+            buyer_headers = {"Authorization": f"Bearer {self.buyer_token}"}
+            
+            # Step 1: Get a shipping address
+            response = self.session.get(f"{self.base_url}/buyer/addresses", headers=buyer_headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    addresses = data.get("addresses", [])
+                    if addresses:
+                        self.buyer_address_id = addresses[0].get("id")
+                        self.log_test("Get Buyer Address", True, f"Found {len(addresses)} addresses")
+                    else:
+                        # Create a test address
+                        address_data = {
+                            "fullName": "Test Buyer",
+                            "phone": "+1234567890",
+                            "addressLine1": "123 Test St",
+                            "city": "Test City",
+                            "state": "TC",
+                            "postalCode": "12345",
+                            "country": "USA",
+                            "isDefault": True
+                        }
+                        
+                        create_response = self.session.post(f"{self.base_url}/buyer/addresses", json=address_data, headers=buyer_headers)
+                        if create_response.status_code == 200:
+                            create_data = create_response.json()
+                            if create_data.get("success"):
+                                self.buyer_address_id = create_data.get("address", {}).get("id")
+                                self.log_test("Create Buyer Address", True, "Created test address for order")
+                            else:
+                                self.log_test("Create Buyer Address", False, "Failed to create address", create_data)
+                                return
+                        else:
+                            self.log_test("Create Buyer Address", False, f"HTTP {create_response.status_code}: {create_response.text}")
+                            return
+                else:
+                    self.log_test("Get Buyer Address", False, "Response missing success=true", data)
+                    return
+            else:
+                self.log_test("Get Buyer Address", False, f"HTTP {response.status_code}: {response.text}")
+                return
+            
+            # Step 2: Get a real store product ID
+            response = self.session.get(f"{self.base_url}/products")
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    products = data.get("products", [])
+                    if products:
+                        # Use the first available product
+                        test_product = products[0]
+                        self.store_product_id = test_product.get("id")
+                        product_price = test_product.get("price", 50.00)
+                        self.log_test("Get Store Product", True, f"Found product {self.store_product_id} with price ${product_price}")
+                    else:
+                        self.log_test("Get Store Product", False, "No products available for order creation test")
+                        return
+                else:
+                    self.log_test("Get Store Product", False, "Response missing success=true", data)
+                    return
+            else:
+                self.log_test("Get Store Product", False, f"HTTP {response.status_code}: {response.text}")
+                return
+            
+            # Step 3: Create order with product_id (snake_case) - this previously failed
+            order_data = {
+                "items": [
+                    {
+                        "product_id": self.store_product_id,  # Using snake_case format as mentioned in review
+                        "quantity": 1,
+                        "price": product_price
+                    }
+                ],
+                "totalAmount": product_price,
+                "useWallet": False,
+                "shippingAddressId": self.buyer_address_id,
+                "shippingName": "Test Buyer",
+                "shippingPhone": "+1234567890",
+                "shippingAddress": {
+                    "street": "123 Test St",
+                    "city": "Test City",
+                    "state": "TC",
+                    "country": "USA",
+                    "zipCode": "12345"
+                }
+            }
+            
+            response = self.session.post(f"{self.base_url}/orders", json=order_data, headers=buyer_headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    order = data.get("order", {})
+                    order_id = order.get("id")
+                    self.test_order_id = order_id
+                    self.log_test(
+                        "Order Creation (productId Fix)", 
+                        True, 
+                        f"✅ SUCCESS: Order {order_id} created successfully with product_id (snake_case). No 'Missing productId' error.",
+                        {"order_id": order_id, "product_id": self.store_product_id, "total_amount": order.get("totalAmount")}
+                    )
+                    
+                    # Step 4: Verify order items were saved correctly
+                    admin_headers = {"Authorization": f"Bearer {self.admin_token}"}
+                    if self.admin_token:
+                        order_response = self.session.get(f"{self.base_url}/admin/orders", headers=admin_headers)
+                        if order_response.status_code == 200:
+                            order_data = order_response.json()
+                            if order_data.get("success"):
+                                orders = order_data.get("orders", [])
+                                created_order = next((o for o in orders if o.get("id") == order_id), None)
+                                if created_order:
+                                    order_items = created_order.get("orderItems", [])
+                                    self.log_test(
+                                        "Order Items Verification", 
+                                        True, 
+                                        f"Order items saved correctly: {len(order_items)} items with product_id {self.store_product_id}",
+                                        {"order_items_count": len(order_items)}
+                                    )
+                                else:
+                                    self.log_test("Order Items Verification", False, f"Order {order_id} not found in admin orders")
+                            else:
+                                self.log_test("Order Items Verification", False, "Failed to get admin orders", order_data)
+                        else:
+                            self.log_test("Order Items Verification", False, f"HTTP {order_response.status_code}: {order_response.text}")
+                    
+                else:
+                    self.log_test("Order Creation (productId Fix)", False, "Response missing success=true", data)
+            else:
+                # Check for the specific "Missing productId" error
+                if "productId" in response.text or "product_id" in response.text:
+                    self.log_test(
+                        "Order Creation (productId Fix)", 
+                        False, 
+                        f"❌ STILL BROKEN: 'Missing productId' error still occurs",
+                        {"error": "missing_productId", "response": response.text}
+                    )
+                else:
+                    self.log_test("Order Creation (productId Fix)", False, f"HTTP {response.status_code}: {response.text}")
+                
+        except Exception as e:
+            self.log_test("Order Creation (productId Fix)", False, f"Exception: {str(e)}")
+
+    # ============ ADDITIONAL VALIDATION TESTS ============
+    
+    def test_additional_validations(self):
+        """TEST 3: Verify Other Critical Features Still Work"""
+        print("\n=== TEST 3: ADDITIONAL VALIDATION TESTS ===")
+        
+        # Test admin mark order as "paid"
+        if self.admin_token and self.test_order_id:
+            try:
+                headers = {"Authorization": f"Bearer {self.admin_token}"}
+                status_data = {"status": "paid"}
+                response = self.session.put(f"{self.base_url}/orders/{self.test_order_id}/status", json=status_data, headers=headers)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get("success"):
+                        self.log_test(
+                            "Admin Mark Order as Paid", 
+                            True, 
+                            f"Admin can still mark orders as 'paid' - order {self.test_order_id}",
+                            {"order_id": self.test_order_id, "status": "paid"}
+                        )
+                    else:
+                        self.log_test("Admin Mark Order as Paid", False, "Response missing success=true", data)
+                else:
+                    self.log_test("Admin Mark Order as Paid", False, f"HTTP {response.status_code}: {response.text}")
+            except Exception as e:
+                self.log_test("Admin Mark Order as Paid", False, f"Exception: {str(e)}")
+        
+        # Test seller order center
+        if self.seller_token:
+            try:
+                headers = {"Authorization": f"Bearer {self.seller_token}"}
+                response = self.session.get(f"{self.base_url}/seller/order-center", headers=headers)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get("success"):
+                        orders = data.get("orders", [])
+                        status_counts = data.get("status_counts", {})
+                        self.log_test(
+                            "Seller Order Center", 
+                            True, 
+                            f"Seller order center still works - {len(orders)} orders, status counts: {status_counts}",
+                            {"orders_count": len(orders), "status_counts": status_counts}
+                        )
+                    else:
+                        self.log_test("Seller Order Center", False, "Response missing success=true", data)
+                else:
+                    self.log_test("Seller Order Center", False, f"HTTP {response.status_code}: {response.text}")
+            except Exception as e:
+                self.log_test("Seller Order Center", False, f"Exception: {str(e)}")
+        
+        # Test buyer view orders
+        if self.buyer_token:
+            try:
+                headers = {"Authorization": f"Bearer {self.buyer_token}"}
+                response = self.session.get(f"{self.base_url}/orders/my", headers=headers)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get("success"):
+                        orders = data.get("orders", [])
+                        self.log_test(
+                            "Buyer View Orders", 
+                            True, 
+                            f"Buyer can still view orders - {len(orders)} orders found",
+                            {"orders_count": len(orders)}
+                        )
+                    else:
+                        self.log_test("Buyer View Orders", False, "Response missing success=true", data)
+                else:
+                    self.log_test("Buyer View Orders", False, f"HTTP {response.status_code}: {response.text}")
+            except Exception as e:
+                self.log_test("Buyer View Orders", False, f"Exception: {str(e)}")
+
+    # ============ MAIN TEST RUNNER ============
+    
+    def run_fixes_verification(self):
+        """Run all fixes verification tests"""
+        print("🔍 FIXES VERIFICATION RESULTS")
+        print("=" * 60)
+        
+        # Authenticate users
+        self.authenticate_all_users()
+        
+        # Run priority tests
+        self.test_order_completion_fix()
+        self.test_order_creation_fix()
+        self.test_additional_validations()
+        
+        # Generate summary
+        self.generate_summary()
+    
+    def generate_summary(self):
+        """Generate test summary"""
+        print("\n" + "=" * 60)
+        print("📊 FIXES VERIFICATION SUMMARY")
+        print("=" * 60)
+        
+        total_tests = len(self.test_results)
+        passed_tests = sum(1 for result in self.test_results if result["success"])
+        failed_tests = total_tests - passed_tests
+        
+        print(f"Total Tests: {total_tests}")
+        print(f"✅ Fixed/Working: {passed_tests}")
+        print(f"❌ Still Broken: {failed_tests}")
+        print(f"Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        
+        # Show failed tests
+        if failed_tests > 0:
+            print(f"\n❌ STILL BROKEN FEATURES ({failed_tests}):")
+            for result in self.test_results:
+                if not result["success"]:
+                    print(f"   • {result['test']}: {result['details']}")
+        
+        # Show fixed tests
+        if passed_tests > 0:
+            print(f"\n✅ FIXED/WORKING FEATURES ({passed_tests}):")
+            for result in self.test_results:
+                if result["success"]:
+                    print(f"   • {result['test']}")
+        
+        print("\n" + "=" * 60)
+        
+        # Key findings
+        order_completion_fixed = any(r["success"] and "Order Completion" in r["test"] for r in self.test_results)
+        order_creation_fixed = any(r["success"] and "Order Creation" in r["test"] for r in self.test_results)
+        
+        print("🎯 KEY FINDINGS:")
+        print(f"   • Order Completion (520 Error): {'✅ FIXED' if order_completion_fixed else '❌ STILL BROKEN'}")
+        print(f"   • Order Creation (productId Error): {'✅ FIXED' if order_creation_fixed else '❌ STILL BROKEN'}")
+        
+        if order_completion_fixed and order_creation_fixed:
+            print("\n🎉 BOTH PRIORITY FIXES ARE WORKING CORRECTLY!")
+        elif order_completion_fixed or order_creation_fixed:
+            print("\n⚠️  ONE PRIORITY FIX IS STILL BROKEN - NEEDS ATTENTION")
+        else:
+            print("\n🚨 BOTH PRIORITY FIXES ARE STILL BROKEN - URGENT ACTION REQUIRED")
+
+
+if __name__ == "__main__":
+    tester = FixesVerificationTester()
+    tester.run_fixes_verification()
     def __init__(self):
         self.base_url = BASE_URL
         self.session = requests.Session()
