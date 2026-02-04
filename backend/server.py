@@ -1959,7 +1959,7 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
         if req.useWallet or payment_status == 'paid':
             # Update order to awaiting_seller_deposit
             supabase_admin.table('orders').update({
-                'escrowStatus': 'awaiting_seller_deposit'
+                'escrow_status': 'awaiting_seller_deposit'
             }).eq('id', order_id).execute()
             
             # Record platform balance transaction (buyer payment received)
