@@ -1,10 +1,18 @@
 #!/usr/bin/env python3
 """
-FIXES VERIFICATION TESTING - Arab Shopping Platform
-RE-TEST FIXED ISSUES - Verify the two backend fixes are working correctly:
+ADMIN DEPOSIT CONFIRMATIONS TESTING - Arab Shopping Platform
+TEST SPECIFIC FIX: Admin Deposit Confirmations not showing seller deposits
 
-1. Order Completion (HIGH PRIORITY) - Previously failed with 520 error
-2. Order Creation (MEDIUM PRIORITY) - Previously failed with "Missing productId" error
+ISSUE: When sellers submit payment proof or pay via wallet balance, admin was not seeing 
+these requests in the deposit confirmation section.
+
+TEST SCENARIO:
+1. Login as admin (support@arabshopping.org / TestPass123!)
+2. Call GET /api/admin/deposit-confirmations
+3. Verify response includes pending deposits with both methods:
+   - deposit_method: 'usdt_payment' (if any)
+   - deposit_method: 'internal_wallet' (wallet balance payments)
+4. Test confirm-deposit endpoint
 """
 
 import requests
