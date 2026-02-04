@@ -99,6 +99,224 @@ class SellerWalletBalanceDeductionTester:
             self.log_test("Seller Login", False, f"Exception: {str(e)}", None)
         return False
 
+    def test_admin_login(self):
+        """Test admin authentication with correct credentials"""
+        try:
+            login_data = {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}
+            response = self.session.post(f"{self.base_url}/auth/login", json=login_data)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success") and "session" in data and "user" in data:
+                    session = data["session"]
+                    user = data["user"]
+                    
+                    if session and "access_token" in session and user.get("role") == "admin":
+                        self.admin_token = session["access_token"]
+                        self.log_test(
+                            "Admin Login", 
+                            True, 
+                            f"Successfully logged in as admin: {user.get('email')}",
+                            {"user_role": user.get("role"), "user_email": user.get("email")}
+                        )
+                        return True
+                    else:
+                        self.log_test("Admin Login", False, f"Invalid role or missing token. Role: {user.get('role')}", data)
+                else:
+                    self.log_test("Admin Login", False, "Response missing required fields", data)
+            else:
+                self.log_test("Admin Login", False, f"HTTP {response.status_code}: {response.text}", None)
+        except Exception as e:
+            self.log_test("Admin Login", False, f"Exception: {str(e)}", None)
+        return False
+
+    def test_initial_wallet_balance(self):
+        """Test GET /api/seller/wallet/balance - Check initial balance"""
+        if not self.seller_token:
+            self.log_test("Initial Wallet Balance Check", False, "No seller token available", None)
+            return None
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            response = self.session.get(f"{self.base_url}/seller/wallet/balance", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    balance = data.get("balance", 0)
+                    self.initial_balance = float(balance)
+                    
+                    # Check if balance matches expected initial balance
+                    balance_matches = abs(self.initial_balance - EXPECTED_INITIAL_BALANCE) < 0.01
+                    
+                    self.log_test(
+                        "Initial Wallet Balance Check", 
+                        True, 
+                        f"Current wallet balance: ${self.initial_balance:.2f} (Expected: ${EXPECTED_INITIAL_BALANCE:.2f})",
+                        {
+                            "current_balance": self.initial_balance,
+                            "expected_balance": EXPECTED_INITIAL_BALANCE,
+                            "balance_matches_expected": balance_matches,
+                            "full_response": data
+                        }
+                    )
+                    return self.initial_balance
+                else:
+                    self.log_test("Initial Wallet Balance Check", False, "Response missing success=true", data)
+            else:
+                self.log_test("Initial Wallet Balance Check", False, f"HTTP {response.status_code}: {response.text}", None)
+                
+        except Exception as e:
+            self.log_test("Initial Wallet Balance Check", False, f"Exception: {str(e)}", None)
+        
+        return None
+
+    def test_deposit_for_order(self):
+        """Test POST /api/seller/wallet/deposit-for-order - Main fix verification"""
+        if not self.seller_token:
+            self.log_test("Deposit For Order", False, "No seller token available", None)
+            return None
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            deposit_data = {"orderId": EXPECTED_ORDER_ID}
+            
+            response = self.session.post(f"{self.base_url}/seller/wallet/deposit-for-order", json=deposit_data, headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    deposit_amount = data.get("depositAmount", 0)
+                    deposit_amount_float = float(deposit_amount)
+                    
+                    # Check if deposit amount is correct (not $0)
+                    amount_correct = abs(deposit_amount_float - EXPECTED_DEPOSIT_AMOUNT) < 0.01
+                    amount_not_zero = deposit_amount_float > 0
+                    
+                    success_details = []
+                    success_details.append(f"Deposit amount: ${deposit_amount_float:.2f}")
+                    success_details.append(f"Expected amount: ${EXPECTED_DEPOSIT_AMOUNT:.2f}")
+                    
+                    if amount_not_zero:
+                        success_details.append("✅ Amount is NOT $0 (fix working)")
+                    else:
+                        success_details.append("❌ Amount is $0 (fix NOT working)")
+                        
+                    if amount_correct:
+                        success_details.append("✅ Amount matches expected value")
+                    else:
+                        success_details.append("⚠️  Amount differs from expected value")
+                    
+                    # The main fix is working if amount is not zero
+                    fix_working = amount_not_zero
+                    
+                    self.log_test(
+                        "Deposit For Order", 
+                        fix_working, 
+                        "; ".join(success_details),
+                        {
+                            "deposit_amount": deposit_amount_float,
+                            "expected_amount": EXPECTED_DEPOSIT_AMOUNT,
+                            "amount_not_zero": amount_not_zero,
+                            "amount_correct": amount_correct,
+                            "order_id": EXPECTED_ORDER_ID,
+                            "full_response": data
+                        }
+                    )
+                    
+                    return deposit_amount_float
+                else:
+                    self.log_test("Deposit For Order", False, "Response missing success=true", data)
+            else:
+                self.log_test("Deposit For Order", False, f"HTTP {response.status_code}: {response.text}", None)
+                
+        except Exception as e:
+            self.log_test("Deposit For Order", False, f"Exception: {str(e)}", None)
+        
+        return None
+
+    def test_final_wallet_balance(self, deposit_amount):
+        """Test wallet balance after deposit - Verify deduction occurred"""
+        if not self.seller_token:
+            self.log_test("Final Wallet Balance Check", False, "No seller token available", None)
+            return None
+            
+        if self.initial_balance is None:
+            self.log_test("Final Wallet Balance Check", False, "No initial balance recorded", None)
+            return None
+            
+        if deposit_amount is None:
+            self.log_test("Final Wallet Balance Check", False, "No deposit amount recorded", None)
+            return None
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            
+            # Wait a moment for the balance to update
+            time.sleep(2)
+            
+            response = self.session.get(f"{self.base_url}/seller/wallet/balance", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    balance = data.get("balance", 0)
+                    self.final_balance = float(balance)
+                    
+                    # Calculate expected final balance
+                    expected_final = self.initial_balance - deposit_amount
+                    actual_deduction = self.initial_balance - self.final_balance
+                    
+                    # Check if deduction occurred correctly
+                    deduction_correct = abs(actual_deduction - deposit_amount) < 0.01
+                    deduction_occurred = actual_deduction > 0
+                    
+                    success_details = []
+                    success_details.append(f"Initial balance: ${self.initial_balance:.2f}")
+                    success_details.append(f"Final balance: ${self.final_balance:.2f}")
+                    success_details.append(f"Actual deduction: ${actual_deduction:.2f}")
+                    success_details.append(f"Expected deduction: ${deposit_amount:.2f}")
+                    
+                    if deduction_occurred:
+                        success_details.append("✅ Balance was deducted (fix working)")
+                    else:
+                        success_details.append("❌ No deduction occurred (fix NOT working)")
+                        
+                    if deduction_correct:
+                        success_details.append("✅ Deduction amount is correct")
+                    else:
+                        success_details.append("⚠️  Deduction amount differs from expected")
+                    
+                    # The fix is working if any deduction occurred
+                    fix_working = deduction_occurred
+                    
+                    self.log_test(
+                        "Final Wallet Balance Check", 
+                        fix_working, 
+                        "; ".join(success_details),
+                        {
+                            "initial_balance": self.initial_balance,
+                            "final_balance": self.final_balance,
+                            "expected_final_balance": expected_final,
+                            "actual_deduction": actual_deduction,
+                            "expected_deduction": deposit_amount,
+                            "deduction_occurred": deduction_occurred,
+                            "deduction_correct": deduction_correct,
+                            "full_response": data
+                        }
+                    )
+                    
+                    return self.final_balance
+                else:
+                    self.log_test("Final Wallet Balance Check", False, "Response missing success=true", data)
+            else:
+                self.log_test("Final Wallet Balance Check", False, f"HTTP {response.status_code}: {response.text}", None)
+                
+        except Exception as e:
+            self.log_test("Final Wallet Balance Check", False, f"Exception: {str(e)}", None)
+        
+        return None
+
     def test_admin_deposit_confirmations_endpoint(self):
         """Test GET /api/admin/deposit-confirmations - Main fix verification"""
         if not self.admin_token:
