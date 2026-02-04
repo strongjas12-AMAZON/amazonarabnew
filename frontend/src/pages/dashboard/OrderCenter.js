@@ -78,7 +78,7 @@ const COURIERS = [
   { code: 'other', name: 'Other Courier', icon: '📨' },
 ];
 
-const OrderCenter = () => {
+const OrderCenter = ({ onDepositSubmitted }) => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('to_be_shipped');
   const [orders, setOrders] = useState([]);
