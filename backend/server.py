@@ -3628,6 +3628,32 @@ async def get_seller_order_center(
             if has_seller_item:
                 # Only include seller's items in the order
                 order['order_items'] = seller_items
+                
+                # Fetch deposit info for this order and seller
+                try:
+                    deposit_result = supabase_admin.table('order_deposits')\
+                        .select('*')\
+                        .eq('order_id', order['id'])\
+                        .eq('seller_id', current_user['id'])\
+                        .execute()
+                    
+                    if deposit_result.data:
+                        deposit = deposit_result.data[0]
+                        order['depositInfo'] = {
+                            'requiredAmount': float(deposit.get('required_amount', 0)),
+                            'depositedAmount': float(deposit.get('deposited_amount', 0)),
+                            'isComplete': deposit.get('is_deposit_complete', False),
+                            'depositStatus': deposit.get('deposit_status'),
+                            'depositMethod': deposit.get('deposit_method'),
+                            'transactionHash': deposit.get('transaction_hash'),
+                            'submittedAt': deposit.get('submitted_at')
+                        }
+                    else:
+                        order['depositInfo'] = None
+                except Exception as e:
+                    logging.warning(f"Could not fetch deposit info for order {order['id']}: {str(e)}")
+                    order['depositInfo'] = None
+                
                 seller_orders.append(order)
         
         # Calculate counts per status
