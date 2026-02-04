@@ -203,6 +203,11 @@ const OrderCenter = ({ onDepositSubmitted }) => {
       
       // Refresh orders to show updated status
       await fetchOrders(activeTab === 'after_sales' ? null : activeTab);
+      
+      // Notify parent component to refresh pending deposit orders
+      if (onDepositSubmitted) {
+        await onDepositSubmitted();
+      }
     } catch (error) {
       const errorMsg = error.response?.data?.detail || 'Failed to submit payment proof';
       toast.error(errorMsg);
