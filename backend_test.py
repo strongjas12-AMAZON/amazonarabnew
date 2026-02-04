@@ -316,7 +316,7 @@ class FixesVerificationTester:
                     # Step 4: Verify order items were saved correctly
                     admin_headers = {"Authorization": f"Bearer {self.admin_token}"}
                     if self.admin_token:
-                        order_response = self.session.get(f"{self.base_url}/admin/orders", headers=admin_headers)
+                        order_response = self.session.get(f"{self.base_url}/orders/my", headers=admin_headers)
                         if order_response.status_code == 200:
                             order_data = order_response.json()
                             if order_data.get("success"):
