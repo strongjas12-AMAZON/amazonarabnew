@@ -284,7 +284,115 @@ class OrderCenterStatusUpdateTester:
         
         return None
 
-    def test_backend_code_fix_verification(self):
+    def test_order_center_status(self):
+        """Test GET /api/seller/order-center - Verify order shows depositInfo with pending status"""
+        if not self.seller_token:
+            self.log_test("Order Center Status Check", False, "No seller token available", None)
+            return None
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            response = self.session.get(f"{self.base_url}/seller/order-center", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    orders = data.get("orders", [])
+                    
+                    # Look for the test order
+                    test_order = None
+                    for order in orders:
+                        order_id = order.get("id", "")
+                        if EXPECTED_ORDER_ID in order_id or order_id == EXPECTED_ORDER_ID:
+                            test_order = order
+                            break
+                    
+                    success_details = []
+                    success_details.append(f"Total orders found: {len(orders)}")
+                    
+                    if test_order:
+                        success_details.append(f"✅ Found test order {EXPECTED_ORDER_ID}")
+                        
+                        # Check escrowStatus
+                        escrow_status = test_order.get("escrowStatus", "")
+                        success_details.append(f"Escrow Status: {escrow_status}")
+                        
+                        # Check depositInfo - this is the key fix
+                        deposit_info = test_order.get("depositInfo", {})
+                        if deposit_info:
+                            success_details.append("✅ Order has depositInfo (fix working)")
+                            
+                            deposit_status = deposit_info.get("depositStatus", "")
+                            deposit_method = deposit_info.get("depositMethod", "")
+                            deposited_amount = deposit_info.get("depositedAmount", 0)
+                            submitted_at = deposit_info.get("submittedAt", "")
+                            
+                            success_details.append(f"   depositStatus: {deposit_status}")
+                            success_details.append(f"   depositMethod: {deposit_method}")
+                            success_details.append(f"   depositedAmount: ${deposited_amount}")
+                            success_details.append(f"   submittedAt: {submitted_at}")
+                            
+                            # Verify expected values
+                            status_pending = deposit_status == "pending"
+                            method_wallet = deposit_method == "internal_wallet"
+                            amount_correct = abs(float(deposited_amount) - EXPECTED_DEPOSIT_AMOUNT) < 0.01
+                            has_timestamp = bool(submitted_at)
+                            
+                            if status_pending:
+                                success_details.append("✅ depositStatus is 'pending' (correct)")
+                            else:
+                                success_details.append(f"❌ depositStatus is '{deposit_status}' (expected 'pending')")
+                                
+                            if method_wallet:
+                                success_details.append("✅ depositMethod is 'internal_wallet' (correct)")
+                            else:
+                                success_details.append(f"❌ depositMethod is '{deposit_method}' (expected 'internal_wallet')")
+                                
+                            if amount_correct:
+                                success_details.append(f"✅ depositedAmount is ${deposited_amount} (correct)")
+                            else:
+                                success_details.append(f"❌ depositedAmount is ${deposited_amount} (expected ${EXPECTED_DEPOSIT_AMOUNT})")
+                                
+                            if has_timestamp:
+                                success_details.append("✅ submittedAt timestamp is set")
+                            else:
+                                success_details.append("❌ submittedAt timestamp is missing")
+                            
+                            # The fix is working if depositInfo exists with correct values
+                            fix_working = status_pending and method_wallet and amount_correct and has_timestamp
+                            
+                        else:
+                            success_details.append("❌ Order missing depositInfo (fix NOT working)")
+                            fix_working = False
+                            
+                    else:
+                        success_details.append(f"❌ Test order {EXPECTED_ORDER_ID} not found in Order Center")
+                        if orders:
+                            success_details.append(f"   Available orders: {[o.get('id', 'unknown')[:8] for o in orders[:3]]}")
+                        fix_working = False
+                    
+                    self.log_test(
+                        "Order Center Status Check", 
+                        fix_working if test_order else False, 
+                        "; ".join(success_details),
+                        {
+                            "total_orders": len(orders),
+                            "test_order_found": test_order is not None,
+                            "test_order": test_order,
+                            "sample_orders": [{"id": o.get("id", "")[:8], "escrowStatus": o.get("escrowStatus", ""), "hasDepositInfo": bool(o.get("depositInfo"))} for o in orders[:3]]
+                        }
+                    )
+                    
+                    return test_order
+                else:
+                    self.log_test("Order Center Status Check", False, "Response missing success=true", data)
+            else:
+                self.log_test("Order Center Status Check", False, f"HTTP {response.status_code}: {response.text}", None)
+                
+        except Exception as e:
+            self.log_test("Order Center Status Check", False, f"Exception: {str(e)}", None)
+        
+        return None
         """Verify the fix is applied in the backend code"""
         try:
             # Read the backend server.py file to verify the fix
