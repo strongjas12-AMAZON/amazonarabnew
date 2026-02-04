@@ -5071,7 +5071,10 @@ async def get_orders_pending_deposit(current_user: dict = Depends(get_current_us
                     'depositInfo': {
                         'requiredAmount': float(deposit_info['required_amount']) if deposit_info else 0,
                         'depositedAmount': float(deposit_info['deposited_amount']) if deposit_info else 0,
-                        'isComplete': deposit_info['is_deposit_complete'] if deposit_info else False
+                        'isComplete': deposit_info['is_deposit_complete'] if deposit_info else False,
+                        'depositStatus': deposit_info.get('deposit_status'),
+                        'transactionHash': deposit_info.get('transaction_hash'),
+                        'submittedAt': deposit_info.get('submitted_at')
                     } if deposit_info else None
                 })
         
