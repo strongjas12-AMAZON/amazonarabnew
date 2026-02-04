@@ -26,7 +26,7 @@ BASE_URL = "https://repo-twin-2.preview.emergentagent.com/api"
 
 # Test Credentials from review request
 ADMIN_EMAIL = "support@arabshopping.org"
-ADMIN_PASSWORD = "TestPass123!"  # Updated password from review request
+ADMIN_PASSWORD = "Hadi1247@"  # Actual admin password from backend code
 SELLER_EMAIL = "testseller@test.com"
 SELLER_PASSWORD = "TestPass123!"
 BUYER_EMAIL = "testbuyer@test.com"
