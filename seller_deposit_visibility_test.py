@@ -140,7 +140,36 @@ class SellerDepositVisibilityTester:
             self.log_test("Seller Login", False, f"Exception: {str(e)}", None)
         return False
 
-    def test_buyer_wallet_balance(self):
+    def test_admin_login(self):
+        """Test admin authentication"""
+        try:
+            login_data = {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}
+            response = self.session.post(f"{self.base_url}/auth/login", json=login_data)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success") and "session" in data and "user" in data:
+                    session = data["session"]
+                    user = data["user"]
+                    
+                    if session and "access_token" in session and user.get("role") == "admin":
+                        self.admin_token = session["access_token"]
+                        self.log_test(
+                            "Admin Login", 
+                            True, 
+                            f"Successfully logged in as admin: {user.get('email')}",
+                            {"user_role": user.get("role"), "user_email": user.get("email")}
+                        )
+                        return True
+                    else:
+                        self.log_test("Admin Login", False, f"Invalid role or missing token. Role: {user.get('role')}", data)
+                else:
+                    self.log_test("Admin Login", False, "Response missing required fields", data)
+            else:
+                self.log_test("Admin Login", False, f"HTTP {response.status_code}: {response.text}", None)
+        except Exception as e:
+            self.log_test("Admin Login", False, f"Exception: {str(e)}", None)
+        return False
         """Test GET /api/buyer/wallet/balance - Get buyer wallet balance"""
         if not self.buyer_token:
             self.log_test("Buyer Wallet Balance", False, "No buyer token available", None)
