@@ -1,21 +1,32 @@
 #!/usr/bin/env python3
 """
-SELLER WALLET BALANCE DEDUCTION TESTING - Arab Shopping Platform
-TEST SPECIFIC FIX: Seller wallet balance not being deducted when paying 80% order deposit
+ORDER CENTER STATUS UPDATE AFTER DEPOSIT TESTING - Arab Shopping Platform
+TEST SPECIFIC FIX: Order Center not showing "Confirmation Awaiting Admin Review" status after seller deposits 80%
 
-ISSUE: After a seller uses their wallet balance for the 80% order deposit, the wallet balance 
-was not being deducted (it was deducting $0 instead of the actual deposit amount).
+ISSUE: After depositing 80% (via wallet balance or USDT), the Order Center should show 
+"Confirmation Awaiting Admin Review" status but it's not displaying correctly.
 
-ROOT CAUSE: Database column is 'deposit_required' (snake_case) but code was using 
-'depositRequired' (camelCase).
+ROOT CAUSE: The /seller/order-center endpoint was NOT fetching depositInfo from order_deposits table.
 
-TEST SCENARIO:
-1. Login as seller (testseller_new@test.com / TestPass123!)
-2. Check current wallet balance using GET /api/seller/wallet/balance - should show $1000
-3. Call POST /api/seller/wallet/deposit-for-order with body: { "orderId": "a32d8ad7-d07b-4fea-be48-f661cc2dd357" }
-4. Verify response shows depositAmount is $39.99 (not $0)
-5. Check wallet balance again - should show approximately $960.01 (deducted by $39.99)
-6. Verify the deposit record appears in GET /api/admin/deposit-confirmations (login as admin: support@arabshopping.org / TestPass123!)
+TEST SCENARIO (from review request):
+1. Reset order a32d8ad7-d07b-4fea-be48-f661cc2dd357 to awaiting_seller_deposit status
+2. Clear any existing deposit records for this order
+3. Reset seller wallet balance to $1000
+4. Login as seller (testseller_new@test.com / TestPass123!)
+5. Check initial wallet balance using GET /api/seller/wallet/balance - should show $1000
+6. Call POST /api/seller/wallet/deposit-for-order with body: { "orderId": "a32d8ad7-d07b-4fea-be48-f661cc2dd357" }
+7. Verify response shows depositAmount is $39.99 (not $0) and message indicates awaiting admin confirmation
+8. Call GET /api/seller/order-center
+9. Find the order a32d8ad7... in the response
+10. Verify the order has:
+    - escrowStatus = "awaiting_seller_deposit" (still awaiting because admin hasn't confirmed)
+    - depositInfo.depositStatus = "pending"
+    - depositInfo.depositMethod = "internal_wallet"
+    - depositInfo.depositedAmount = 39.99
+    - depositInfo.submittedAt is set
+11. Check wallet balance again - should be ~$960.01 (deducted by $39.99)
+
+EXPECTED: Order should have depositInfo with pending status so frontend can show "Confirmation Awaiting Admin Review"
 """
 
 import requests
