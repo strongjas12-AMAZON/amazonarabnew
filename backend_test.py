@@ -959,5 +959,5 @@ class OrderStatusTransitionTester:
 
 
 if __name__ == "__main__":
-    tester = OrderCenterStatusUpdateTester()
-    tester.run_order_center_status_test()
+    tester = OrderStatusTransitionTester()
+    tester.run_order_status_transition_test()
