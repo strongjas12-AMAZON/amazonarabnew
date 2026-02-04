@@ -2741,7 +2741,8 @@ async def update_order_status(order_id: str, request: UpdateOrderStatusRequest, 
             for seller_id, earnings_amount in seller_earnings.items():
                 seller_wallet = await get_or_create_seller_wallet(seller_id)
                 current_balance = float(seller_wallet.get('balance', 0))
-                current_deposit_balance = float(seller_wallet.get('depositBalance', 0))
+                # Handle depositBalance - may not exist if migration not run
+                current_deposit_balance = float(seller_wallet.get('depositBalance') or seller_wallet.get('deposit_balance', 0))
                 current_total_earnings = float(seller_wallet.get('totalEarnings') or seller_wallet.get('total_earnings', 0))
                 
                 # Get deposit for this order to return it
@@ -2760,12 +2761,18 @@ async def update_order_status(order_id: str, request: UpdateOrderStatusRequest, 
                 new_deposit_balance = max(current_deposit_balance - deposit_to_return, 0)
                 new_total_earnings = current_total_earnings + earnings_amount
                 
-                supabase_admin.table('seller_wallets').update({
+                # Prepare update data - only include deposit columns if they exist
+                wallet_update = {
                     'balance': new_balance,
-                    'depositBalance': new_deposit_balance,
                     'totalEarnings': new_total_earnings,
                     'updatedAt': datetime.now(timezone.utc).isoformat()
-                }).eq('userId', seller_id).execute()
+                }
+                
+                # Only update depositBalance if column exists (migration was run)
+                if 'depositBalance' in seller_wallet or 'deposit_balance' in seller_wallet:
+                    wallet_update['depositBalance'] = new_deposit_balance
+                
+                supabase_admin.table('seller_wallets').update(wallet_update).eq('userId', seller_id).execute()
                 
                 # Create transaction record for earnings
                 await create_wallet_transaction(
