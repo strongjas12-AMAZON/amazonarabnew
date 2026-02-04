@@ -535,7 +535,7 @@ class SellerDepositVisibilityTester:
         # Key findings
         admin_login_working = any(r["success"] and "Admin Login" in r["test"] for r in self.test_results)
         seller_login_working = any(r["success"] and "Seller Login" in r["test"] for r in self.test_results)
-        admin_orders_working = any(r["success"] and "Admin Get Orders" in r["test"] for r in self.test_results)
+        admin_deposits_working = any(r["success"] and "Admin Get Deposit" in r["test"] for r in self.test_results)
         order_center_working = any(r["success"] and "Seller Order Center" in r["test"] for r in self.test_results)
         pending_deposits_working = any(r["success"] and "Pending Deposit Orders" in r["test"] for r in self.test_results)
         backend_fix_verified = any(r["success"] and "Backend Code Column Fix" in r["test"] for r in self.test_results)
