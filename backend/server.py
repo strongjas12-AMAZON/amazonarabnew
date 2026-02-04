@@ -2788,21 +2788,8 @@ async def update_order_status(order_id: str, request: UpdateOrderStatusRequest, 
                     previous_balance=current_balance,
                     new_balance=new_balance,
                     order_id=order_id,
-                    description=f"Earnings from order: ${earnings_amount:.2f}"
+                    description=f"Earnings from order: ${earnings_amount:.2f} (Deposit: ${deposit_to_return:.2f} returned)"
                 )
-                
-                # Create transaction record for deposit return (if any)
-                if deposit_to_return > 0:
-                    await create_wallet_transaction(
-                        user_id=seller_id,
-                        user_role='seller',
-                        transaction_type='deposit_return',
-                        amount=deposit_to_return,
-                        previous_balance=new_balance,
-                        new_balance=new_balance,  # Balance already updated with earnings
-                        order_id=order_id,
-                        description=f"Deposit returned: ${deposit_to_return:.2f}"
-                    )
         
         # Send email notifications based on status change
         if result.data:
