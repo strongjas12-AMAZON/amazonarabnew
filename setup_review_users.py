@@ -6,7 +6,7 @@ Setup specific test users mentioned in the review request
 import requests
 import json
 
-BASE_URL = "https://repo-copy-3.preview.emergentagent.com/api"
+BASE_URL = "https://repo-twin-2.preview.emergentagent.com/api"
 
 def create_user_via_register(email, password, name, role, store_name=None):
     """Create user via registration endpoint"""

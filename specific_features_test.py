@@ -13,7 +13,7 @@ import sys
 from typing import Dict, Any, Optional
 
 # Configuration
-BASE_URL = "https://repo-copy-3.preview.emergentagent.com/api"
+BASE_URL = "https://repo-twin-2.preview.emergentagent.com/api"
 
 # Test Credentials from review request
 ADMIN_EMAIL = "support@arabshopping.org"

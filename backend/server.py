@@ -3628,6 +3628,32 @@ async def get_seller_order_center(
             if has_seller_item:
                 # Only include seller's items in the order
                 order['order_items'] = seller_items
+                
+                # Fetch deposit info for this order and seller
+                try:
+                    deposit_result = supabase_admin.table('order_deposits')\
+                        .select('*')\
+                        .eq('order_id', order['id'])\
+                        .eq('seller_id', current_user['id'])\
+                        .execute()
+                    
+                    if deposit_result.data:
+                        deposit = deposit_result.data[0]
+                        order['depositInfo'] = {
+                            'requiredAmount': float(deposit.get('required_amount', 0)),
+                            'depositedAmount': float(deposit.get('deposited_amount', 0)),
+                            'isComplete': deposit.get('is_deposit_complete', False),
+                            'depositStatus': deposit.get('deposit_status'),
+                            'depositMethod': deposit.get('deposit_method'),
+                            'transactionHash': deposit.get('transaction_hash'),
+                            'submittedAt': deposit.get('submitted_at')
+                        }
+                    else:
+                        order['depositInfo'] = None
+                except Exception as e:
+                    logging.warning(f"Could not fetch deposit info for order {order['id']}: {str(e)}")
+                    order['depositInfo'] = None
+                
                 seller_orders.append(order)
         
         # Calculate counts per status
@@ -3732,6 +3758,32 @@ async def get_seller_order_detail(order_id: str, current_user: dict = Depends(ge
             raise HTTPException(status_code=403, detail="You don't have products in this order")
         
         order['order_items'] = seller_items
+        
+        # Fetch deposit info for this order and seller
+        try:
+            deposit_result = supabase_admin.table('order_deposits')\
+                .select('*')\
+                .eq('order_id', order_id)\
+                .eq('seller_id', current_user['id'])\
+                .execute()
+            
+            if deposit_result.data:
+                deposit = deposit_result.data[0]
+                order['depositInfo'] = {
+                    'requiredAmount': float(deposit.get('required_amount', 0)),
+                    'depositedAmount': float(deposit.get('deposited_amount', 0)),
+                    'isComplete': deposit.get('is_deposit_complete', False),
+                    'depositStatus': deposit.get('deposit_status'),
+                    'depositMethod': deposit.get('deposit_method'),
+                    'transactionHash': deposit.get('transaction_hash'),
+                    'submittedAt': deposit.get('submitted_at')
+                }
+            else:
+                order['depositInfo'] = None
+        except Exception as e:
+            logging.warning(f"Could not fetch deposit info for order detail {order_id}: {str(e)}")
+            order['depositInfo'] = None
+        
         return {"success": True, "order": format_order_center_response(order)}
     except HTTPException:
         raise
@@ -5064,10 +5116,10 @@ async def get_orders_pending_deposit(current_user: dict = Depends(get_current_us
                 
                 seller_orders.append({
                     'id': order['id'],
-                    'totalAmount': float(order['totalAmount']),
-                    'depositRequired': float(order.get('depositRequired', 0)),
+                    'totalAmount': float(order.get('total_amount', 0)),  # Fixed: use snake_case
+                    'depositRequired': float(order.get('deposit_required', 0)),  # Fixed: use snake_case
                     'escrowStatus': order.get('escrow_status'),
-                    'createdAt': order.get('createdAt'),
+                    'createdAt': order.get('created_at'),  # Fixed: use snake_case
                     'depositInfo': {
                         'requiredAmount': float(deposit_info['required_amount']) if deposit_info else 0,
                         'depositedAmount': float(deposit_info['deposited_amount']) if deposit_info else 0,
@@ -5144,7 +5196,7 @@ async def deposit_for_order(req: SellerDepositRequest, current_user: dict = Depe
         
         current_balance = float(wallet.get('balance', 0))
         deposit_balance = float(wallet.get('depositBalance', 0))
-        required_deposit = float(order.get('depositRequired', 0))
+        required_deposit = float(order.get('deposit_required', 0))  # Fixed: use snake_case column name
         
         # 3. Verify seller has enough balance to deposit
         if current_balance < required_deposit:
@@ -5185,41 +5237,61 @@ async def deposit_for_order(req: SellerDepositRequest, current_user: dict = Depe
             .eq('seller_id', user_id)\
             .execute()
         
+        # 6. Update order_deposits - set as pending for admin confirmation
+        deposit_update_data = {
+            'deposited_amount': required_deposit,
+            'is_deposit_complete': False,  # Wait for admin confirmation
+            'deposit_method': 'internal_wallet',  # Use internal_wallet to match DB constraint
+            'deposit_status': 'pending',
+            'submitted_at': datetime.now(timezone.utc).isoformat()
+        }
+        
         if deposit_result.data:
             # Update existing
             supabase_admin.table('order_deposits')\
-                .update({
-                    'deposited_amount': required_deposit,
-                    'is_deposit_complete': True,
-                    'deposited_at': datetime.now(timezone.utc).isoformat()
-                })\
+                .update(deposit_update_data)\
                 .eq('order_id', req.orderId)\
                 .eq('seller_id', user_id)\
                 .execute()
         else:
             # Create new
-            supabase_admin.table('order_deposits').insert({
+            deposit_update_data.update({
                 'order_id': req.orderId,
                 'seller_id': user_id,
-                'required_amount': required_deposit,
-                'deposited_amount': required_deposit,
-                'is_deposit_complete': True,
-                'deposited_at': datetime.now(timezone.utc).isoformat()
-            }).execute()
+                'required_amount': required_deposit
+            })
+            supabase_admin.table('order_deposits').insert(deposit_update_data).execute()
         
-        # 7. Update order status to 'deposit_received'
-        supabase_admin.table('orders')\
-            .update({'escrow_status': 'deposit_received'})\
-            .eq('id', req.orderId)\
-            .execute()
+        # 7. Keep order status as 'awaiting_seller_deposit' until admin confirms
+        # The order status will be updated to 'deposit_received' when admin confirms
+        
+        # 8. Notify admin about the wallet balance deposit
+        try:
+            if RESEND_API_KEY:
+                seller_info = current_user.get('name', current_user.get('email', 'Unknown'))
+                resend.Emails.send({
+                    "from": SENDER_EMAIL,
+                    "to": ADMIN_EMAIL,
+                    "subject": f"New Wallet Deposit - Order {req.orderId[:8]}",
+                    "html": f"""
+                    <h2>New Wallet Balance Deposit Submitted</h2>
+                    <p><strong>Seller:</strong> {seller_info}</p>
+                    <p><strong>Order ID:</strong> {req.orderId}</p>
+                    <p><strong>Amount:</strong> ${required_deposit:.2f} (from wallet balance)</p>
+                    <p><strong>Payment Method:</strong> Wallet Balance</p>
+                    <p>The seller has deposited funds from their wallet balance. Please confirm this deposit in the admin panel.</p>
+                    """
+                })
+        except Exception as e:
+            logging.warning(f"Failed to send admin notification: {str(e)}")
         
         return {
             "success": True,
-            "message": f"Deposit of ${required_deposit:.2f} completed successfully",
+            "message": f"Deposit of ${required_deposit:.2f} submitted. Awaiting admin confirmation.",
             "depositAmount": required_deposit,
             "newBalance": new_balance,
             "depositBalance": new_deposit_balance,
-            "orderStatus": "deposit_received"
+            "orderStatus": "awaiting_confirmation"
         }
         
     except HTTPException:
@@ -5348,17 +5420,17 @@ async def submit_usdt_deposit_payment(
 @api_router.get("/admin/deposit-confirmations")
 async def get_pending_deposit_confirmations(current_user: dict = Depends(get_current_user)):
     """
-    Admin endpoint to view all pending USDT deposit confirmations
+    Admin endpoint to view all pending deposit confirmations (both USDT and wallet balance)
     """
     try:
         if current_user.get('role') != 'admin':
             raise HTTPException(status_code=403, detail="Admin access required")
         
-        # Get all pending deposit confirmations
+        # Get all pending deposit confirmations (both USDT payment and internal wallet)
         deposits_result = supabase_admin.table('order_deposits')\
             .select('*, orders(id, total_amount, created_at, buyer_id), users!seller_id(id, name, email)')\
-            .eq('deposit_method', 'usdt_payment')\
             .eq('deposit_status', 'pending')\
+            .in_('deposit_method', ['usdt_payment', 'internal_wallet'])\
             .order('submitted_at', desc=True)\
             .execute()
         
@@ -5379,7 +5451,8 @@ async def get_pending_deposit_confirmations(current_user: dict = Depends(get_cur
                 'transactionHash': deposit.get('transaction_hash'),
                 'notes': deposit.get('payment_notes'),
                 'submittedAt': deposit.get('submitted_at'),
-                'orderCreatedAt': order_info.get('created_at')
+                'orderCreatedAt': order_info.get('created_at'),
+                'depositMethod': deposit.get('deposit_method', 'unknown')  # Include deposit method for UI display
             })
         
         return {
@@ -5408,11 +5481,11 @@ async def confirm_seller_deposit(
         if current_user.get('role') != 'admin':
             raise HTTPException(status_code=403, detail="Admin access required")
         
-        # 1. Get deposit record
+        # 1. Get deposit record (both USDT and internal wallet methods)
         deposit_result = supabase_admin.table('order_deposits')\
             .select('*, users!seller_id(name, email)')\
             .eq('order_id', order_id)\
-            .eq('deposit_method', 'usdt_payment')\
+            .in_('deposit_method', ['usdt_payment', 'internal_wallet'])\
             .eq('deposit_status', 'pending')\
             .execute()
         
@@ -5421,6 +5494,7 @@ async def confirm_seller_deposit(
         
         deposit = deposit_result.data[0]
         seller_info = deposit.get('users', {})
+        deposit_method = deposit.get('deposit_method', 'unknown')
         
         if req.approved:
             # APPROVE DEPOSIT
@@ -5435,15 +5509,20 @@ async def confirm_seller_deposit(
                 .eq('order_id', order_id)\
                 .execute()
             
-            # Update order status to deposit_received
+            # Update order status to deposit_received AND set order_status to 'to_be_shipped'
+            # This moves the order from 'Pending Payment' to 'To Be Shipped' in Order Center
             supabase_admin.table('orders')\
-                .update({'escrow_status': 'deposit_received'})\
+                .update({
+                    'escrow_status': 'deposit_received',
+                    'order_status': 'to_be_shipped'  # Move to 'To Be Shipped' column in Order Center
+                })\
                 .eq('id', order_id)\
                 .execute()
             
             # Send confirmation email to seller
             try:
                 if RESEND_API_KEY and seller_info.get('email'):
+                    method_display = "USDT" if deposit_method == 'usdt_payment' else "wallet balance"
                     resend.Emails.send({
                         "from": SENDER_EMAIL,
                         "to": seller_info['email'],
@@ -5451,9 +5530,10 @@ async def confirm_seller_deposit(
                         "html": f"""
                         <h2>Your Deposit Has Been Confirmed!</h2>
                         <p>Hello {seller_info.get('name', 'Seller')},</p>
-                        <p>Your USDT deposit of <strong>${float(deposit['required_amount']):.2f}</strong> has been confirmed by the admin.</p>
+                        <p>Your {method_display} deposit of <strong>${float(deposit['required_amount']):.2f}</strong> has been confirmed by the admin.</p>
                         <p><strong>Order ID:</strong> {order_id}</p>
-                        <p><strong>Transaction Hash:</strong> {deposit.get('transaction_hash')}</p>
+                        <p><strong>Payment Method:</strong> {method_display.title()}</p>
+                        {f"<p><strong>Transaction Hash:</strong> {deposit.get('transaction_hash')}</p>" if deposit.get('transaction_hash') else ""}
                         <p>You can now ship this order. Once the order is completed, you will receive 100% of the order amount in your earnings.</p>
                         <p>Thank you for using our platform!</p>
                         """
@@ -5482,9 +5562,57 @@ async def confirm_seller_deposit(
                 .eq('order_id', order_id)\
                 .execute()
             
+            # If internal wallet deposit was rejected, return the funds to seller's wallet
+            if deposit_method == 'internal_wallet':
+                try:
+                    seller_id = deposit.get('seller_id')
+                    deposit_amount = float(deposit.get('deposited_amount', 0))
+                    
+                    if seller_id and deposit_amount > 0:
+                        # Get seller wallet
+                        wallet_result = supabase_admin.table('seller_wallets')\
+                            .select('*')\
+                            .eq('userId', seller_id)\
+                            .execute()
+                        
+                        if wallet_result.data:
+                            wallet = wallet_result.data[0]
+                            current_balance = float(wallet.get('balance', 0))
+                            current_deposit_balance = float(wallet.get('depositBalance', 0))
+                            
+                            # Return funds: move from depositBalance back to balance
+                            new_balance = current_balance + deposit_amount
+                            new_deposit_balance = max(current_deposit_balance - deposit_amount, 0)
+                            
+                            supabase_admin.table('seller_wallets')\
+                                .update({
+                                    'balance': new_balance,
+                                    'depositBalance': new_deposit_balance,
+                                    'updatedAt': datetime.now(timezone.utc).isoformat()
+                                })\
+                                .eq('userId', seller_id)\
+                                .execute()
+                            
+                            # Record refund transaction
+                            supabase_admin.table('wallet_transactions').insert({
+                                'userId': seller_id,
+                                'userRole': 'seller',
+                                'type': 'recharge',  # Use recharge type for returning funds
+                                'amount': deposit_amount,
+                                'previousBalance': current_balance,
+                                'newBalance': new_balance,
+                                'orderId': order_id,
+                                'description': f'Deposit refund - rejected by admin for order {order_id[:8]}'
+                            }).execute()
+                            
+                            logging.info(f"Refunded ${deposit_amount:.2f} to seller {seller_id} for rejected deposit")
+                except Exception as e:
+                    logging.error(f"Failed to refund wallet balance deposit: {str(e)}")
+            
             # Send rejection email to seller
             try:
                 if RESEND_API_KEY and seller_info.get('email'):
+                    method_display = "USDT" if deposit_method == 'usdt_payment' else "wallet balance"
                     resend.Emails.send({
                         "from": SENDER_EMAIL,
                         "to": seller_info['email'],
@@ -5492,10 +5620,11 @@ async def confirm_seller_deposit(
                         "html": f"""
                         <h2>Deposit Payment Rejected</h2>
                         <p>Hello {seller_info.get('name', 'Seller')},</p>
-                        <p>Unfortunately, your USDT deposit payment for Order <strong>{order_id[:8]}</strong> could not be confirmed.</p>
+                        <p>Unfortunately, your {method_display} deposit payment for Order <strong>{order_id[:8]}</strong> could not be confirmed.</p>
                         <p><strong>Reason:</strong> {req.rejectionReason}</p>
-                        <p><strong>Transaction Hash:</strong> {deposit.get('transaction_hash')}</p>
-                        <p>Please verify the transaction details and submit again, or contact support if you believe this is an error.</p>
+                        <p><strong>Payment Method:</strong> {method_display.title()}</p>
+                        {f"<p><strong>Transaction Hash:</strong> {deposit.get('transaction_hash')}</p>" if deposit.get('transaction_hash') else ""}
+                        {"<p>Your wallet balance has been restored.</p>" if deposit_method == 'internal_wallet' else "<p>Please verify the transaction details and submit again, or contact support if you believe this is an error.</p>"}
                         """
                     })
             except Exception as e:

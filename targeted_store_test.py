@@ -6,7 +6,7 @@ Targeted test to verify buyer can see seller's specific store products
 import requests
 import json
 
-BASE_URL = "https://repo-copy-3.preview.emergentagent.com/api"
+BASE_URL = "https://repo-twin-2.preview.emergentagent.com/api"
 SELLER_EMAIL = "testseller_new@test.com"
 SELLER_PASSWORD = "TestPass123!"
 BUYER_EMAIL = "testbuyer@test.com"

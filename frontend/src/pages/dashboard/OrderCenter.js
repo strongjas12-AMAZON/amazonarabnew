@@ -661,21 +661,29 @@ const OrderCenter = ({ onDepositSubmitted }) => {
             </div>
           )}
           
-          {/* Pending Admin Approval - When USDT deposit proof submitted but not yet confirmed */}
+          {/* Confirmation Awaiting Admin Review - When deposit submitted but not yet confirmed */}
           {order.escrowStatus === 'awaiting_seller_deposit' && order.depositInfo?.depositStatus === 'pending' && (
             <div className="w-full p-6 bg-gradient-to-br from-blue-500/20 to-purple-500/20 border-2 border-blue-500/50 rounded-xl shadow-xl">
               <div className="text-center">
                 <div className="flex items-center justify-center gap-2 mb-3">
                   <Clock className="w-6 h-6 text-blue-400 animate-pulse" />
-                  <span className="text-blue-400 font-bold text-xl">⏳ Pending Admin Approval</span>
+                  <span className="text-blue-400 font-bold text-xl">⏳ Confirmation Awaiting Admin Review</span>
                 </div>
                 <p className="text-gray-300 text-base mb-2">
-                  Your deposit payment proof has been submitted successfully
+                  {order.depositInfo.depositMethod === 'internal_wallet' 
+                    ? 'Your wallet balance deposit has been submitted successfully'
+                    : 'Your deposit payment proof has been submitted successfully'}
                 </p>
                 <div className="bg-[rgba(0,0,0,0.3)] rounded-lg p-4 mt-4">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-400">Deposit Amount:</span>
-                    <span className="text-[#D4AF37] font-bold">${order.depositRequired?.toFixed(2) || '0.00'}</span>
+                    <span className="text-[#D4AF37] font-bold">${order.depositRequired?.toFixed(2) || order.depositInfo?.requiredAmount?.toFixed(2) || '0.00'}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm mt-2 pt-2 border-t border-white/10">
+                    <span className="text-gray-400">Payment Method:</span>
+                    <span className={`font-medium ${order.depositInfo.depositMethod === 'internal_wallet' ? 'text-green-400' : 'text-blue-400'}`}>
+                      {order.depositInfo.depositMethod === 'internal_wallet' ? '💰 Wallet Balance' : '💎 USDT TRC20'}
+                    </span>
                   </div>
                   {order.depositInfo.transactionHash && (
                     <div className="flex items-start justify-between text-sm mt-2 pt-2 border-t border-white/10">
@@ -700,8 +708,9 @@ const OrderCenter = ({ onDepositSubmitted }) => {
                   )}
                 </div>
                 <p className="text-xs text-gray-400 mt-4">
-                  Our admin team is verifying your transaction on the blockchain. 
-                  You'll receive an email notification once approved (usually within 24 hours).
+                  {order.depositInfo.depositMethod === 'internal_wallet' 
+                    ? 'Our admin team is reviewing your deposit. You\'ll receive an email notification once approved.'
+                    : 'Our admin team is verifying your transaction on the blockchain. You\'ll receive an email notification once approved (usually within 24 hours).'}
                 </p>
               </div>
             </div>

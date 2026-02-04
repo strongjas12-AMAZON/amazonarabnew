@@ -1,10 +1,38 @@
 #!/usr/bin/env python3
 """
-FIXES VERIFICATION TESTING - Arab Shopping Platform
-RE-TEST FIXED ISSUES - Verify the two backend fixes are working correctly:
+ORDER STATUS TRANSITION TESTING - Arab Shopping Platform
+TEST SPECIFIC FIX: Order not moving from 'Pending Payment' to 'To Be Shipped' after admin confirms deposit
 
-1. Order Completion (HIGH PRIORITY) - Previously failed with 520 error
-2. Order Creation (MEDIUM PRIORITY) - Previously failed with "Missing productId" error
+ISSUE: After seller deposits 80% and admin confirms it, the order should move from 'Pending Payment' 
+to 'To Be Shipped' column in Order Center.
+
+ROOT CAUSE: When admin confirms deposit via POST /admin/orders/{id}/confirm-deposit, only 'escrow_status' 
+was updated to 'deposit_received', but 'order_status' was NOT updated. The Order Center uses 'order_status' 
+to categorize orders into columns (pending_payment, to_be_shipped, etc.).
+
+FIX APPLIED: Updated the confirm-deposit endpoint to also set 'order_status' to 'to_be_shipped' when 
+admin approves the deposit.
+
+TEST SCENARIO (from review request):
+1. First check current orders in database to find one with pending deposit:
+   - Look for orders with escrow_status='awaiting_seller_deposit' or deposit_status='pending'
+2. Login as admin (support@arabshopping.org / TestPass123!)
+3. Get pending deposit confirmations: GET /api/admin/deposit-confirmations
+   - Find an order with pending deposit
+4. If there's a pending deposit, confirm it:
+   POST /api/admin/orders/{order_id}/confirm-deposit
+   Body: { "approved": true }
+5. Verify the response shows success
+6. Check the order status directly or via seller order center:
+   - Login as seller (testseller_new@test.com / TestPass123!)
+   - GET /api/seller/order-center
+   - Find the order and verify:
+     - escrow_status = "deposit_received"
+     - order_status = "to_be_shipped" (THIS IS THE KEY FIX)
+   - Or check the counts: to_be_shipped count should increase
+
+EXPECTED: After admin confirms deposit, order_status should be 'to_be_shipped' so the order appears 
+in 'To Be Shipped' column instead of 'Pending Payment'.
 """
 
 import requests
@@ -14,506 +42,23 @@ from typing import Dict, Any, Optional
 import time
 
 # Configuration
-BASE_URL = "https://repo-copy-3.preview.emergentagent.com/api"
+BASE_URL = "https://repo-twin-2.preview.emergentagent.com/api"
 
 # Test Credentials from review request
 ADMIN_EMAIL = "support@arabshopping.org"
-ADMIN_PASSWORD = "Hadi1247@"
-SELLER_EMAIL = "testseller@test.com"  # Updated to match existing test user
-SELLER_PASSWORD = "TestPass123!"
+ADMIN_PASSWORD = "Hadi1247@"  # Correct admin password from backend
+SELLER_EMAIL = "testseller@test.com"  # Using existing test seller
+SELLER_PASSWORD = "TestPass123!"  # Standard test password
 BUYER_EMAIL = "testbuyer@test.com"
 BUYER_PASSWORD = "TestPass123!"
 
-class FixesVerificationTester:
+class OrderStatusTransitionTester:
     def __init__(self):
         self.base_url = BASE_URL
         self.session = requests.Session()
-        self.admin_token = None
         self.seller_token = None
-        self.buyer_token = None
-        self.test_results = []
-        
-        # Test data storage
-        self.store_product_id = None
-        self.test_order_id = None
-        self.buyer_address_id = None
-        
-    def log_test(self, test_name: str, success: bool, details: str = "", response_data: Any = None):
-        """Log test result"""
-        result = {
-            "test": test_name,
-            "success": success,
-            "details": details,
-            "response_data": response_data
-        }
-        self.test_results.append(result)
-        status = "✅ FIXED" if success else "❌ STILL BROKEN"
-        print(f"{status} {test_name}")
-        if details:
-            print(f"   Details: {details}")
-        if not success and response_data:
-            print(f"   Response: {response_data}")
-        print()
-
-    # ============ AUTHENTICATION ============
-    
-    def authenticate_all_users(self):
-        """Authenticate all test users"""
-        print("=== AUTHENTICATION TESTS ===")
-        
-        # Admin login
-        try:
-            login_data = {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}
-            response = self.session.post(f"{self.base_url}/auth/login", json=login_data)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success") and "session" in data:
-                    self.admin_token = data["session"]["access_token"]
-                    self.log_test("Admin Login", True, f"Admin authenticated successfully")
-                else:
-                    self.log_test("Admin Login", False, "Authentication failed", data)
-            else:
-                self.log_test("Admin Login", False, f"HTTP {response.status_code}: {response.text}")
-        except Exception as e:
-            self.log_test("Admin Login", False, f"Exception: {str(e)}")
-
-        # Buyer login
-        try:
-            login_data = {"email": BUYER_EMAIL, "password": BUYER_PASSWORD}
-            response = self.session.post(f"{self.base_url}/auth/login", json=login_data)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success") and "session" in data:
-                    self.buyer_token = data["session"]["access_token"]
-                    self.log_test("Buyer Login", True, f"Buyer authenticated successfully")
-                else:
-                    self.log_test("Buyer Login", False, "Authentication failed", data)
-            else:
-                self.log_test("Buyer Login", False, f"HTTP {response.status_code}: {response.text}")
-        except Exception as e:
-            self.log_test("Buyer Login", False, f"Exception: {str(e)}")
-
-        # Seller login
-        try:
-            login_data = {"email": SELLER_EMAIL, "password": SELLER_PASSWORD}
-            response = self.session.post(f"{self.base_url}/auth/login", json=login_data)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success") and "session" in data:
-                    self.seller_token = data["session"]["access_token"]
-                    self.log_test("Seller Login", True, f"Seller authenticated successfully")
-                else:
-                    self.log_test("Seller Login", False, "Authentication failed", data)
-            else:
-                self.log_test("Seller Login", False, f"HTTP {response.status_code}: {response.text}")
-        except Exception as e:
-            self.log_test("Seller Login", False, f"Exception: {str(e)}")
-
-    # ============ PRIORITY FIX 1: ORDER COMPLETION ============
-    
-    def test_order_completion_fix(self):
-        """TEST 1: Order Completion (HIGH PRIORITY) - Previously failed with 520 error"""
-        print("\n=== TEST 1: ORDER COMPLETION FIX (HIGH PRIORITY) ===")
-        
-        if not self.admin_token:
-            self.log_test("Order Completion Test", False, "No admin token available")
-            return
-            
-        try:
-            headers = {"Authorization": f"Bearer {self.admin_token}"}
-            
-            # Step 1: Get an order to test completion
-            response = self.session.get(f"{self.base_url}/orders/my", headers=headers)
-            
-            if response.status_code != 200:
-                self.log_test("Get Admin Orders", False, f"HTTP {response.status_code}: {response.text}")
-                return
-                
-            data = response.json()
-            if not data.get("success"):
-                self.log_test("Get Admin Orders", False, "Response missing success=true", data)
-                return
-                
-            orders = data.get("orders", [])
-            if not orders:
-                self.log_test("Order Completion Test", False, "No orders available for testing")
-                return
-                
-            # Find an order that can be completed
-            test_order = orders[0]
-            order_id = test_order.get("id")
-            
-            self.log_test("Get Admin Orders", True, f"Found {len(orders)} orders, testing with order {order_id}")
-            
-            # Step 2: Mark order as completed (this previously caused 520 error)
-            status_data = {"status": "completed"}
-            response = self.session.put(f"{self.base_url}/orders/{order_id}/status", json=status_data, headers=headers)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    self.log_test(
-                        "Order Completion (520 Error Fix)", 
-                        True, 
-                        f"✅ SUCCESS: Order {order_id} marked as completed without 520 error. Seller wallet should be updated with earnings.",
-                        {"order_id": order_id, "status": "completed"}
-                    )
-                    
-                    # Step 3: Verify seller wallet was updated (if we can identify the seller)
-                    if self.seller_token:
-                        seller_headers = {"Authorization": f"Bearer {self.seller_token}"}
-                        wallet_response = self.session.get(f"{self.base_url}/seller/wallet/balance", headers=seller_headers)
-                        
-                        if wallet_response.status_code == 200:
-                            wallet_data = wallet_response.json()
-                            if wallet_data.get("success"):
-                                balance = wallet_data.get("balance", 0)
-                                self.log_test(
-                                    "Seller Wallet Update Verification", 
-                                    True, 
-                                    f"Seller wallet balance: ${balance} (earnings should be distributed on order completion)",
-                                    {"balance": balance}
-                                )
-                            else:
-                                self.log_test("Seller Wallet Update Verification", False, "Failed to get wallet balance", wallet_data)
-                        else:
-                            self.log_test("Seller Wallet Update Verification", False, f"HTTP {wallet_response.status_code}: {wallet_response.text}")
-                    
-                else:
-                    self.log_test("Order Completion (520 Error Fix)", False, "Response missing success=true", data)
-            elif response.status_code == 520:
-                self.log_test(
-                    "Order Completion (520 Error Fix)", 
-                    False, 
-                    f"❌ STILL BROKEN: 520 error still occurs when marking order as completed",
-                    {"error": "520_error_persists", "response": response.text}
-                )
-            else:
-                self.log_test("Order Completion (520 Error Fix)", False, f"HTTP {response.status_code}: {response.text}")
-                
-        except Exception as e:
-            self.log_test("Order Completion (520 Error Fix)", False, f"Exception: {str(e)}")
-
-    # ============ PRIORITY FIX 2: ORDER CREATION ============
-    
-    def test_order_creation_fix(self):
-        """TEST 2: Order Creation (MEDIUM PRIORITY) - Previously failed with "Missing productId" error"""
-        print("\n=== TEST 2: ORDER CREATION FIX (MEDIUM PRIORITY) ===")
-        
-        if not self.buyer_token:
-            self.log_test("Order Creation Test", False, "No buyer token available")
-            return
-            
-        try:
-            buyer_headers = {"Authorization": f"Bearer {self.buyer_token}"}
-            
-            # Step 1: Get a shipping address
-            response = self.session.get(f"{self.base_url}/buyer/addresses", headers=buyer_headers)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    addresses = data.get("addresses", [])
-                    if addresses:
-                        self.buyer_address_id = addresses[0].get("id")
-                        self.log_test("Get Buyer Address", True, f"Found {len(addresses)} addresses")
-                    else:
-                        # Create a test address
-                        address_data = {
-                            "fullName": "Test Buyer",
-                            "phone": "+1234567890",
-                            "addressLine1": "123 Test St",
-                            "city": "Test City",
-                            "state": "TC",
-                            "postalCode": "12345",
-                            "country": "USA",
-                            "isDefault": True
-                        }
-                        
-                        create_response = self.session.post(f"{self.base_url}/buyer/addresses", json=address_data, headers=buyer_headers)
-                        if create_response.status_code == 200:
-                            create_data = create_response.json()
-                            if create_data.get("success"):
-                                self.buyer_address_id = create_data.get("address", {}).get("id")
-                                self.log_test("Create Buyer Address", True, "Created test address for order")
-                            else:
-                                self.log_test("Create Buyer Address", False, "Failed to create address", create_data)
-                                return
-                        else:
-                            self.log_test("Create Buyer Address", False, f"HTTP {create_response.status_code}: {create_response.text}")
-                            return
-                else:
-                    self.log_test("Get Buyer Address", False, "Response missing success=true", data)
-                    return
-            else:
-                self.log_test("Get Buyer Address", False, f"HTTP {response.status_code}: {response.text}")
-                return
-            
-            # Step 2: Get a real store product ID
-            response = self.session.get(f"{self.base_url}/products")
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    products = data.get("products", [])
-                    if products:
-                        # Use the first available product
-                        test_product = products[0]
-                        self.store_product_id = test_product.get("id")
-                        product_price = test_product.get("price", 50.00)
-                        self.log_test("Get Store Product", True, f"Found product {self.store_product_id} with price ${product_price}")
-                    else:
-                        self.log_test("Get Store Product", False, "No products available for order creation test")
-                        return
-                else:
-                    self.log_test("Get Store Product", False, "Response missing success=true", data)
-                    return
-            else:
-                self.log_test("Get Store Product", False, f"HTTP {response.status_code}: {response.text}")
-                return
-            
-            # Step 3: Create order with product_id (snake_case) - this previously failed
-            order_data = {
-                "items": [
-                    {
-                        "product_id": self.store_product_id,  # Using snake_case format as mentioned in review
-                        "quantity": 1,
-                        "price": product_price
-                    }
-                ],
-                "totalAmount": product_price,
-                "useWallet": False,
-                "shippingAddressId": self.buyer_address_id,
-                "shippingName": "Test Buyer",
-                "shippingPhone": "+1234567890",
-                "shippingAddress": {
-                    "street": "123 Test St",
-                    "city": "Test City",
-                    "state": "TC",
-                    "country": "USA",
-                    "zipCode": "12345"
-                }
-            }
-            
-            response = self.session.post(f"{self.base_url}/orders", json=order_data, headers=buyer_headers)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    order = data.get("order", {})
-                    order_id = order.get("id")
-                    self.test_order_id = order_id
-                    self.log_test(
-                        "Order Creation (productId Fix)", 
-                        True, 
-                        f"✅ SUCCESS: Order {order_id} created successfully with product_id (snake_case). No 'Missing productId' error.",
-                        {"order_id": order_id, "product_id": self.store_product_id, "total_amount": order.get("totalAmount")}
-                    )
-                    
-                    # Step 4: Verify order items were saved correctly
-                    admin_headers = {"Authorization": f"Bearer {self.admin_token}"}
-                    if self.admin_token:
-                        order_response = self.session.get(f"{self.base_url}/orders/my", headers=admin_headers)
-                        if order_response.status_code == 200:
-                            order_data = order_response.json()
-                            if order_data.get("success"):
-                                orders = order_data.get("orders", [])
-                                created_order = next((o for o in orders if o.get("id") == order_id), None)
-                                if created_order:
-                                    order_items = created_order.get("orderItems", [])
-                                    self.log_test(
-                                        "Order Items Verification", 
-                                        True, 
-                                        f"Order items saved correctly: {len(order_items)} items with product_id {self.store_product_id}",
-                                        {"order_items_count": len(order_items)}
-                                    )
-                                else:
-                                    self.log_test("Order Items Verification", False, f"Order {order_id} not found in admin orders")
-                            else:
-                                self.log_test("Order Items Verification", False, "Failed to get admin orders", order_data)
-                        else:
-                            self.log_test("Order Items Verification", False, f"HTTP {order_response.status_code}: {order_response.text}")
-                    
-                else:
-                    self.log_test("Order Creation (productId Fix)", False, "Response missing success=true", data)
-            else:
-                # Check for the specific "Missing productId" error
-                if "productId" in response.text or "product_id" in response.text:
-                    self.log_test(
-                        "Order Creation (productId Fix)", 
-                        False, 
-                        f"❌ STILL BROKEN: 'Missing productId' error still occurs",
-                        {"error": "missing_productId", "response": response.text}
-                    )
-                else:
-                    self.log_test("Order Creation (productId Fix)", False, f"HTTP {response.status_code}: {response.text}")
-                
-        except Exception as e:
-            self.log_test("Order Creation (productId Fix)", False, f"Exception: {str(e)}")
-
-    # ============ ADDITIONAL VALIDATION TESTS ============
-    
-    def test_additional_validations(self):
-        """TEST 3: Verify Other Critical Features Still Work"""
-        print("\n=== TEST 3: ADDITIONAL VALIDATION TESTS ===")
-        
-        # Test admin mark order as "paid"
-        if self.admin_token and self.test_order_id:
-            try:
-                headers = {"Authorization": f"Bearer {self.admin_token}"}
-                status_data = {"status": "paid"}
-                response = self.session.put(f"{self.base_url}/orders/{self.test_order_id}/status", json=status_data, headers=headers)
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get("success"):
-                        self.log_test(
-                            "Admin Mark Order as Paid", 
-                            True, 
-                            f"Admin can still mark orders as 'paid' - order {self.test_order_id}",
-                            {"order_id": self.test_order_id, "status": "paid"}
-                        )
-                    else:
-                        self.log_test("Admin Mark Order as Paid", False, "Response missing success=true", data)
-                else:
-                    self.log_test("Admin Mark Order as Paid", False, f"HTTP {response.status_code}: {response.text}")
-            except Exception as e:
-                self.log_test("Admin Mark Order as Paid", False, f"Exception: {str(e)}")
-        
-        # Test seller order center
-        if self.seller_token:
-            try:
-                headers = {"Authorization": f"Bearer {self.seller_token}"}
-                response = self.session.get(f"{self.base_url}/seller/order-center", headers=headers)
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get("success"):
-                        orders = data.get("orders", [])
-                        status_counts = data.get("status_counts", {})
-                        self.log_test(
-                            "Seller Order Center", 
-                            True, 
-                            f"Seller order center still works - {len(orders)} orders, status counts: {status_counts}",
-                            {"orders_count": len(orders), "status_counts": status_counts}
-                        )
-                    else:
-                        self.log_test("Seller Order Center", False, "Response missing success=true", data)
-                else:
-                    self.log_test("Seller Order Center", False, f"HTTP {response.status_code}: {response.text}")
-            except Exception as e:
-                self.log_test("Seller Order Center", False, f"Exception: {str(e)}")
-        
-        # Test buyer view orders
-        if self.buyer_token:
-            try:
-                headers = {"Authorization": f"Bearer {self.buyer_token}"}
-                response = self.session.get(f"{self.base_url}/orders/my", headers=headers)
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get("success"):
-                        orders = data.get("orders", [])
-                        self.log_test(
-                            "Buyer View Orders", 
-                            True, 
-                            f"Buyer can still view orders - {len(orders)} orders found",
-                            {"orders_count": len(orders)}
-                        )
-                    else:
-                        self.log_test("Buyer View Orders", False, "Response missing success=true", data)
-                else:
-                    self.log_test("Buyer View Orders", False, f"HTTP {response.status_code}: {response.text}")
-            except Exception as e:
-                self.log_test("Buyer View Orders", False, f"Exception: {str(e)}")
-
-    # ============ MAIN TEST RUNNER ============
-    
-    def run_fixes_verification(self):
-        """Run all fixes verification tests"""
-        print("🔍 FIXES VERIFICATION RESULTS")
-        print("=" * 60)
-        
-        # Authenticate users
-        self.authenticate_all_users()
-        
-        # Run priority tests
-        self.test_order_completion_fix()
-        self.test_order_creation_fix()
-        self.test_additional_validations()
-        
-        # Generate summary
-        self.generate_summary()
-    
-    def generate_summary(self):
-        """Generate test summary"""
-        print("\n" + "=" * 60)
-        print("📊 FIXES VERIFICATION SUMMARY")
-        print("=" * 60)
-        
-        total_tests = len(self.test_results)
-        passed_tests = sum(1 for result in self.test_results if result["success"])
-        failed_tests = total_tests - passed_tests
-        
-        print(f"Total Tests: {total_tests}")
-        print(f"✅ Fixed/Working: {passed_tests}")
-        print(f"❌ Still Broken: {failed_tests}")
-        print(f"Success Rate: {(passed_tests/total_tests)*100:.1f}%")
-        
-        # Show failed tests
-        if failed_tests > 0:
-            print(f"\n❌ STILL BROKEN FEATURES ({failed_tests}):")
-            for result in self.test_results:
-                if not result["success"]:
-                    print(f"   • {result['test']}: {result['details']}")
-        
-        # Show fixed tests
-        if passed_tests > 0:
-            print(f"\n✅ FIXED/WORKING FEATURES ({passed_tests}):")
-            for result in self.test_results:
-                if result["success"]:
-                    print(f"   • {result['test']}")
-        
-        print("\n" + "=" * 60)
-        
-        # Key findings
-        order_completion_fixed = any(r["success"] and "Order Completion" in r["test"] for r in self.test_results)
-        order_creation_fixed = any(r["success"] and "Order Creation" in r["test"] for r in self.test_results)
-        
-        print("🎯 KEY FINDINGS:")
-        print(f"   • Order Completion (520 Error): {'✅ FIXED' if order_completion_fixed else '❌ STILL BROKEN'}")
-        print(f"   • Order Creation (productId Error): {'✅ FIXED' if order_creation_fixed else '❌ STILL BROKEN'}")
-        
-        if order_completion_fixed and order_creation_fixed:
-            print("\n🎉 BOTH PRIORITY FIXES ARE WORKING CORRECTLY!")
-        elif order_completion_fixed or order_creation_fixed:
-            print("\n⚠️  ONE PRIORITY FIX IS STILL BROKEN - NEEDS ATTENTION")
-        else:
-            print("\n🚨 BOTH PRIORITY FIXES ARE STILL BROKEN - URGENT ACTION REQUIRED")
-
-
-if __name__ == "__main__":
-    tester = FixesVerificationTester()
-    tester.run_fixes_verification()
-    def __init__(self):
-        self.base_url = BASE_URL
-        self.session = requests.Session()
         self.admin_token = None
-        self.seller_token = None
-        self.buyer_token = None
         self.test_results = []
-        
-        # Test data storage
-        self.store_id = None
-        self.catalog_product_id = None
-        self.store_product_id = None
-        self.test_order_id = None
-        self.buyer_address_id = None
-        self.payout_request_id = None
-        self.recharge_request_id = None
         
     def log_test(self, test_name: str, success: bool, details: str = "", response_data: Any = None):
         """Log test result"""
@@ -532,39 +77,8 @@ if __name__ == "__main__":
             print(f"   Response: {response_data}")
         print()
 
-    # ============ AUTHENTICATION TESTS ============
-    
-    def test_admin_login(self):
-        """Test admin authentication"""
-        try:
-            login_data = {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}
-            response = self.session.post(f"{self.base_url}/auth/login", json=login_data)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success") and "session" in data and "user" in data:
-                    session = data["session"]
-                    user = data["user"]
-                    
-                    if session and "access_token" in session and user.get("role") == "admin":
-                        self.admin_token = session["access_token"]
-                        self.log_test(
-                            "Admin Login", 
-                            True, 
-                            f"Successfully logged in as admin: {user.get('name', 'Unknown')}",
-                            {"user_role": user.get("role"), "user_email": user.get("email")}
-                        )
-                    else:
-                        self.log_test("Admin Login", False, f"Invalid role or missing token. Role: {user.get('role')}", data)
-                else:
-                    self.log_test("Admin Login", False, "Response missing required fields", data)
-            else:
-                self.log_test("Admin Login", False, f"HTTP {response.status_code}: {response.text}", None)
-        except Exception as e:
-            self.log_test("Admin Login", False, f"Exception: {str(e)}", None)
-
     def test_seller_login(self):
-        """Test seller authentication"""
+        """Test seller authentication with correct credentials"""
         try:
             login_data = {"email": SELLER_EMAIL, "password": SELLER_PASSWORD}
             response = self.session.post(f"{self.base_url}/auth/login", json=login_data)
@@ -580,9 +94,10 @@ if __name__ == "__main__":
                         self.log_test(
                             "Seller Login", 
                             True, 
-                            f"Successfully logged in as seller: {user.get('name', 'Unknown')}",
+                            f"Successfully logged in as seller: {user.get('email')}",
                             {"user_role": user.get("role"), "user_email": user.get("email")}
                         )
+                        return True
                     else:
                         self.log_test("Seller Login", False, f"Invalid role or missing token. Role: {user.get('role')}", data)
                 else:
@@ -591,11 +106,12 @@ if __name__ == "__main__":
                 self.log_test("Seller Login", False, f"HTTP {response.status_code}: {response.text}", None)
         except Exception as e:
             self.log_test("Seller Login", False, f"Exception: {str(e)}", None)
+        return False
 
-    def test_buyer_login(self):
-        """Test buyer authentication"""
+    def test_admin_login(self):
+        """Test admin authentication with correct credentials"""
         try:
-            login_data = {"email": BUYER_EMAIL, "password": BUYER_PASSWORD}
+            login_data = {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}
             response = self.session.post(f"{self.base_url}/auth/login", json=login_data)
             
             if response.status_code == 200:
@@ -604,1844 +120,480 @@ if __name__ == "__main__":
                     session = data["session"]
                     user = data["user"]
                     
-                    if session and "access_token" in session and user.get("role") == "buyer":
-                        self.buyer_token = session["access_token"]
+                    if session and "access_token" in session and user.get("role") == "admin":
+                        self.admin_token = session["access_token"]
                         self.log_test(
-                            "Buyer Login", 
+                            "Admin Login", 
                             True, 
-                            f"Successfully logged in as buyer: {user.get('name', 'Unknown')}",
+                            f"Successfully logged in as admin: {user.get('email')}",
                             {"user_role": user.get("role"), "user_email": user.get("email")}
                         )
+                        return True
                     else:
-                        self.log_test("Buyer Login", False, f"Invalid role or missing token. Role: {user.get('role')}", data)
+                        self.log_test("Admin Login", False, f"Invalid role or missing token. Role: {user.get('role')}", data)
                 else:
-                    self.log_test("Buyer Login", False, "Response missing required fields", data)
+                    self.log_test("Admin Login", False, "Response missing required fields", data)
             else:
-                self.log_test("Buyer Login", False, f"HTTP {response.status_code}: {response.text}", None)
+                self.log_test("Admin Login", False, f"HTTP {response.status_code}: {response.text}", None)
         except Exception as e:
-            self.log_test("Buyer Login", False, f"Exception: {str(e)}", None)
+            self.log_test("Admin Login", False, f"Exception: {str(e)}", None)
+        return False
 
-    # ============ ADMIN FUNCTIONALITY TESTS ============
-    
-    def test_admin_dashboard_access(self):
-        """Test admin dashboard access and navigation"""
+    def test_admin_get_all_orders(self):
+        """Test GET /api/admin/orders - Check all orders in system"""
         if not self.admin_token:
-            self.log_test("Admin Dashboard Access", False, "No admin token available", None)
-            return
+            self.log_test("Admin Get All Orders", False, "No admin token available", None)
+            return None
             
         try:
             headers = {"Authorization": f"Bearer {self.admin_token}"}
-            
-            # Test admin users endpoint (represents dashboard access)
-            response = self.session.get(f"{self.base_url}/admin/users", headers=headers)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    users = data.get("users", [])
-                    self.log_test(
-                        "Admin Dashboard Access", 
-                        True, 
-                        f"Admin can access dashboard and view {len(users)} users",
-                        {"users_count": len(users)}
-                    )
-                else:
-                    self.log_test("Admin Dashboard Access", False, "Response missing success=true", data)
-            else:
-                self.log_test("Admin Dashboard Access", False, f"HTTP {response.status_code}: {response.text}", None)
-        except Exception as e:
-            self.log_test("Admin Dashboard Access", False, f"Exception: {str(e)}", None)
-
-    def test_admin_product_catalog_management(self):
-        """Test admin product catalog CRUD operations"""
-        if not self.admin_token:
-            self.log_test("Admin Product Catalog Management", False, "No admin token available", None)
-            return
-            
-        try:
-            headers = {"Authorization": f"Bearer {self.admin_token}"}
-            
-            # 1. GET /api/admin/products (should return products from product_catalog)
-            response = self.session.get(f"{self.base_url}/admin/products", headers=headers)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    products = data.get("products", [])
-                    self.log_test(
-                        "GET /api/admin/products", 
-                        True, 
-                        f"Admin can view {len(products)} products from product_catalog",
-                        {"products_count": len(products)}
-                    )
-                    
-                    # Store a product ID for later tests
-                    if products:
-                        self.catalog_product_id = products[0].get("id")
-                else:
-                    self.log_test("GET /api/admin/products", False, "Response missing success=true", data)
-            else:
-                self.log_test("GET /api/admin/products", False, f"HTTP {response.status_code}: {response.text}", None)
-                
-            # 2. POST /api/admin/products (create product)
-            create_data = {
-                "title": "Test Admin Product",
-                "description": "Test product created by admin",
-                "price": 99.99,
-                "category": "electronics",
-                "images": ["https://example.com/image.jpg"]
-            }
-            
-            response = self.session.post(f"{self.base_url}/admin/products", json=create_data, headers=headers)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    product = data.get("product", {})
-                    created_product_id = product.get("id")
-                    self.log_test(
-                        "POST /api/admin/products", 
-                        True, 
-                        f"Admin successfully created product: {product.get('title')}",
-                        {"product_id": created_product_id}
-                    )
-                    
-                    # 3. PUT /api/admin/products/{id} (update product)
-                    if created_product_id:
-                        update_data = {
-                            "title": "Updated Test Admin Product",
-                            "price": 149.99
-                        }
-                        
-                        response = self.session.put(f"{self.base_url}/admin/products/{created_product_id}", json=update_data, headers=headers)
-                        
-                        if response.status_code == 200:
-                            data = response.json()
-                            if data.get("success"):
-                                self.log_test(
-                                    "PUT /api/admin/products/{id}", 
-                                    True, 
-                                    "Admin successfully updated product",
-                                    {"updated_product_id": created_product_id}
-                                )
-                            else:
-                                self.log_test("PUT /api/admin/products/{id}", False, "Response missing success=true", data)
-                        else:
-                            self.log_test("PUT /api/admin/products/{id}", False, f"HTTP {response.status_code}: {response.text}", None)
-                        
-                        # 4. DELETE /api/admin/products/{id} (delete product)
-                        response = self.session.delete(f"{self.base_url}/admin/products/{created_product_id}", headers=headers)
-                        
-                        if response.status_code == 200:
-                            data = response.json()
-                            if data.get("success"):
-                                self.log_test(
-                                    "DELETE /api/admin/products/{id}", 
-                                    True, 
-                                    "Admin successfully deleted product",
-                                    {"deleted_product_id": created_product_id}
-                                )
-                            else:
-                                self.log_test("DELETE /api/admin/products/{id}", False, "Response missing success=true", data)
-                        else:
-                            self.log_test("DELETE /api/admin/products/{id}", False, f"HTTP {response.status_code}: {response.text}", None)
-                else:
-                    self.log_test("POST /api/admin/products", False, "Response missing success=true", data)
-            else:
-                self.log_test("POST /api/admin/products", False, f"HTTP {response.status_code}: {response.text}", None)
-                
-        except Exception as e:
-            self.log_test("Admin Product Catalog Management", False, f"Exception: {str(e)}", None)
-
-    def test_admin_seed_and_clear_catalog(self):
-        """Test admin catalog seeding and clearing"""
-        if not self.admin_token:
-            self.log_test("Admin Seed/Clear Catalog", False, "No admin token available", None)
-            return
-            
-        try:
-            headers = {"Authorization": f"Bearer {self.admin_token}"}
-            
-            # 1. POST /api/admin/seed-catalog (seed 100 products)
-            response = self.session.post(f"{self.base_url}/admin/seed-catalog", headers=headers)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    products_created = data.get("products_created", 0)
-                    self.log_test(
-                        "POST /api/admin/seed-catalog", 
-                        True, 
-                        f"Admin successfully seeded catalog with {products_created} products",
-                        {"products_created": products_created}
-                    )
-                else:
-                    self.log_test("POST /api/admin/seed-catalog", False, "Response missing success=true", data)
-            elif response.status_code == 400 and "already seeded" in response.text.lower():
-                self.log_test("POST /api/admin/seed-catalog", True, "Catalog already seeded (expected)", response.text)
-            else:
-                self.log_test("POST /api/admin/seed-catalog", False, f"HTTP {response.status_code}: {response.text}", None)
-                
-            # 2. DELETE /api/admin/clear-catalog (clear catalog)
-            response = self.session.delete(f"{self.base_url}/admin/clear-catalog", headers=headers)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    self.log_test(
-                        "DELETE /api/admin/clear-catalog", 
-                        True, 
-                        "Admin successfully cleared catalog",
-                        data
-                    )
-                else:
-                    self.log_test("DELETE /api/admin/clear-catalog", False, "Response missing success=true", data)
-            else:
-                self.log_test("DELETE /api/admin/clear-catalog", False, f"HTTP {response.status_code}: {response.text}", None)
-                
-        except Exception as e:
-            self.log_test("Admin Seed/Clear Catalog", False, f"Exception: {str(e)}", None)
-
-    def test_admin_order_management(self):
-        """Test admin order management functionality"""
-        if not self.admin_token:
-            self.log_test("Admin Order Management", False, "No admin token available", None)
-            return
-            
-        try:
-            headers = {"Authorization": f"Bearer {self.admin_token}"}
-            
-            # 1. GET /api/orders/my (admin view all orders)
-            response = self.session.get(f"{self.base_url}/orders/my", headers=headers)
+            response = self.session.get(f"{self.base_url}/admin/orders", headers=headers)
             
             if response.status_code == 200:
                 data = response.json()
                 if data.get("success"):
                     orders = data.get("orders", [])
-                    self.log_test(
-                        "GET /api/orders/my (admin)", 
-                        True, 
-                        f"Admin can view {len(orders)} orders",
-                        {"orders_count": len(orders)}
-                    )
                     
-                    # If there are orders, test status update
+                    success_details = []
+                    success_details.append(f"Total orders in system: {len(orders)}")
+                    
+                    # Look for orders with escrow_status awaiting_seller_deposit
+                    awaiting_deposit_orders = []
+                    for order in orders:
+                        escrow_status = order.get("escrowStatus", "")
+                        if escrow_status == "awaiting_seller_deposit":
+                            awaiting_deposit_orders.append(order)
+                    
+                    if awaiting_deposit_orders:
+                        success_details.append(f"✅ Found {len(awaiting_deposit_orders)} orders awaiting seller deposit")
+                        for order in awaiting_deposit_orders[:3]:  # Show first 3
+                            order_id = order.get("id", "unknown")[:8]
+                            total_amount = order.get("totalAmount", 0)
+                            success_details.append(f"   Order {order_id}: ${total_amount}")
+                    else:
+                        success_details.append("⚠️  No orders awaiting seller deposit found")
+                    
+                    # Show sample orders
                     if orders:
-                        test_order = orders[0]
-                        order_id = test_order.get("id")
-                        
-                        if order_id:
-                            # 2. PUT /api/orders/{id}/status (mark as paid)
-                            status_data = {"status": "paid"}
-                            response = self.session.put(f"{self.base_url}/orders/{order_id}/status", json=status_data, headers=headers)
-                            
-                            if response.status_code == 200:
-                                data = response.json()
-                                if data.get("success"):
-                                    self.log_test(
-                                        "PUT /api/orders/{id}/status (paid)", 
-                                        True, 
-                                        f"Admin successfully marked order {order_id} as paid",
-                                        {"order_id": order_id, "status": "paid"}
-                                    )
-                                    
-                                    # 3. PUT /api/orders/{id}/status (mark as completed)
-                                    status_data = {"status": "completed"}
-                                    response = self.session.put(f"{self.base_url}/orders/{order_id}/status", json=status_data, headers=headers)
-                                    
-                                    if response.status_code == 200:
-                                        data = response.json()
-                                        if data.get("success"):
-                                            self.log_test(
-                                                "PUT /api/orders/{id}/status (completed)", 
-                                                True, 
-                                                f"Admin successfully marked order {order_id} as completed",
-                                                {"order_id": order_id, "status": "completed"}
-                                            )
-                                        else:
-                                            self.log_test("PUT /api/orders/{id}/status (completed)", False, "Response missing success=true", data)
-                                    else:
-                                        self.log_test("PUT /api/orders/{id}/status (completed)", False, f"HTTP {response.status_code}: {response.text}", None)
-                                else:
-                                    self.log_test("PUT /api/orders/{id}/status (paid)", False, "Response missing success=true", data)
-                            else:
-                                self.log_test("PUT /api/orders/{id}/status (paid)", False, f"HTTP {response.status_code}: {response.text}", None)
-                    else:
-                        self.log_test("Admin Order Status Update", True, "No orders available for status update test", None)
+                        success_details.append("Sample orders:")
+                        for i, order in enumerate(orders[:3]):
+                            order_id = order.get("id", "unknown")[:8]
+                            escrow_status = order.get("escrowStatus", "unknown")
+                            order_status = order.get("orderStatus", "unknown")
+                            success_details.append(f"   {i+1}. {order_id}: escrow={escrow_status}, status={order_status}")
+                    
+                    self.log_test(
+                        "Admin Get All Orders", 
+                        True, 
+                        "; ".join(success_details),
+                        {
+                            "total_orders": len(orders),
+                            "awaiting_deposit_orders": len(awaiting_deposit_orders),
+                            "sample_orders": orders[:3]
+                        }
+                    )
+                    
+                    return awaiting_deposit_orders
                 else:
-                    self.log_test("GET /api/orders/my (admin)", False, "Response missing success=true", data)
+                    self.log_test("Admin Get All Orders", False, "Response missing success=true", data)
             else:
-                self.log_test("GET /api/orders/my (admin)", False, f"HTTP {response.status_code}: {response.text}", None)
+                self.log_test("Admin Get All Orders", False, f"HTTP {response.status_code}: {response.text}", None)
                 
         except Exception as e:
-            self.log_test("Admin Order Management", False, f"Exception: {str(e)}", None)
-
-    def test_admin_user_management(self):
-        """Test admin user management"""
+            self.log_test("Admin Get All Orders", False, f"Exception: {str(e)}", None)
+        
+        return None
+        """Test GET /api/admin/deposit-confirmations - Find pending deposits"""
         if not self.admin_token:
-            self.log_test("Admin User Management", False, "No admin token available", None)
-            return
+            self.log_test("Admin Get Deposit Confirmations", False, "No admin token available", None)
+            return None
             
         try:
             headers = {"Authorization": f"Bearer {self.admin_token}"}
-            
-            # GET /api/admin/users
-            response = self.session.get(f"{self.base_url}/admin/users", headers=headers)
+            response = self.session.get(f"{self.base_url}/admin/deposit-confirmations", headers=headers)
             
             if response.status_code == 200:
                 data = response.json()
                 if data.get("success"):
-                    users = data.get("users", [])
+                    deposits = data.get("deposits", [])
+                    
+                    success_details = []
+                    success_details.append(f"Total pending deposits found: {len(deposits)}")
+                    
+                    # Look for any pending deposit
+                    pending_deposit = None
+                    if deposits:
+                        pending_deposit = deposits[0]  # Take the first one
+                        success_details.append(f"✅ Found pending deposit for order: {pending_deposit.get('orderId', 'unknown')}")
+                        success_details.append(f"   Deposit method: {pending_deposit.get('depositMethod', 'unknown')}")
+                        success_details.append(f"   Deposit amount: ${pending_deposit.get('depositRequired', 0)}")
+                        success_details.append(f"   Status: {pending_deposit.get('deposit_status', 'unknown')}")
+                    else:
+                        success_details.append("⚠️  No pending deposits found - may need to create test data first")
+                    
                     self.log_test(
-                        "GET /api/admin/users", 
+                        "Admin Get Deposit Confirmations", 
                         True, 
-                        f"Admin can view {len(users)} users with roles",
-                        {"users_count": len(users)}
+                        "; ".join(success_details),
+                        {
+                            "total_deposits": len(deposits),
+                            "pending_deposit": pending_deposit,
+                            "all_deposits": deposits
+                        }
                     )
+                    
+                    return pending_deposit
                 else:
-                    self.log_test("GET /api/admin/users", False, "Response missing success=true", data)
+                    self.log_test("Admin Get Deposit Confirmations", False, "Response missing success=true", data)
             else:
-                self.log_test("GET /api/admin/users", False, f"HTTP {response.status_code}: {response.text}", None)
+                self.log_test("Admin Get Deposit Confirmations", False, f"HTTP {response.status_code}: {response.text}", None)
                 
         except Exception as e:
-            self.log_test("Admin User Management", False, f"Exception: {str(e)}", None)
+            self.log_test("Admin Get Deposit Confirmations", False, f"Exception: {str(e)}", None)
+        
+        return None
 
-    def test_admin_payout_requests(self):
-        """Test admin payout request management"""
+    def test_admin_confirm_deposit(self, order_id: str):
+        """Test POST /api/admin/orders/{order_id}/confirm-deposit - Confirm the deposit"""
         if not self.admin_token:
-            self.log_test("Admin Payout Requests", False, "No admin token available", None)
-            return
+            self.log_test("Admin Confirm Deposit", False, "No admin token available", None)
+            return False
+            
+        if not order_id:
+            self.log_test("Admin Confirm Deposit", False, "No order ID provided", None)
+            return False
             
         try:
             headers = {"Authorization": f"Bearer {self.admin_token}"}
+            confirm_data = {"approved": True}
             
-            # 1. GET /api/admin/payout-requests
-            response = self.session.get(f"{self.base_url}/admin/payout-requests", headers=headers)
+            response = self.session.post(
+                f"{self.base_url}/admin/orders/{order_id}/confirm-deposit", 
+                json=confirm_data, 
+                headers=headers
+            )
             
             if response.status_code == 200:
                 data = response.json()
                 if data.get("success"):
-                    payout_requests = data.get("payout_requests", [])
-                    self.log_test(
-                        "GET /api/admin/payout-requests", 
-                        True, 
-                        f"Admin can view {len(payout_requests)} payout requests",
-                        {"payout_requests_count": len(payout_requests)}
-                    )
+                    success_details = []
+                    success_details.append(f"✅ Successfully confirmed deposit for order {order_id}")
+                    success_details.append(f"Response message: {data.get('message', 'No message')}")
                     
-                    # If there are payout requests, test approval
-                    if payout_requests:
-                        test_request = payout_requests[0]
-                        request_id = test_request.get("id")
+                    # Check if response includes updated order info
+                    if 'order' in data:
+                        order = data['order']
+                        escrow_status = order.get('escrowStatus', 'unknown')
+                        order_status = order.get('orderStatus', 'unknown')
+                        success_details.append(f"Updated escrow_status: {escrow_status}")
+                        success_details.append(f"Updated order_status: {order_status}")
                         
-                        if request_id:
-                            # 2. POST /api/admin/payout-requests/{id}/status (approve)
-                            status_data = {"status": "approved", "adminNote": "Test approval"}
-                            response = self.session.post(f"{self.base_url}/admin/payout-requests/{request_id}/status", json=status_data, headers=headers)
-                            
-                            if response.status_code == 200:
-                                data = response.json()
-                                if data.get("success"):
-                                    self.log_test(
-                                        "POST /api/admin/payout-requests/{id}/status", 
-                                        True, 
-                                        f"Admin successfully approved payout request {request_id}",
-                                        {"request_id": request_id, "status": "approved"}
-                                    )
-                                else:
-                                    self.log_test("POST /api/admin/payout-requests/{id}/status", False, "Response missing success=true", data)
-                            else:
-                                self.log_test("POST /api/admin/payout-requests/{id}/status", False, f"HTTP {response.status_code}: {response.text}", None)
-                    else:
-                        self.log_test("Admin Payout Request Approval", True, "No payout requests available for approval test", None)
-                else:
-                    self.log_test("GET /api/admin/payout-requests", False, "Response missing success=true", data)
-            else:
-                self.log_test("GET /api/admin/payout-requests", False, f"HTTP {response.status_code}: {response.text}", None)
-                
-        except Exception as e:
-            self.log_test("Admin Payout Requests", False, f"Exception: {str(e)}", None)
-
-    def test_admin_seller_wallet_recharge_requests(self):
-        """Test admin seller wallet recharge request management"""
-        if not self.admin_token:
-            self.log_test("Admin Seller Wallet Recharge", False, "No admin token available", None)
-            return
-            
-        try:
-            headers = {"Authorization": f"Bearer {self.admin_token}"}
-            
-            # 1. GET /api/admin/seller-wallet-recharge-requests
-            response = self.session.get(f"{self.base_url}/admin/seller-wallet-recharge-requests", headers=headers)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    recharge_requests = data.get("recharge_requests", [])
-                    self.log_test(
-                        "GET /api/admin/seller-wallet-recharge-requests", 
-                        True, 
-                        f"Admin can view {len(recharge_requests)} seller wallet recharge requests",
-                        {"recharge_requests_count": len(recharge_requests)}
-                    )
-                    
-                    # If there are recharge requests, test approval
-                    if recharge_requests:
-                        test_request = recharge_requests[0]
-                        request_id = test_request.get("id")
-                        
-                        if request_id:
-                            # 2. POST /api/admin/seller-wallet-recharge-requests/{id}/status
-                            status_data = {"status": "approved", "adminNote": "Test approval"}
-                            response = self.session.post(f"{self.base_url}/admin/seller-wallet-recharge-requests/{request_id}/status", json=status_data, headers=headers)
-                            
-                            if response.status_code == 200:
-                                data = response.json()
-                                if data.get("success"):
-                                    self.log_test(
-                                        "POST /api/admin/seller-wallet-recharge-requests/{id}/status", 
-                                        True, 
-                                        f"Admin successfully approved seller wallet recharge request {request_id}",
-                                        {"request_id": request_id, "status": "approved"}
-                                    )
-                                else:
-                                    self.log_test("POST /api/admin/seller-wallet-recharge-requests/{id}/status", False, "Response missing success=true", data)
-                            else:
-                                self.log_test("POST /api/admin/seller-wallet-recharge-requests/{id}/status", False, f"HTTP {response.status_code}: {response.text}", None)
-                    else:
-                        self.log_test("Admin Seller Wallet Recharge Approval", True, "No seller wallet recharge requests available for approval test", None)
-                else:
-                    self.log_test("GET /api/admin/seller-wallet-recharge-requests", False, "Response missing success=true", data)
-            else:
-                self.log_test("GET /api/admin/seller-wallet-recharge-requests", False, f"HTTP {response.status_code}: {response.text}", None)
-                
-        except Exception as e:
-            self.log_test("Admin Seller Wallet Recharge", False, f"Exception: {str(e)}", None)
-
-    # ============ BUYER FUNCTIONALITY TESTS ============
-    
-    def test_buyer_product_browsing(self):
-        """Test buyer product browsing (should return products from store_products, NOT catalog)"""
-        try:
-            # Test without authentication first (public endpoint)
-            response = self.session.get(f"{self.base_url}/products")
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    products = data.get("products", [])
-                    self.log_test(
-                        "GET /api/products (buyer browsing)", 
-                        True, 
-                        f"Buyer can browse {len(products)} products from store_products (NOT catalog)",
-                        {"products_count": len(products)}
-                    )
-                    
-                    # Verify products have store names (indicating they come from store_products)
-                    if products:
-                        sample_product = products[0]
-                        has_store_name = "store_name" in sample_product or "storeName" in sample_product
-                        if has_store_name:
-                            self.log_test(
-                                "Product Store Name Verification", 
-                                True, 
-                                "Products correctly include store names (from store_products table)",
-                                {"sample_product_fields": list(sample_product.keys())}
-                            )
+                        # Check if the fix is working
+                        fix_working = (escrow_status == 'deposit_received' and order_status == 'to_be_shipped')
+                        if fix_working:
+                            success_details.append("✅ FIX WORKING: Both escrow_status and order_status updated correctly")
                         else:
-                            self.log_test(
-                                "Product Store Name Verification", 
-                                False, 
-                                "Products missing store names - may be from catalog instead of store_products",
-                                {"sample_product_fields": list(sample_product.keys())}
-                            )
-                            
-                        # Store a product for order testing
-                        self.store_product_id = sample_product.get("id")
-                else:
-                    self.log_test("GET /api/products (buyer browsing)", False, "Response missing success=true", data)
-            else:
-                self.log_test("GET /api/products (buyer browsing)", False, f"HTTP {response.status_code}: {response.text}", None)
-                
-        except Exception as e:
-            self.log_test("Buyer Product Browsing", False, f"Exception: {str(e)}", None)
-
-    def test_buyer_store_system(self):
-        """Test buyer store browsing functionality"""
-        if not self.buyer_token:
-            self.log_test("Buyer Store System", False, "No buyer token available", None)
-            return
-            
-        try:
-            headers = {"Authorization": f"Bearer {self.buyer_token}"}
-            
-            # 1. GET /api/stores/search (browse stores)
-            response = self.session.get(f"{self.base_url}/stores/search", headers=headers)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    stores = data.get("stores", [])
+                            success_details.append("❌ FIX ISSUE: Status updates may not be correct")
+                    
                     self.log_test(
-                        "GET /api/stores/search", 
+                        "Admin Confirm Deposit", 
                         True, 
-                        f"Buyer can browse {len(stores)} stores",
-                        {"stores_count": len(stores)}
+                        "; ".join(success_details),
+                        {
+                            "order_id": order_id,
+                            "response_data": data
+                        }
                     )
                     
-                    # Store a store ID for further testing
-                    if stores:
-                        self.store_id = stores[0].get("id")
-                        
-                        # 2. GET /api/stores/{id} (store detail)
-                        if self.store_id:
-                            response = self.session.get(f"{self.base_url}/stores/{self.store_id}", headers=headers)
-                            
-                            if response.status_code == 200:
-                                data = response.json()
-                                if data.get("success"):
-                                    store = data.get("store", {})
-                                    self.log_test(
-                                        "GET /api/stores/{id}", 
-                                        True, 
-                                        f"Buyer can view store details: {store.get('store_name', 'Unknown')}",
-                                        {"store_id": self.store_id, "store_name": store.get("store_name")}
-                                    )
-                                    
-                                    # 3. GET /api/stores/{id}/products (store products)
-                                    response = self.session.get(f"{self.base_url}/stores/{self.store_id}/products", headers=headers)
-                                    
-                                    if response.status_code == 200:
-                                        data = response.json()
-                                        if data.get("success"):
-                                            products = data.get("products", [])
-                                            self.log_test(
-                                                "GET /api/stores/{id}/products", 
-                                                True, 
-                                                f"Buyer can view {len(products)} products in store {self.store_id}",
-                                                {"store_id": self.store_id, "products_count": len(products)}
-                                            )
-                                        else:
-                                            self.log_test("GET /api/stores/{id}/products", False, "Response missing success=true", data)
-                                    else:
-                                        self.log_test("GET /api/stores/{id}/products", False, f"HTTP {response.status_code}: {response.text}", None)
-                                else:
-                                    self.log_test("GET /api/stores/{id}", False, "Response missing success=true", data)
-                            else:
-                                self.log_test("GET /api/stores/{id}", False, f"HTTP {response.status_code}: {response.text}", None)
+                    return True
                 else:
-                    self.log_test("GET /api/stores/search", False, "Response missing success=true", data)
+                    self.log_test("Admin Confirm Deposit", False, "Response missing success=true", data)
             else:
-                self.log_test("GET /api/stores/search", False, f"HTTP {response.status_code}: {response.text}", None)
+                self.log_test("Admin Confirm Deposit", False, f"HTTP {response.status_code}: {response.text}", None)
                 
         except Exception as e:
-            self.log_test("Buyer Store System", False, f"Exception: {str(e)}", None)
+            self.log_test("Admin Confirm Deposit", False, f"Exception: {str(e)}", None)
+        
+        return False
 
-    def test_buyer_shipping_addresses(self):
-        """Test buyer shipping address management"""
-        if not self.buyer_token:
-            self.log_test("Buyer Shipping Addresses", False, "No buyer token available", None)
-            return
-            
-        try:
-            headers = {"Authorization": f"Bearer {self.buyer_token}"}
-            
-            # 1. GET /api/buyer/addresses
-            response = self.session.get(f"{self.base_url}/buyer/addresses", headers=headers)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    addresses = data.get("addresses", [])
-                    self.log_test(
-                        "GET /api/buyer/addresses", 
-                        True, 
-                        f"Buyer can view {len(addresses)} shipping addresses",
-                        {"addresses_count": len(addresses)}
-                    )
-                else:
-                    self.log_test("GET /api/buyer/addresses", False, "Response missing success=true", data)
-            else:
-                self.log_test("GET /api/buyer/addresses", False, f"HTTP {response.status_code}: {response.text}", None)
-                
-            # 2. POST /api/buyer/addresses (create address)
-            address_data = {
-                "fullName": "Test Buyer",
-                "phone": "+1234567890",
-                "addressLine1": "123 Test Street",
-                "city": "Test City",
-                "state": "Test State",
-                "postalCode": "12345",
-                "country": "Test Country",
-                "isDefault": True
-            }
-            
-            response = self.session.post(f"{self.base_url}/buyer/addresses", json=address_data, headers=headers)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    address = data.get("address", {})
-                    address_id = address.get("id")
-                    self.buyer_address_id = address_id
-                    self.log_test(
-                        "POST /api/buyer/addresses", 
-                        True, 
-                        f"Buyer successfully created shipping address: {address.get('fullName')}",
-                        {"address_id": address_id}
-                    )
-                    
-                    # 3. PUT /api/buyer/addresses/{id} (update address)
-                    if address_id:
-                        update_data = {"fullName": "Updated Test Buyer", "phone": "+0987654321"}
-                        response = self.session.put(f"{self.base_url}/buyer/addresses/{address_id}", json=update_data, headers=headers)
-                        
-                        if response.status_code == 200:
-                            data = response.json()
-                            if data.get("success"):
-                                self.log_test(
-                                    "PUT /api/buyer/addresses/{id}", 
-                                    True, 
-                                    f"Buyer successfully updated address {address_id}",
-                                    {"address_id": address_id}
-                                )
-                            else:
-                                self.log_test("PUT /api/buyer/addresses/{id}", False, "Response missing success=true", data)
-                        else:
-                            self.log_test("PUT /api/buyer/addresses/{id}", False, f"HTTP {response.status_code}: {response.text}", None)
-                        
-                        # 4. DELETE /api/buyer/addresses/{id} (delete address) - Skip for now to keep address for order test
-                        # We'll keep the address for order creation test
-                else:
-                    self.log_test("POST /api/buyer/addresses", False, "Response missing success=true", data)
-            else:
-                self.log_test("POST /api/buyer/addresses", False, f"HTTP {response.status_code}: {response.text}", None)
-                
-        except Exception as e:
-            self.log_test("Buyer Shipping Addresses", False, f"Exception: {str(e)}", None)
-
-    def test_buyer_order_creation(self):
-        """Test buyer order creation (CRITICAL - Recently Fixed)"""
-        if not self.buyer_token:
-            self.log_test("Buyer Order Creation", False, "No buyer token available", None)
-            return
-            
-        if not self.store_product_id:
-            self.log_test("Buyer Order Creation", False, "No store product ID available for order", None)
-            return
-            
-        try:
-            headers = {"Authorization": f"Bearer {self.buyer_token}"}
-            
-            # Create order with store_product IDs (NOT catalog IDs)
-            order_data = {
-                "items": [
-                    {
-                        "id": self.store_product_id,  # MUST be store_product ID
-                        "quantity": 2,
-                        "price": 99.99
-                    }
-                ],
-                "totalAmount": 199.98,
-                "useWallet": False,
-                "shippingAddressId": self.buyer_address_id,
-                "shippingName": "Test Buyer",
-                "shippingPhone": "+1234567890",
-                "shippingAddress": {
-                    "fullName": "Test Buyer",
-                    "addressLine1": "123 Test Street",
-                    "city": "Test City",
-                    "state": "Test State",
-                    "postalCode": "12345",
-                    "country": "Test Country"
-                }
-            }
-            
-            response = self.session.post(f"{self.base_url}/orders", json=order_data, headers=headers)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    order = data.get("order", {})
-                    order_id = order.get("id")
-                    self.test_order_id = order_id
-                    self.log_test(
-                        "POST /api/orders (order creation)", 
-                        True, 
-                        f"Buyer successfully created order {order_id} with store_product IDs - NO foreign key constraint error",
-                        {"order_id": order_id, "total_amount": order.get("totalAmount")}
-                    )
-                    
-                    # Verify order appears in buyer's orders
-                    response = self.session.get(f"{self.base_url}/orders/my", headers=headers)
-                    
-                    if response.status_code == 200:
-                        data = response.json()
-                        if data.get("success"):
-                            orders = data.get("orders", [])
-                            order_found = any(o.get("id") == order_id for o in orders)
-                            if order_found:
-                                self.log_test(
-                                    "Order appears in GET /api/orders/my", 
-                                    True, 
-                                    f"Order {order_id} successfully appears in buyer's order list",
-                                    {"orders_count": len(orders)}
-                                )
-                            else:
-                                self.log_test(
-                                    "Order appears in GET /api/orders/my", 
-                                    False, 
-                                    f"Order {order_id} not found in buyer's order list",
-                                    {"orders_count": len(orders)}
-                                )
-                        else:
-                            self.log_test("Order appears in GET /api/orders/my", False, "Response missing success=true", data)
-                    else:
-                        self.log_test("Order appears in GET /api/orders/my", False, f"HTTP {response.status_code}: {response.text}", None)
-                else:
-                    self.log_test("POST /api/orders (order creation)", False, "Response missing success=true", data)
-            else:
-                # Check for foreign key constraint error
-                if "foreign key constraint" in response.text.lower():
-                    self.log_test(
-                        "POST /api/orders (order creation)", 
-                        False, 
-                        f"CRITICAL: Foreign key constraint error still exists - {response.text}",
-                        {"error": "foreign_key_constraint", "response": response.text}
-                    )
-                else:
-                    self.log_test("POST /api/orders (order creation)", False, f"HTTP {response.status_code}: {response.text}", None)
-                
-        except Exception as e:
-            self.log_test("Buyer Order Creation", False, f"Exception: {str(e)}", None)
-
-    def test_buyer_wallet(self):
-        """Test buyer wallet functionality"""
-        if not self.buyer_token:
-            self.log_test("Buyer Wallet", False, "No buyer token available", None)
-            return
-            
-        try:
-            headers = {"Authorization": f"Bearer {self.buyer_token}"}
-            
-            # 1. GET /api/wallet/balance
-            response = self.session.get(f"{self.base_url}/wallet/balance", headers=headers)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    balance = data.get("balance", 0)
-                    self.log_test(
-                        "GET /api/wallet/balance", 
-                        True, 
-                        f"Buyer can view wallet balance: ${balance}",
-                        {"balance": balance}
-                    )
-                else:
-                    self.log_test("GET /api/wallet/balance", False, "Response missing success=true", data)
-            else:
-                self.log_test("GET /api/wallet/balance", False, f"HTTP {response.status_code}: {response.text}", None)
-                
-            # 2. POST /api/wallet/recharge
-            recharge_data = {
-                "amount": 100.0,
-                "paymentMethod": "USDT_TRON",
-                "paymentWallet": "TY8Z91NMCjREyZVj9NjDsF8hVjyqfxFFRU"
-            }
-            
-            response = self.session.post(f"{self.base_url}/wallet/recharge", json=recharge_data, headers=headers)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    recharge_request = data.get("recharge_request", {})
-                    self.log_test(
-                        "POST /api/wallet/recharge", 
-                        True, 
-                        f"Buyer successfully created wallet recharge request: ${recharge_data['amount']}",
-                        {"recharge_request_id": recharge_request.get("id"), "amount": recharge_data["amount"]}
-                    )
-                else:
-                    self.log_test("POST /api/wallet/recharge", False, "Response missing success=true", data)
-            else:
-                self.log_test("POST /api/wallet/recharge", False, f"HTTP {response.status_code}: {response.text}", None)
-                
-        except Exception as e:
-            self.log_test("Buyer Wallet", False, f"Exception: {str(e)}", None)
-
-    # ============ SELLER FUNCTIONALITY TESTS ============
-    
-    def test_seller_product_catalog_browsing(self):
-        """Test seller browsing product catalog"""
+    def test_seller_order_center_status(self, expected_order_id: str = None):
+        """Test GET /api/seller/order-center - Verify order status after admin confirmation"""
         if not self.seller_token:
-            self.log_test("Seller Catalog Browsing", False, "No seller token available", None)
-            return
+            self.log_test("Seller Order Center Status Check", False, "No seller token available", None)
+            return None
             
         try:
             headers = {"Authorization": f"Bearer {self.seller_token}"}
-            
-            # GET /api/seller/catalog/products (should see 100+ products from product_catalog)
-            response = self.session.get(f"{self.base_url}/seller/catalog/products", headers=headers)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    products = data.get("products", [])
-                    self.log_test(
-                        "GET /api/seller/catalog/products", 
-                        True, 
-                        f"Seller can browse {len(products)} products from product_catalog",
-                        {"products_count": len(products)}
-                    )
-                    
-                    # Store a catalog product ID for later tests
-                    if products:
-                        self.catalog_product_id = products[0].get("id")
-                else:
-                    self.log_test("GET /api/seller/catalog/products", False, "Response missing success=true", data)
-            else:
-                self.log_test("GET /api/seller/catalog/products", False, f"HTTP {response.status_code}: {response.text}", None)
-                
-        except Exception as e:
-            self.log_test("Seller Catalog Browsing", False, f"Exception: {str(e)}", None)
-
-    def test_seller_store_management(self):
-        """Test seller store management functionality"""
-        if not self.seller_token:
-            self.log_test("Seller Store Management", False, "No seller token available", None)
-            return
-            
-        if not self.catalog_product_id:
-            self.log_test("Seller Store Management", False, "No catalog product ID available", None)
-            return
-            
-        try:
-            headers = {"Authorization": f"Bearer {self.seller_token}"}
-            
-            # 1. POST /api/seller/store/products (add product to store - auto-create store if needed)
-            form_data = {
-                "catalog_product_id": self.catalog_product_id,
-                "price": "149.99",
-                "stock": "25"
-            }
-            
-            response = self.session.post(f"{self.base_url}/seller/store/products", headers=headers, data=form_data)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    store_product = data.get("store_product", {})
-                    self.log_test(
-                        "POST /api/seller/store/products", 
-                        True, 
-                        f"Seller successfully added product to store (auto-create if needed): ${form_data['price']}, stock {form_data['stock']}",
-                        {"store_product_id": store_product.get("id"), "catalog_product_id": self.catalog_product_id}
-                    )
-                else:
-                    self.log_test("POST /api/seller/store/products", False, "Response missing success=true", data)
-            elif response.status_code == 400 and "already exists" in response.text.lower():
-                self.log_test("POST /api/seller/store/products", True, "Product already exists in store (expected)", response.text)
-            else:
-                self.log_test("POST /api/seller/store/products", False, f"HTTP {response.status_code}: {response.text}", None)
-                
-            # 2. GET /api/seller/store/products (view store products)
-            response = self.session.get(f"{self.base_url}/seller/store/products", headers=headers)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    products = data.get("products", [])
-                    self.log_test(
-                        "GET /api/seller/store/products", 
-                        True, 
-                        f"Seller can view {len(products)} products in their store",
-                        {"products_count": len(products)}
-                    )
-                    
-                    # Store a store product ID for update/delete tests
-                    if products:
-                        store_product_id = products[0].get("id")
-                        
-                        # 3. PUT /api/seller/store/products/{id} (update product price/stock)
-                        if store_product_id:
-                            update_data = {"price": "199.99", "stock": "30"}
-                            response = self.session.put(f"{self.base_url}/seller/store/products/{store_product_id}", headers=headers, data=update_data)
-                            
-                            if response.status_code == 200:
-                                data = response.json()
-                                if data.get("success"):
-                                    self.log_test(
-                                        "PUT /api/seller/store/products/{id}", 
-                                        True, 
-                                        f"Seller successfully updated store product {store_product_id}",
-                                        {"store_product_id": store_product_id, "new_price": update_data["price"]}
-                                    )
-                                else:
-                                    self.log_test("PUT /api/seller/store/products/{id}", False, "Response missing success=true", data)
-                            else:
-                                self.log_test("PUT /api/seller/store/products/{id}", False, f"HTTP {response.status_code}: {response.text}", None)
-                            
-                            # 4. DELETE /api/seller/store/products/{id} (remove from store) - Skip to keep product for order tests
-                            # We'll keep the product for order testing
-                else:
-                    self.log_test("GET /api/seller/store/products", False, "Response missing success=true", data)
-            else:
-                self.log_test("GET /api/seller/store/products", False, f"HTTP {response.status_code}: {response.text}", None)
-                
-        except Exception as e:
-            self.log_test("Seller Store Management", False, f"Exception: {str(e)}", None)
-
-    def test_seller_order_center(self):
-        """Test seller order center functionality"""
-        if not self.seller_token:
-            self.log_test("Seller Order Center", False, "No seller token available", None)
-            return
-            
-        try:
-            headers = {"Authorization": f"Bearer {self.seller_token}"}
-            
-            # 1. GET /api/seller/order-center (with status counts)
             response = self.session.get(f"{self.base_url}/seller/order-center", headers=headers)
             
             if response.status_code == 200:
                 data = response.json()
                 if data.get("success"):
                     orders = data.get("orders", [])
-                    status_counts = data.get("status_counts", {})
-                    self.log_test(
-                        "GET /api/seller/order-center", 
-                        True, 
-                        f"Seller can view {len(orders)} orders with status counts: {status_counts}",
-                        {"orders_count": len(orders), "status_counts": status_counts}
-                    )
+                    counts = data.get("counts", {})
                     
-                    # Test status filtering
-                    for status in ["pending_payment", "to_be_shipped", "to_be_received", "completed"]:
-                        response = self.session.get(f"{self.base_url}/seller/order-center?status={status}", headers=headers)
+                    success_details = []
+                    success_details.append(f"Total orders found: {len(orders)}")
+                    success_details.append(f"Order counts: {counts}")
+                    
+                    # Look for the specific order if provided
+                    target_order = None
+                    if expected_order_id:
+                        for order in orders:
+                            if order.get("id") == expected_order_id:
+                                target_order = order
+                                break
                         
-                        if response.status_code == 200:
-                            data = response.json()
-                            if data.get("success"):
-                                filtered_orders = data.get("orders", [])
-                                self.log_test(
-                                    f"GET /api/seller/order-center?status={status}", 
-                                    True, 
-                                    f"Seller can filter orders by status '{status}': {len(filtered_orders)} orders",
-                                    {"status": status, "orders_count": len(filtered_orders)}
-                                )
+                        if target_order:
+                            success_details.append(f"✅ Found target order {expected_order_id}")
+                            
+                            escrow_status = target_order.get("escrowStatus", "unknown")
+                            order_status = target_order.get("orderStatus", "unknown")
+                            
+                            success_details.append(f"Order escrow_status: {escrow_status}")
+                            success_details.append(f"Order order_status: {order_status}")
+                            
+                            # Check if the fix is working - order should be in 'to_be_shipped' status
+                            fix_working = (escrow_status == 'deposit_received' and order_status == 'to_be_shipped')
+                            
+                            if fix_working:
+                                success_details.append("✅ FIX VERIFIED: Order moved to 'to_be_shipped' status")
                             else:
-                                self.log_test(f"GET /api/seller/order-center?status={status}", False, "Response missing success=true", data)
-                        else:
-                            self.log_test(f"GET /api/seller/order-center?status={status}", False, f"HTTP {response.status_code}: {response.text}", None)
-                    
-                    # If there are orders, test shipping functionality
-                    if orders:
-                        test_order = orders[0]
-                        order_id = test_order.get("id")
-                        
-                        if order_id:
-                            # 2. POST /api/seller/orders/{id}/ship (ship order with tracking)
-                            ship_data = {
-                                "trackingNumber": "TEST123456789",
-                                "courierName": "DHL Express",
-                                "courierCode": "dhl",
-                                "estimatedDelivery": "2024-02-01"
-                            }
-                            
-                            response = self.session.post(f"{self.base_url}/seller/orders/{order_id}/ship", json=ship_data, headers=headers)
-                            
-                            if response.status_code == 200:
-                                data = response.json()
-                                if data.get("success"):
-                                    self.log_test(
-                                        "POST /api/seller/orders/{id}/ship", 
-                                        True, 
-                                        f"Seller successfully shipped order {order_id} with tracking {ship_data['trackingNumber']}",
-                                        {"order_id": order_id, "tracking_number": ship_data["trackingNumber"]}
-                                    )
-                                    
-                                    # 3. PUT /api/seller/orders/{id}/shipment (update shipment)
-                                    shipment_data = {"deliveryStatus": "delivered"}
-                                    response = self.session.put(f"{self.base_url}/seller/orders/{order_id}/shipment", json=shipment_data, headers=headers)
-                                    
-                                    if response.status_code == 200:
-                                        data = response.json()
-                                        if data.get("success"):
-                                            self.log_test(
-                                                "PUT /api/seller/orders/{id}/shipment", 
-                                                True, 
-                                                f"Seller successfully updated shipment for order {order_id}",
-                                                {"order_id": order_id, "delivery_status": shipment_data["deliveryStatus"]}
-                                            )
-                                        else:
-                                            self.log_test("PUT /api/seller/orders/{id}/shipment", False, "Response missing success=true", data)
-                                    else:
-                                        self.log_test("PUT /api/seller/orders/{id}/shipment", False, f"HTTP {response.status_code}: {response.text}", None)
-                                else:
-                                    self.log_test("POST /api/seller/orders/{id}/ship", False, "Response missing success=true", data)
+                                success_details.append("❌ FIX NOT WORKING: Order status not updated correctly")
+                                
+                            # Check counts - to_be_shipped should be > 0
+                            to_be_shipped_count = counts.get('to_be_shipped', 0)
+                            if to_be_shipped_count > 0:
+                                success_details.append(f"✅ 'To Be Shipped' count: {to_be_shipped_count}")
                             else:
-                                self.log_test("POST /api/seller/orders/{id}/ship", False, f"HTTP {response.status_code}: {response.text}", None)
+                                success_details.append(f"❌ 'To Be Shipped' count is 0")
+                        else:
+                            success_details.append(f"❌ Target order {expected_order_id} not found")
+                            fix_working = False
                     else:
-                        self.log_test("Seller Order Shipping", True, "No orders available for shipping test", None)
-                else:
-                    self.log_test("GET /api/seller/order-center", False, "Response missing success=true", data)
-            else:
-                self.log_test("GET /api/seller/order-center", False, f"HTTP {response.status_code}: {response.text}", None)
-                
-        except Exception as e:
-            self.log_test("Seller Order Center", False, f"Exception: {str(e)}", None)
-
-    def test_seller_earnings_and_payouts(self):
-        """Test seller earnings and payout functionality"""
-        if not self.seller_token:
-            self.log_test("Seller Earnings and Payouts", False, "No seller token available", None)
-            return
-            
-        try:
-            headers = {"Authorization": f"Bearer {self.seller_token}"}
-            
-            # 1. GET /api/seller/earnings (should calculate from store_products correctly)
-            response = self.session.get(f"{self.base_url}/seller/earnings", headers=headers)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    earnings = data.get("earnings", {})
-                    total_earnings = earnings.get("totalEarnings", 0)
-                    available_balance = earnings.get("availableBalance", 0)
-                    self.log_test(
-                        "GET /api/seller/earnings", 
-                        True, 
-                        f"Seller can view earnings - Total: ${total_earnings}, Available: ${available_balance}",
-                        {"total_earnings": total_earnings, "available_balance": available_balance}
-                    )
-                else:
-                    self.log_test("GET /api/seller/earnings", False, "Response missing success=true", data)
-            else:
-                self.log_test("GET /api/seller/earnings", False, f"HTTP {response.status_code}: {response.text}", None)
-                
-            # 2. POST /api/seller/payout-requests (with USDT TRC20 wallet address)
-            payout_data = {
-                "requestedAmount": 50.0,
-                "payoutWallet": "TY8Z91NMCjREyZVj9NjDsF8hVjyqfxFFRU"  # Valid TRC20 address
-            }
-            
-            response = self.session.post(f"{self.base_url}/seller/payout-requests", json=payout_data, headers=headers)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    payout_request = data.get("payout_request", {})
-                    self.payout_request_id = payout_request.get("id")
-                    self.log_test(
-                        "POST /api/seller/payout-requests (TRC20)", 
-                        True, 
-                        f"Seller successfully created payout request with TRC20 wallet: ${payout_data['requestedAmount']}",
-                        {"payout_request_id": self.payout_request_id, "wallet": payout_data["payoutWallet"]}
-                    )
-                else:
-                    self.log_test("POST /api/seller/payout-requests (TRC20)", False, "Response missing success=true", data)
-            else:
-                self.log_test("POST /api/seller/payout-requests (TRC20)", False, f"HTTP {response.status_code}: {response.text}", None)
-                
-            # Test TRC20 validation with invalid wallet
-            invalid_payout_data = {
-                "requestedAmount": 25.0,
-                "payoutWallet": "invalid_wallet_address"  # Invalid TRC20 address
-            }
-            
-            response = self.session.post(f"{self.base_url}/seller/payout-requests", json=invalid_payout_data, headers=headers)
-            
-            if response.status_code == 400:
-                if "trc20" in response.text.lower() or "invalid" in response.text.lower():
-                    self.log_test(
-                        "TRC20 Wallet Validation", 
-                        True, 
-                        "Invalid TRC20 wallet address properly rejected",
-                        {"error_message": response.text}
-                    )
-                else:
-                    self.log_test("TRC20 Wallet Validation", False, f"Unexpected error message: {response.text}", None)
-            else:
-                self.log_test("TRC20 Wallet Validation", False, f"Invalid wallet not rejected - HTTP {response.status_code}: {response.text}", None)
-                
-        except Exception as e:
-            self.log_test("Seller Earnings and Payouts", False, f"Exception: {str(e)}", None)
-
-    def test_seller_wallet(self):
-        """Test seller wallet functionality"""
-        if not self.seller_token:
-            self.log_test("Seller Wallet", False, "No seller token available", None)
-            return
-            
-        try:
-            headers = {"Authorization": f"Bearer {self.seller_token}"}
-            
-            # 1. GET /api/seller/wallet/balance
-            response = self.session.get(f"{self.base_url}/seller/wallet/balance", headers=headers)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    balance = data.get("balance", 0)
-                    total_recharged = data.get("totalRecharged", 0)
-                    self.log_test(
-                        "GET /api/seller/wallet/balance", 
-                        True, 
-                        f"Seller can view wallet balance: ${balance}, Total Recharged: ${total_recharged}",
-                        {"balance": balance, "total_recharged": total_recharged}
-                    )
-                else:
-                    self.log_test("GET /api/seller/wallet/balance", False, "Response missing success=true", data)
-            else:
-                self.log_test("GET /api/seller/wallet/balance", False, f"HTTP {response.status_code}: {response.text}", None)
-                
-            # 2. POST /api/seller/wallet/recharge
-            recharge_data = {
-                "amount": 75.0,
-                "paymentMethod": "USDT_TRON",
-                "paymentWallet": "TY8Z91NMCjREyZVj9NjDsF8hVjyqfxFFRU"
-            }
-            
-            response = self.session.post(f"{self.base_url}/seller/wallet/recharge", json=recharge_data, headers=headers)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    recharge_request = data.get("recharge_request", {})
-                    self.recharge_request_id = recharge_request.get("id")
-                    self.log_test(
-                        "POST /api/seller/wallet/recharge", 
-                        True, 
-                        f"Seller successfully created wallet recharge request: ${recharge_data['amount']}",
-                        {"recharge_request_id": self.recharge_request_id, "amount": recharge_data["amount"]}
-                    )
-                else:
-                    self.log_test("POST /api/seller/wallet/recharge", False, "Response missing success=true", data)
-            else:
-                self.log_test("POST /api/seller/wallet/recharge", False, f"HTTP {response.status_code}: {response.text}", None)
-                
-            # 3. GET /api/seller/wallet/recharge-requests
-            response = self.session.get(f"{self.base_url}/seller/wallet/recharge-requests", headers=headers)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    recharge_requests = data.get("recharge_requests", [])
-                    self.log_test(
-                        "GET /api/seller/wallet/recharge-requests", 
-                        True, 
-                        f"Seller can view {len(recharge_requests)} wallet recharge requests",
-                        {"recharge_requests_count": len(recharge_requests)}
-                    )
-                else:
-                    self.log_test("GET /api/seller/wallet/recharge-requests", False, "Response missing success=true", data)
-            else:
-                self.log_test("GET /api/seller/wallet/recharge-requests", False, f"HTTP {response.status_code}: {response.text}", None)
-                
-        except Exception as e:
-            self.log_test("Seller Wallet", False, f"Exception: {str(e)}", None)
-
-    # ============ ESCROW + SELLER DEPOSIT SYSTEM TESTS ============
-    
-    def test_platform_balance_apis(self):
-        """Test Platform Balance APIs (Admin Only)"""
-        if not self.admin_token:
-            self.log_test("Platform Balance APIs", False, "No admin token available", None)
-            return
-            
-        try:
-            headers = {"Authorization": f"Bearer {self.admin_token}"}
-            
-            # GET /api/admin/platform-wallet
-            response = self.session.get(f"{self.base_url}/admin/platform-wallet", headers=headers)
-            
-            if response.status_code == 200:
-                data = response.json()
-                balance = data.get("balance", 0)
-                total_received = data.get("totalReceived", 0)
-                total_paid_out = data.get("totalPaidOut", 0)
-                
-                self.log_test(
-                    "GET /api/admin/platform-wallet", 
-                    True, 
-                    f"Platform wallet: Balance=${balance}, Received=${total_received}, PaidOut=${total_paid_out}",
-                    {"balance": balance, "totalReceived": total_received, "totalPaidOut": total_paid_out}
-                )
-                
-                # Verify required fields exist
-                required_fields = ["balance", "totalReceived", "totalPaidOut"]
-                missing_fields = [field for field in required_fields if field not in data]
-                
-                if missing_fields:
-                    self.log_test(
-                        "Platform Wallet Fields Validation", 
-                        False, 
-                        f"Missing required fields: {missing_fields}",
-                        data
-                    )
-                else:
-                    self.log_test(
-                        "Platform Wallet Fields Validation", 
-                        True, 
-                        "All required fields present (balance, totalReceived, totalPaidOut)",
-                        None
-                    )
-            else:
-                self.log_test("GET /api/admin/platform-wallet", False, f"HTTP {response.status_code}: {response.text}", None)
-                
-            # Test non-admin access (should fail)
-            if self.buyer_token:
-                buyer_headers = {"Authorization": f"Bearer {self.buyer_token}"}
-                response = self.session.get(f"{self.base_url}/admin/platform-wallet", headers=buyer_headers)
-                
-                if response.status_code == 403:
-                    self.log_test(
-                        "Platform Wallet Admin-Only Access", 
-                        True, 
-                        "Non-admin access properly rejected with 403",
-                        None
-                    )
-                else:
-                    self.log_test(
-                        "Platform Wallet Admin-Only Access", 
-                        False, 
-                        f"Non-admin access not properly rejected - HTTP {response.status_code}",
-                        None
-                    )
-                
-        except Exception as e:
-            self.log_test("Platform Balance APIs", False, f"Exception: {str(e)}", None)
-
-    def test_seller_deposit_flow(self):
-        """Test Seller Deposit Flow"""
-        if not self.seller_token:
-            self.log_test("Seller Deposit Flow", False, "No seller token available", None)
-            return
-            
-        try:
-            headers = {"Authorization": f"Bearer {self.seller_token}"}
-            
-            # 1. GET /api/seller/orders/pending-deposit
-            response = self.session.get(f"{self.base_url}/seller/orders/pending-deposit", headers=headers)
-            
-            if response.status_code == 200:
-                data = response.json()
-                orders = data.get("orders", [])
-                count = data.get("count", 0)
-                
-                self.log_test(
-                    "GET /api/seller/orders/pending-deposit", 
-                    True, 
-                    f"Seller can view {count} orders needing deposits",
-                    {"orders_count": count}
-                )
-                
-                # If there are orders needing deposits, test deposit flow
-                if orders:
-                    test_order = orders[0]
-                    order_id = test_order.get("id")
-                    deposit_required = test_order.get("depositRequired", 0)
-                    
-                    if order_id and deposit_required > 0:
-                        # First check seller wallet balance
-                        wallet_response = self.session.get(f"{self.base_url}/seller/wallet/balance", headers=headers)
+                        # No specific order to check, just verify the endpoint works
+                        fix_working = True
+                        success_details.append("✅ Order Center endpoint accessible")
                         
-                        if wallet_response.status_code == 200:
-                            wallet_data = wallet_response.json()
-                            current_balance = wallet_data.get("balance", 0)
-                            
-                            if current_balance >= deposit_required:
-                                # 2. POST /api/seller/wallet/deposit-for-order
-                                deposit_data = {
-                                    "orderId": order_id,
-                                    "amount": deposit_required
-                                }
-                                
-                                response = self.session.post(f"{self.base_url}/seller/wallet/deposit-for-order", json=deposit_data, headers=headers)
-                                
-                                if response.status_code == 200:
-                                    data = response.json()
-                                    if data.get("success"):
-                                        self.log_test(
-                                            "POST /api/seller/wallet/deposit-for-order", 
-                                            True, 
-                                            f"Seller successfully deposited ${deposit_required} for order {order_id}",
-                                            {"order_id": order_id, "deposit_amount": deposit_required}
-                                        )
-                                        
-                                        # 3. GET /api/seller/deposit-status/{orderId}
-                                        response = self.session.get(f"{self.base_url}/seller/deposit-status/{order_id}", headers=headers)
-                                        
-                                        if response.status_code == 200:
-                                            data = response.json()
-                                            if data.get("found"):
-                                                is_complete = data.get("isComplete", False)
-                                                deposited_amount = data.get("depositedAmount", 0)
-                                                
-                                                self.log_test(
-                                                    "GET /api/seller/deposit-status/{orderId}", 
-                                                    True, 
-                                                    f"Deposit status: Complete={is_complete}, Amount=${deposited_amount}",
-                                                    {"order_id": order_id, "is_complete": is_complete, "deposited_amount": deposited_amount}
-                                                )
-                                                
-                                                # Verify wallet balance changed
-                                                new_wallet_response = self.session.get(f"{self.base_url}/seller/wallet/balance", headers=headers)
-                                                if new_wallet_response.status_code == 200:
-                                                    new_wallet_data = new_wallet_response.json()
-                                                    new_balance = new_wallet_data.get("balance", 0)
-                                                    deposit_balance = new_wallet_data.get("depositBalance", 0)
-                                                    
-                                                    balance_decreased = new_balance < current_balance
-                                                    deposit_increased = deposit_balance > 0
-                                                    
-                                                    if balance_decreased and deposit_increased:
-                                                        self.log_test(
-                                                            "Seller Wallet Balance Changes", 
-                                                            True, 
-                                                            f"Balance correctly decreased from ${current_balance} to ${new_balance}, deposit balance: ${deposit_balance}",
-                                                            {"old_balance": current_balance, "new_balance": new_balance, "deposit_balance": deposit_balance}
-                                                        )
-                                                    else:
-                                                        self.log_test(
-                                                            "Seller Wallet Balance Changes", 
-                                                            False, 
-                                                            f"Balance changes incorrect - Old: ${current_balance}, New: ${new_balance}, Deposit: ${deposit_balance}",
-                                                            {"old_balance": current_balance, "new_balance": new_balance, "deposit_balance": deposit_balance}
-                                                        )
-                                            else:
-                                                self.log_test("GET /api/seller/deposit-status/{orderId}", False, "Deposit status not found", data)
-                                        else:
-                                            self.log_test("GET /api/seller/deposit-status/{orderId}", False, f"HTTP {response.status_code}: {response.text}", None)
-                                    else:
-                                        self.log_test("POST /api/seller/wallet/deposit-for-order", False, "Response missing success=true", data)
-                                else:
-                                    self.log_test("POST /api/seller/wallet/deposit-for-order", False, f"HTTP {response.status_code}: {response.text}", None)
-                            else:
-                                self.log_test(
-                                    "Seller Deposit Flow", 
-                                    True, 
-                                    f"Insufficient balance for deposit test (${current_balance} < ${deposit_required}) - Expected behavior",
-                                    {"current_balance": current_balance, "deposit_required": deposit_required}
-                                )
-                        else:
-                            self.log_test("Seller Wallet Balance Check", False, f"HTTP {wallet_response.status_code}: {wallet_response.text}", None)
-                    else:
-                        self.log_test("Seller Deposit Flow", True, "No valid orders with deposit requirements for testing", None)
+                        # Show some sample orders
+                        if orders:
+                            success_details.append("Sample orders:")
+                            for i, order in enumerate(orders[:3]):
+                                order_id = order.get("id", "unknown")[:8]
+                                escrow_status = order.get("escrowStatus", "unknown")
+                                order_status = order.get("orderStatus", "unknown")
+                                success_details.append(f"   {i+1}. {order_id}: escrow={escrow_status}, status={order_status}")
+                    
+                    self.log_test(
+                        "Seller Order Center Status Check", 
+                        fix_working, 
+                        "; ".join(success_details),
+                        {
+                            "total_orders": len(orders),
+                            "counts": counts,
+                            "target_order": target_order,
+                            "expected_order_id": expected_order_id,
+                            "sample_orders": [{"id": o.get("id", "")[:8], "escrowStatus": o.get("escrowStatus"), "orderStatus": o.get("orderStatus")} for o in orders[:5]]
+                        }
+                    )
+                    
+                    return target_order
                 else:
-                    self.log_test("Seller Deposit Flow", True, "No orders pending deposit - system working correctly", None)
+                    self.log_test("Seller Order Center Status Check", False, "Response missing success=true", data)
             else:
-                self.log_test("GET /api/seller/orders/pending-deposit", False, f"HTTP {response.status_code}: {response.text}", None)
+                self.log_test("Seller Order Center Status Check", False, f"HTTP {response.status_code}: {response.text}", None)
                 
         except Exception as e:
-            self.log_test("Seller Deposit Flow", False, f"Exception: {str(e)}", None)
-
-    def test_platform_shipping(self):
-        """Test Platform Shipping"""
-        if not self.admin_token:
-            self.log_test("Platform Shipping", False, "No admin token available", None)
-            return
-            
-        try:
-            headers = {"Authorization": f"Bearer {self.admin_token}"}
-            
-            # Get all orders to find one suitable for shipping test
-            orders_response = self.session.get(f"{self.base_url}/orders/my", headers=headers)
-            
-            if orders_response.status_code == 200:
-                orders_data = orders_response.json()
-                orders = orders_data.get("orders", [])
-                
-                # Look for an order with deposit_received status
-                test_order_id = None
-                for order in orders:
-                    escrow_status = order.get("escrowStatus") or order.get("escrow_status")
-                    if escrow_status == "deposit_received":
-                        test_order_id = order.get("id")
-                        break
-                
-                if test_order_id:
-                    # Test shipping with tracking number
-                    ship_data = {
-                        "trackingNumber": "TEST-PLATFORM-123456",
-                        "courierName": "Platform Express"
-                    }
-                    
-                    response = self.session.post(f"{self.base_url}/orders/{test_order_id}/ship-by-platform", json=ship_data, headers=headers)
-                    
-                    if response.status_code == 200:
-                        data = response.json()
-                        if data.get("success"):
-                            self.log_test(
-                                "POST /api/orders/{orderId}/ship-by-platform (with tracking)", 
-                                True, 
-                                f"Admin successfully shipped order {test_order_id} with tracking {ship_data['trackingNumber']}",
-                                {"order_id": test_order_id, "tracking_number": ship_data["trackingNumber"]}
-                            )
-                            
-                            # Verify escrow_status changed to 'shipped'
-                            time.sleep(1)
-                            order_check_response = self.session.get(f"{self.base_url}/orders/my", headers=headers)
-                            if order_check_response.status_code == 200:
-                                updated_orders = order_check_response.json().get("orders", [])
-                                shipped_order = next((o for o in updated_orders if o.get("id") == test_order_id), None)
-                                
-                                if shipped_order:
-                                    escrow_status = shipped_order.get("escrowStatus") or shipped_order.get("escrow_status")
-                                    if escrow_status == "shipped":
-                                        self.log_test(
-                                            "Escrow Status Update to 'shipped'", 
-                                            True, 
-                                            f"Order {test_order_id} escrow status correctly updated to 'shipped'",
-                                            {"order_id": test_order_id, "escrow_status": "shipped"}
-                                        )
-                                    else:
-                                        self.log_test(
-                                            "Escrow Status Update to 'shipped'", 
-                                            False, 
-                                            f"Order {test_order_id} escrow status not updated correctly",
-                                            {"order_id": test_order_id, "current_status": escrow_status}
-                                        )
-                        else:
-                            self.log_test("POST /api/orders/{orderId}/ship-by-platform (with tracking)", False, "Response missing success=true", data)
-                    else:
-                        self.log_test("POST /api/orders/{orderId}/ship-by-platform (with tracking)", False, f"HTTP {response.status_code}: {response.text}", None)
-                        
-                    # Test shipping without tracking number
-                    ship_data_no_tracking = {}
-                    
-                    response = self.session.post(f"{self.base_url}/orders/{test_order_id}/ship-by-platform", json=ship_data_no_tracking, headers=headers)
-                    
-                    if response.status_code == 200:
-                        data = response.json()
-                        if data.get("success"):
-                            self.log_test(
-                                "POST /api/orders/{orderId}/ship-by-platform (without tracking)", 
-                                True, 
-                                f"Admin successfully shipped order without tracking number",
-                                {"order_id": test_order_id}
-                            )
-                        else:
-                            self.log_test("POST /api/orders/{orderId}/ship-by-platform (without tracking)", False, "Response missing success=true", data)
-                    elif response.status_code == 400 and "deposit received" in response.text.lower():
-                        self.log_test(
-                            "POST /api/orders/{orderId}/ship-by-platform (without tracking)", 
-                            True, 
-                            "Order already shipped or status validation working correctly",
-                            {"order_id": test_order_id}
-                        )
-                    else:
-                        self.log_test("POST /api/orders/{orderId}/ship-by-platform (without tracking)", False, f"HTTP {response.status_code}: {response.text}", None)
-                        
-                else:
-                    self.log_test("Platform Shipping", True, "No orders with 'deposit_received' status found for shipping test", None)
-            else:
-                self.log_test("Platform Shipping Orders Check", False, f"HTTP {orders_response.status_code}: {orders_response.text}", None)
-                
-        except Exception as e:
-            self.log_test("Platform Shipping", False, f"Exception: {str(e)}", None)
-
-    def test_delivery_confirmation_and_settlement(self):
-        """Test Delivery Confirmation & Settlement"""
-        if not self.buyer_token:
-            self.log_test("Delivery Confirmation & Settlement", False, "No buyer token available", None)
-            return
-            
-        try:
-            headers = {"Authorization": f"Bearer {self.buyer_token}"}
-            
-            # Get buyer's orders to find one that's shipped
-            orders_response = self.session.get(f"{self.base_url}/orders/my", headers=headers)
-            
-            if orders_response.status_code == 200:
-                orders_data = orders_response.json()
-                orders = orders_data.get("orders", [])
-                
-                # Look for an order with 'shipped' status
-                test_order_id = None
-                for order in orders:
-                    escrow_status = order.get("escrowStatus") or order.get("escrow_status")
-                    if escrow_status == "shipped":
-                        test_order_id = order.get("id")
-                        break
-                
-                if test_order_id:
-                    # Get platform wallet balance before settlement
-                    if self.admin_token:
-                        admin_headers = {"Authorization": f"Bearer {self.admin_token}"}
-                        platform_wallet_before = self.session.get(f"{self.base_url}/admin/platform-wallet", headers=admin_headers)
-                        platform_balance_before = 0
-                        if platform_wallet_before.status_code == 200:
-                            platform_balance_before = platform_wallet_before.json().get("balance", 0)
-                    
-                    # POST /api/orders/{orderId}/confirm-delivery
-                    response = self.session.post(f"{self.base_url}/orders/{test_order_id}/confirm-delivery", headers=headers)
-                    
-                    if response.status_code == 200:
-                        data = response.json()
-                        if data.get("success"):
-                            settlements = data.get("settlements", [])
-                            
-                            self.log_test(
-                                "POST /api/orders/{orderId}/confirm-delivery", 
-                                True, 
-                                f"Buyer successfully confirmed delivery for order {test_order_id}, {len(settlements)} settlements processed",
-                                {"order_id": test_order_id, "settlements_count": len(settlements)}
-                            )
-                            
-                            # Verify automatic settlement triggered
-                            successful_settlements = [s for s in settlements if s.get("success")]
-                            failed_settlements = [s for s in settlements if not s.get("success")]
-                            
-                            if successful_settlements:
-                                self.log_test(
-                                    "Automatic Settlement Trigger", 
-                                    True, 
-                                    f"Settlement successfully processed for {len(successful_settlements)} sellers",
-                                    {"successful_settlements": len(successful_settlements), "failed_settlements": len(failed_settlements)}
-                                )
-                                
-                                # Check settlement details
-                                for settlement in successful_settlements:
-                                    seller_id = settlement.get("sellerId")
-                                    amount = settlement.get("amount", 0)
-                                    deposit = settlement.get("deposit", 0)
-                                    profit = settlement.get("profit", 0)
-                                    
-                                    expected_profit = amount - deposit  # Should be 20% of order amount
-                                    profit_percentage = (profit / amount * 100) if amount > 0 else 0
-                                    
-                                    if abs(profit_percentage - 20) < 1:  # Allow 1% tolerance
-                                        self.log_test(
-                                            f"Settlement Calculation (Seller {seller_id[:8]})", 
-                                            True, 
-                                            f"Correct settlement: Amount=${amount}, Deposit=${deposit}, Profit=${profit} (~20%)",
-                                            {"seller_id": seller_id, "amount": amount, "deposit": deposit, "profit": profit, "profit_percentage": profit_percentage}
-                                        )
-                                    else:
-                                        self.log_test(
-                                            f"Settlement Calculation (Seller {seller_id[:8]})", 
-                                            False, 
-                                            f"Incorrect settlement calculation: Expected ~20% profit, got {profit_percentage:.1f}%",
-                                            {"seller_id": seller_id, "amount": amount, "deposit": deposit, "profit": profit, "profit_percentage": profit_percentage}
-                                        )
-                            else:
-                                self.log_test(
-                                    "Automatic Settlement Trigger", 
-                                    False, 
-                                    f"No successful settlements processed - all {len(failed_settlements)} failed",
-                                    {"failed_settlements": failed_settlements}
-                                )
-                            
-                            # Verify escrow_status = 'settled' or 'delivered'
-                            time.sleep(1)
-                            order_check_response = self.session.get(f"{self.base_url}/orders/my", headers=headers)
-                            if order_check_response.status_code == 200:
-                                updated_orders = order_check_response.json().get("orders", [])
-                                delivered_order = next((o for o in updated_orders if o.get("id") == test_order_id), None)
-                                
-                                if delivered_order:
-                                    escrow_status = delivered_order.get("escrowStatus") or delivered_order.get("escrow_status")
-                                    if escrow_status in ["delivered", "settled"]:
-                                        self.log_test(
-                                            "Escrow Status Final Update", 
-                                            True, 
-                                            f"Order {test_order_id} escrow status correctly updated to '{escrow_status}'",
-                                            {"order_id": test_order_id, "escrow_status": escrow_status}
-                                        )
-                                    else:
-                                        self.log_test(
-                                            "Escrow Status Final Update", 
-                                            False, 
-                                            f"Order {test_order_id} escrow status not updated correctly: '{escrow_status}'",
-                                            {"order_id": test_order_id, "escrow_status": escrow_status}
-                                        )
-                            
-                            # Check platform balance increase (if admin token available)
-                            if self.admin_token:
-                                platform_wallet_after = self.session.get(f"{self.base_url}/admin/platform-wallet", headers=admin_headers)
-                                if platform_wallet_after.status_code == 200:
-                                    platform_balance_after = platform_wallet_after.json().get("balance", 0)
-                                    balance_increase = platform_balance_after - platform_balance_before
-                                    
-                                    if balance_increase > 0:
-                                        self.log_test(
-                                            "Platform Balance Increase", 
-                                            True, 
-                                            f"Platform balance increased by ${balance_increase:.2f} after settlement",
-                                            {"balance_before": platform_balance_before, "balance_after": platform_balance_after, "increase": balance_increase}
-                                        )
-                                    else:
-                                        self.log_test(
-                                            "Platform Balance Increase", 
-                                            False, 
-                                            f"Platform balance did not increase after settlement (Before: ${platform_balance_before}, After: ${platform_balance_after})",
-                                            {"balance_before": platform_balance_before, "balance_after": platform_balance_after}
-                                        )
-                        else:
-                            self.log_test("POST /api/orders/{orderId}/confirm-delivery", False, "Response missing success=true", data)
-                    else:
-                        self.log_test("POST /api/orders/{orderId}/confirm-delivery", False, f"HTTP {response.status_code}: {response.text}", None)
-                else:
-                    self.log_test("Delivery Confirmation & Settlement", True, "No orders with 'shipped' status found for delivery confirmation test", None)
-            else:
-                self.log_test("Delivery Confirmation Orders Check", False, f"HTTP {orders_response.status_code}: {orders_response.text}", None)
-                
-        except Exception as e:
-            self.log_test("Delivery Confirmation & Settlement", False, f"Exception: {str(e)}", None)
-
-    def test_complete_escrow_end_to_end_flow(self):
-        """Test Complete End-to-End Escrow Flow"""
-        print("🔄 COMPLETE END-TO-END ESCROW FLOW TEST")
-        print("-" * 50)
+            self.log_test("Seller Order Center Status Check", False, f"Exception: {str(e)}", None)
         
-        if not all([self.buyer_token, self.seller_token, self.admin_token]):
-            self.log_test("Complete Escrow End-to-End Flow", False, "Missing required tokens (buyer, seller, admin)", None)
-            return
-        
+        return None
+
+    def test_backend_code_fix_verification(self):
+        """Verify the fix is applied in the backend code"""
         try:
-            # Step a) Buyer creates order with wallet payment
-            buyer_headers = {"Authorization": f"Bearer {self.buyer_token}"}
-            seller_headers = {"Authorization": f"Bearer {self.seller_token}"}
-            admin_headers = {"Authorization": f"Bearer {self.admin_token}"}
+            # Read the backend server.py file to verify the fix
+            with open('/app/backend/server.py', 'r') as f:
+                content = f.read()
             
-            # First ensure we have a product to order
-            if not self.store_product_id:
-                products_response = self.session.get(f"{self.base_url}/products")
-                if products_response.status_code == 200:
-                    products = products_response.json().get("products", [])
-                    if products:
-                        self.store_product_id = products[0].get("id")
+            # Look for the confirm-deposit endpoint
+            lines = content.split('\n')
             
-            if not self.store_product_id:
-                self.log_test("Complete Escrow End-to-End Flow", False, "No store product available for order creation", None)
-                return
+            confirm_deposit_endpoint_found = False
+            order_status_update_found = False
+            escrow_status_update_found = False
             
-            # Check buyer wallet balance and create some balance if needed
-            wallet_response = self.session.get(f"{self.base_url}/wallet/balance", headers=buyer_headers)
-            if wallet_response.status_code == 200:
-                wallet_data = wallet_response.json()
-                current_balance = wallet_data.get("balance", 0)
+            for i, line in enumerate(lines):
+                # Look for the confirm-deposit endpoint
+                if 'confirm-deposit' in line and '@api_router.post' in line:
+                    confirm_deposit_endpoint_found = True
+                    
+                    # Check the next 50 lines for status updates
+                    for j in range(i, min(i + 50, len(lines))):
+                        if 'order_status' in lines[j] and 'to_be_shipped' in lines[j]:
+                            order_status_update_found = True
+                        if 'escrow_status' in lines[j] and 'deposit_received' in lines[j]:
+                            escrow_status_update_found = True
+                    break
+            
+            success_details = []
+            if confirm_deposit_endpoint_found:
+                success_details.append("✅ Found POST /admin/orders/{id}/confirm-deposit endpoint")
+            else:
+                success_details.append("❌ Confirm deposit endpoint not found")
                 
-                if current_balance < 100.00:
-                    # For testing purposes, we'll skip the full end-to-end test if no balance
-                    # In a real scenario, the buyer would need to recharge their wallet first
-                    self.log_test(
-                        "Complete Escrow End-to-End Flow", 
-                        True, 
-                        f"Buyer has insufficient wallet balance (${current_balance}) for full end-to-end test. This is expected behavior - buyer would need to recharge wallet first.",
-                        {"buyer_balance": current_balance, "required": 100.00}
-                    )
-                    return
+            if escrow_status_update_found:
+                success_details.append("✅ Endpoint updates escrow_status to 'deposit_received'")
+            else:
+                success_details.append("❌ Escrow status update not found")
+                
+            if order_status_update_found:
+                success_details.append("✅ Endpoint updates order_status to 'to_be_shipped' (FIX APPLIED)")
+            else:
+                success_details.append("❌ Order status update not found (FIX NOT APPLIED)")
             
-            # Create order with wallet payment (triggers escrow)
-            order_data = {
-                "items": [
-                    {
-                        "id": self.store_product_id,
-                        "quantity": 1,
-                        "price": 100.00
-                    }
-                ],
-                "totalAmount": 100.00,
-                "useWallet": True,  # This should trigger escrow flow
-                "shippingAddressId": self.buyer_address_id,
-                "shippingName": "Test Buyer Escrow",
-                "shippingPhone": "+1234567890",
-                "shippingAddress": {
-                    "fullName": "Test Buyer Escrow",
-                    "addressLine1": "123 Escrow Test Street",
-                    "city": "Test City",
-                    "state": "Test State",
-                    "postalCode": "12345",
-                    "country": "Test Country"
+            fix_verified = confirm_deposit_endpoint_found and order_status_update_found and escrow_status_update_found
+            
+            self.log_test(
+                "Backend Code Fix Verification", 
+                fix_verified, 
+                "; ".join(success_details),
+                {
+                    "confirm_deposit_endpoint_found": confirm_deposit_endpoint_found,
+                    "order_status_update_found": order_status_update_found,
+                    "escrow_status_update_found": escrow_status_update_found,
+                    "file_location": "/app/backend/server.py"
                 }
-            }
+            )
             
-            order_response = self.session.post(f"{self.base_url}/orders", json=order_data, headers=buyer_headers)
+            return fix_verified
             
-            if order_response.status_code == 200:
-                order_result = order_response.json()
-                if order_result.get("success"):
-                    escrow_order_id = order_result.get("order", {}).get("id")
-                    
-                    self.log_test(
-                        "Step A: Buyer Creates Order with Wallet Payment", 
-                        True, 
-                        f"Order {escrow_order_id} created successfully with wallet payment",
-                        {"order_id": escrow_order_id, "total_amount": 100.00}
-                    )
-                    
-                    # Step b) Verify escrow_status = 'awaiting_seller_deposit'
-                    time.sleep(1)  # Allow processing time
-                    order_check = self.session.get(f"{self.base_url}/orders/my", headers=buyer_headers)
-                    if order_check.status_code == 200:
-                        orders = order_check.json().get("orders", [])
-                        created_order = next((o for o in orders if o.get("id") == escrow_order_id), None)
-                        
-                        if created_order:
-                            escrow_status = created_order.get("escrowStatus") or created_order.get("escrow_status")
-                            if escrow_status == "awaiting_seller_deposit":
-                                self.log_test(
-                                    "Step B: Verify escrow_status = 'awaiting_seller_deposit'", 
-                                    True, 
-                                    f"Order {escrow_order_id} correctly has escrow_status = 'awaiting_seller_deposit'",
-                                    {"order_id": escrow_order_id, "escrow_status": escrow_status}
-                                )
-                                
-                                # Continue with remaining steps...
-                                self.log_test(
-                                    "Complete End-to-End Escrow Flow", 
-                                    True, 
-                                    "✅ Escrow flow initiated successfully - Full end-to-end test would require seller wallet funding",
-                                    {"order_id": escrow_order_id, "flow_status": "initiated"}
-                                )
-                            else:
-                                self.log_test("Step B: Verify escrow_status", False, f"Order escrow_status incorrect: Expected 'awaiting_seller_deposit', got '{escrow_status}'", {"order_id": escrow_order_id, "escrow_status": escrow_status})
-                        else:
-                            self.log_test("Step B: Order Verification", False, f"Created order {escrow_order_id} not found in buyer's orders", None)
-                    else:
-                        self.log_test("Step B: Order Status Check", False, f"HTTP {order_check.status_code}: {order_check.text}", None)
-                else:
-                    self.log_test("Step A: Buyer Creates Order", False, "Response missing success=true", order_result)
-            else:
-                self.log_test("Step A: Buyer Creates Order", False, f"HTTP {order_response.status_code}: {order_response.text}", None)
-                
         except Exception as e:
-            self.log_test("Complete Escrow End-to-End Flow", False, f"Exception: {str(e)}", None)
+            self.log_test("Backend Code Fix Verification", False, f"Exception: {str(e)}", None)
+            return False
 
-    def run_escrow_system_tests(self):
-        """Run all escrow system tests"""
-        print("=" * 80)
-        print("ESCROW + SELLER DEPOSIT SYSTEM TESTING")
-        print("=" * 80)
-        print()
+    def run_order_status_transition_test(self):
+        """Run the complete Order Status Transition test"""
+        print("🔍 ORDER STATUS TRANSITION TESTING")
+        print("=" * 70)
+        print(f"Testing fix for: Order not moving from 'Pending Payment' to 'To Be Shipped' after admin confirms deposit")
+        print(f"Expected behavior: After admin confirms deposit, order_status should be 'to_be_shipped'")
+        print("=" * 70)
         
-        # Authentication Tests (required for escrow tests)
-        print("🔐 AUTHENTICATION SETUP")
-        print("-" * 40)
-        self.test_admin_login()
-        self.test_seller_login()
-        self.test_buyer_login()
-        print()
+        # Step 1: Verify the fix in backend code
+        self.test_backend_code_fix_verification()
         
-        # Escrow System Tests
-        print("💰 ESCROW SYSTEM TESTS")
-        print("-" * 40)
-        self.test_platform_balance_apis()
-        self.test_seller_deposit_flow()
-        self.test_platform_shipping()
-        self.test_delivery_confirmation_and_settlement()
-        print()
+        # Step 2: Admin login
+        if not self.test_admin_login():
+            print("\n❌ CRITICAL: Admin login failed - cannot proceed with testing")
+            return
         
-        # Complete End-to-End Flow
-        self.test_complete_escrow_end_to_end_flow()
-        print()
+        # Step 3: Check all orders in system first
+        awaiting_deposit_orders = self.test_admin_get_all_orders()
         
-        # Summary
-        self.print_summary()
-
-    # ============ MAIN TEST EXECUTION ============
+        # Step 4: Get pending deposit confirmations
+        pending_deposit = self.test_admin_get_deposit_confirmations()
+        
+        if not pending_deposit:
+            print("\n⚠️  No pending deposits found - testing with mock scenario")
+            # We can still test the seller order center to see current state
+            if self.test_seller_login():
+                self.test_seller_order_center_status()
+            return
+        
+        # Step 4: Confirm the deposit (main test)
+        order_id = pending_deposit.get('orderId')
+        if order_id:
+            deposit_confirmed = self.test_admin_confirm_deposit(order_id)
+            
+            if deposit_confirmed:
+                # Step 5: Login as seller and check order center
+                if self.test_seller_login():
+                    # Wait a moment for the status to update
+                    time.sleep(2)
+                    self.test_seller_order_center_status(order_id)
+                else:
+                    print("\n❌ Seller login failed - cannot verify order status change")
+            else:
+                print("\n❌ Deposit confirmation failed - cannot test status transition")
+        else:
+            print("\n❌ No order ID found in pending deposit - cannot proceed")
+        
+        # Generate summary
+        self.generate_summary()
     
-    def run_comprehensive_audit(self):
-        """Run comprehensive audit of all functionalities"""
-        print("=" * 80)
-        print("COMPREHENSIVE BACKEND API AUDIT - ARAB SHOPPING PLATFORM")
-        print("=" * 80)
-        print()
-        
-        # Authentication Tests
-        print("🔐 AUTHENTICATION TESTS")
-        print("-" * 40)
-        self.test_admin_login()
-        self.test_seller_login()
-        self.test_buyer_login()
-        print()
-        
-        # Admin Functionality Tests
-        print("👑 ADMIN FUNCTIONALITY TESTS")
-        print("-" * 40)
-        self.test_admin_dashboard_access()
-        self.test_admin_product_catalog_management()
-        self.test_admin_seed_and_clear_catalog()
-        self.test_admin_order_management()
-        self.test_admin_user_management()
-        self.test_admin_payout_requests()
-        self.test_admin_seller_wallet_recharge_requests()
-        print()
-        
-        # Buyer Functionality Tests
-        print("🛒 BUYER FUNCTIONALITY TESTS")
-        print("-" * 40)
-        self.test_buyer_product_browsing()
-        self.test_buyer_store_system()
-        self.test_buyer_shipping_addresses()
-        self.test_buyer_order_creation()
-        self.test_buyer_wallet()
-        print()
-        
-        # Seller Functionality Tests
-        print("🏪 SELLER FUNCTIONALITY TESTS")
-        print("-" * 40)
-        self.test_seller_product_catalog_browsing()
-        self.test_seller_store_management()
-        self.test_seller_order_center()
-        self.test_seller_earnings_and_payouts()
-        self.test_seller_wallet()
-        print()
-        
-        # Summary
-        self.print_summary()
-
-    def print_summary(self):
-        """Print test summary"""
-        print("=" * 80)
-        print("TEST SUMMARY")
-        print("=" * 80)
+    def generate_summary(self):
+        """Generate test summary"""
+        print("\n" + "=" * 70)
+        print("📊 ORDER STATUS TRANSITION TEST SUMMARY")
+        print("=" * 70)
         
         total_tests = len(self.test_results)
         passed_tests = sum(1 for result in self.test_results if result["success"])
         failed_tests = total_tests - passed_tests
         
         print(f"Total Tests: {total_tests}")
-        print(f"Passed: {passed_tests} ✅")
-        print(f"Failed: {failed_tests} ❌")
-        print(f"Success Rate: {(passed_tests/total_tests*100):.1f}%")
-        print()
+        print(f"✅ Passed: {passed_tests}")
+        print(f"❌ Failed: {failed_tests}")
+        print(f"Success Rate: {(passed_tests/total_tests)*100:.1f}%")
         
+        # Show failed tests
         if failed_tests > 0:
-            print("FAILED TESTS:")
-            print("-" * 40)
+            print(f"\n❌ FAILED TESTS ({failed_tests}):")
             for result in self.test_results:
                 if not result["success"]:
-                    print(f"❌ {result['test']}")
-                    if result["details"]:
-                        print(f"   {result['details']}")
-            print()
+                    print(f"   • {result['test']}: {result['details']}")
         
-        print("CRITICAL VALIDATIONS:")
-        print("-" * 40)
+        # Show passed tests
+        if passed_tests > 0:
+            print(f"\n✅ PASSED TESTS ({passed_tests}):")
+            for result in self.test_results:
+                if result["success"]:
+                    print(f"   • {result['test']}")
         
-        # Check critical validations from review request
-        critical_tests = [
-            "Buyer Order Creation",
-            "GET /api/admin/products",
-            "POST /api/admin/products",
-            "GET /api/products (buyer browsing)",
-            "POST /api/seller/payout-requests (TRC20)",
-            "GET /api/seller/order-center"
-        ]
+        print("\n" + "=" * 70)
         
-        for test_name in critical_tests:
-            result = next((r for r in self.test_results if test_name in r["test"]), None)
-            if result:
-                status = "✅" if result["success"] else "❌"
-                print(f"{status} {test_name}")
+        # Key findings
+        admin_login_working = any(r["success"] and "Admin Login" in r["test"] for r in self.test_results)
+        seller_login_working = any(r["success"] and "Seller Login" in r["test"] for r in self.test_results)
+        deposit_confirmations_working = any(r["success"] and "Admin Get Deposit Confirmations" in r["test"] for r in self.test_results)
+        deposit_confirmed = any(r["success"] and "Admin Confirm Deposit" in r["test"] for r in self.test_results)
+        order_center_working = any(r["success"] and "Seller Order Center Status" in r["test"] for r in self.test_results)
+        backend_fix_verified = any(r["success"] and "Backend Code Fix Verification" in r["test"] for r in self.test_results)
         
-        print()
-        print("=" * 80)
+        print("🎯 KEY FINDINGS:")
+        print(f"   • Admin Authentication: {'✅ WORKING' if admin_login_working else '❌ BROKEN'}")
+        print(f"   • Seller Authentication: {'✅ WORKING' if seller_login_working else '❌ BROKEN'}")
+        print(f"   • GET /api/admin/deposit-confirmations: {'✅ WORKING' if deposit_confirmations_working else '❌ BROKEN'}")
+        print(f"   • POST /api/admin/orders/{{id}}/confirm-deposit: {'✅ WORKING' if deposit_confirmed else '❌ BROKEN'}")
+        print(f"   • GET /api/seller/order-center: {'✅ WORKING' if order_center_working else '❌ BROKEN'}")
+        print(f"   • Backend Code Fix: {'✅ VERIFIED' if backend_fix_verified else '❌ NOT FOUND'}")
+        
+        # Overall assessment
+        if backend_fix_verified and admin_login_working and deposit_confirmations_working:
+            if deposit_confirmed and order_center_working:
+                print("\n🎉 ORDER STATUS TRANSITION FIX IS WORKING!")
+                print("   ✅ Backend code includes the fix (order_status update)")
+                print("   ✅ Admin can confirm deposits")
+                print("   ✅ Order status transitions correctly after confirmation")
+                print("   ✅ Orders appear in 'To Be Shipped' column as expected")
+            else:
+                print("\n⚠️  PARTIAL SUCCESS - Fix is implemented but testing incomplete")
+                print("   ✅ Backend code includes the fix")
+                print("   ✅ Admin endpoints are accessible")
+                if not deposit_confirmed:
+                    print("   ❌ Could not test deposit confirmation (no pending deposits)")
+                if not order_center_working:
+                    print("   ❌ Could not verify order status change")
+        else:
+            print("\n🚨 SYSTEM ISSUES DETECTED")
+            if not backend_fix_verified:
+                print("   ❌ Backend fix not found in code")
+            if not admin_login_working:
+                print("   ❌ Admin authentication broken")
+            if not deposit_confirmations_working:
+                print("   ❌ Admin deposit confirmations endpoint broken")
+
 
 if __name__ == "__main__":
-    tester = FixesVerificationTester()
-    tester.run_fixes_verification()
+    tester = OrderStatusTransitionTester()
+    tester.run_order_status_transition_test()
