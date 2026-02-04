@@ -594,14 +594,14 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Admin Deposit Confirmations - Show Both USDT and Wallet Balance Deposits"
+    - "Seller Wallet Balance Not Deducted on 80% Deposit"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
 agent_communication:
   - agent: "main"
-    message: "FIX IMPLEMENTED for admin deposit confirmations not showing seller deposits. ISSUE: Admin endpoint was only filtering for usdt_payment method, missing internal_wallet deposits from wallet balance payments. CHANGES: 1) Backend: Updated GET /api/admin/deposit-confirmations to include both usdt_payment and internal_wallet methods. 2) Backend: Updated POST /seller/wallet/deposit-for-order to set deposit_status='pending' so wallet deposits require admin confirmation. 3) Backend: Updated confirm-deposit endpoint to handle both methods with refund logic for rejected wallet deposits. 4) Frontend: Updated AdminDashboard to display payment method badge (Wallet Balance vs USDT). 5) Database: Fixed existing record to show as pending. TEST FOCUS: Login as admin (support@arabshopping.org), navigate to Deposit Confirmations tab, verify the pending wallet balance deposit is visible (order b6229b1b..., amount $31.99, method: internal_wallet)."
+    message: "FIX IMPLEMENTED for seller wallet balance not being deducted on 80% deposit. ISSUE: Database column is 'deposit_required' (snake_case) but code was using 'depositRequired' (camelCase), causing it to return 0 instead of actual amount. FIX: Updated line 5147 to use order.get('deposit_required', 0). TEST SCENARIO: 1) Login as seller (testseller_new@test.com / TestPass123!) 2) Check wallet balance (should be $1000) 3) Call POST /api/seller/wallet/deposit-for-order with orderId: a32d8ad7-d07b-4fea-be48-f661cc2dd357 4) Verify wallet balance is deducted by $39.99 (new balance should be ~$960) 5) Verify deposit record created in admin deposit confirmations."
   - agent: "testing"
     message: "✅ ADMIN DEPOSIT CONFIRMATIONS FIX VERIFICATION COMPLETE: Tested the specific fix for admin not seeing seller deposit requests as requested in review. SUCCESS RATE: 100% (5/5 tests passed). ✅ ADMIN LOGIN: Successfully authenticated as support@arabshopping.org with correct credentials ✅ GET /api/admin/deposit-confirmations: WORKING PERFECTLY - Found exactly 1 pending deposit with expected order ID b6229b1b-d2b4-4b8e-ab20-cb75947b203e, depositMethod 'internal_wallet', depositRequired $31.99, deposit_status 'pending' ✅ DEPOSIT METHODS COVERAGE: Internal wallet deposits fully supported and visible to admin (fix working) ✅ POST /api/admin/orders/{id}/confirm-deposit: WORKING - Successfully approved deposit for test order with {approved: true} ✅ DEPOSIT REMOVAL VERIFICATION: Approved deposit correctly removed from pending list after confirmation. CRITICAL SUCCESS: The reported issue has been completely resolved. Admin can now see both USDT payment and internal wallet deposits. The specific wallet balance deposit mentioned in the review (order b6229b1b..., $31.99) was found and successfully processed. Both endpoints are working correctly."
   - agent: "testing"
