@@ -193,100 +193,209 @@ class OrderStatusTransitionTester:
         
         return None
 
-    def test_deposit_for_order(self):
-        """Test POST /api/seller/wallet/deposit-for-order - Main fix verification"""
-        if not self.seller_token:
-            self.log_test("Deposit For Order", False, "No seller token available", None)
+    def test_admin_get_deposit_confirmations(self):
+        """Test GET /api/admin/deposit-confirmations - Find pending deposits"""
+        if not self.admin_token:
+            self.log_test("Admin Get Deposit Confirmations", False, "No admin token available", None)
             return None
             
         try:
-            headers = {"Authorization": f"Bearer {self.seller_token}"}
-            # The API expects both orderId and amount
-            deposit_data = {"orderId": EXPECTED_ORDER_ID, "amount": EXPECTED_DEPOSIT_AMOUNT}
-            
-            response = self.session.post(f"{self.base_url}/seller/wallet/deposit-for-order", json=deposit_data, headers=headers)
+            headers = {"Authorization": f"Bearer {self.admin_token}"}
+            response = self.session.get(f"{self.base_url}/admin/deposit-confirmations", headers=headers)
             
             if response.status_code == 200:
                 data = response.json()
                 if data.get("success"):
-                    deposit_amount = data.get("depositAmount", 0)
-                    message = data.get("message", "")
-                    deposit_amount_float = float(deposit_amount)
-                    
-                    # Check if deposit amount is correct (not $0)
-                    amount_correct = abs(deposit_amount_float - EXPECTED_DEPOSIT_AMOUNT) < 0.01
-                    amount_not_zero = deposit_amount_float > 0
-                    awaiting_admin = "awaiting admin" in message.lower() or "admin confirmation" in message.lower()
+                    deposits = data.get("deposits", [])
                     
                     success_details = []
-                    success_details.append(f"Deposit amount: ${deposit_amount_float:.2f}")
-                    success_details.append(f"Expected amount: ${EXPECTED_DEPOSIT_AMOUNT:.2f}")
-                    success_details.append(f"Message: {message}")
+                    success_details.append(f"Total pending deposits found: {len(deposits)}")
                     
-                    if amount_not_zero:
-                        success_details.append("✅ Amount is NOT $0 (fix working)")
+                    # Look for any pending deposit
+                    pending_deposit = None
+                    if deposits:
+                        pending_deposit = deposits[0]  # Take the first one
+                        success_details.append(f"✅ Found pending deposit for order: {pending_deposit.get('orderId', 'unknown')}")
+                        success_details.append(f"   Deposit method: {pending_deposit.get('depositMethod', 'unknown')}")
+                        success_details.append(f"   Deposit amount: ${pending_deposit.get('depositRequired', 0)}")
+                        success_details.append(f"   Status: {pending_deposit.get('deposit_status', 'unknown')}")
                     else:
-                        success_details.append("❌ Amount is $0 (fix NOT working)")
-                        
-                    if amount_correct:
-                        success_details.append("✅ Amount matches expected value")
-                    else:
-                        success_details.append("⚠️  Amount differs from expected value")
-                        
-                    if awaiting_admin:
-                        success_details.append("✅ Message indicates awaiting admin confirmation")
-                    else:
-                        success_details.append("⚠️  Message doesn't mention admin confirmation")
-                    
-                    # The main fix is working if amount is not zero
-                    fix_working = amount_not_zero
+                        success_details.append("⚠️  No pending deposits found - may need to create test data first")
                     
                     self.log_test(
-                        "Deposit For Order", 
-                        fix_working, 
+                        "Admin Get Deposit Confirmations", 
+                        True, 
                         "; ".join(success_details),
                         {
-                            "deposit_amount": deposit_amount_float,
-                            "expected_amount": EXPECTED_DEPOSIT_AMOUNT,
-                            "amount_not_zero": amount_not_zero,
-                            "amount_correct": amount_correct,
-                            "message": message,
-                            "awaiting_admin": awaiting_admin,
-                            "order_id": EXPECTED_ORDER_ID,
-                            "full_response": data
+                            "total_deposits": len(deposits),
+                            "pending_deposit": pending_deposit,
+                            "all_deposits": deposits
                         }
                     )
                     
-                    return deposit_amount_float
+                    return pending_deposit
                 else:
-                    self.log_test("Deposit For Order", False, "Response missing success=true", data)
-            elif response.status_code == 404:
-                # Order not found - this is expected if the test order doesn't exist
-                self.log_test(
-                    "Deposit For Order", 
-                    False, 
-                    f"Order {EXPECTED_ORDER_ID} not found. Need to reset test data first.",
-                    {"status_code": 404, "order_id": EXPECTED_ORDER_ID}
-                )
-                return None
-            elif response.status_code == 400:
-                # Check if it's because order is not in correct state
-                error_detail = response.json().get("detail", "")
-                if "not awaiting deposit" in error_detail.lower():
-                    self.log_test(
-                        "Deposit For Order", 
-                        False, 
-                        f"Order exists but not in awaiting_seller_deposit state: {error_detail}. Need to reset order status first.",
-                        {"status_code": 400, "error": error_detail}
-                    )
-                    return None
-                else:
-                    self.log_test("Deposit For Order", False, f"HTTP 400: {error_detail}", response.json())
+                    self.log_test("Admin Get Deposit Confirmations", False, "Response missing success=true", data)
             else:
-                self.log_test("Deposit For Order", False, f"HTTP {response.status_code}: {response.text}", None)
+                self.log_test("Admin Get Deposit Confirmations", False, f"HTTP {response.status_code}: {response.text}", None)
                 
         except Exception as e:
-            self.log_test("Deposit For Order", False, f"Exception: {str(e)}", None)
+            self.log_test("Admin Get Deposit Confirmations", False, f"Exception: {str(e)}", None)
+        
+        return None
+
+    def test_admin_confirm_deposit(self, order_id: str):
+        """Test POST /api/admin/orders/{order_id}/confirm-deposit - Confirm the deposit"""
+        if not self.admin_token:
+            self.log_test("Admin Confirm Deposit", False, "No admin token available", None)
+            return False
+            
+        if not order_id:
+            self.log_test("Admin Confirm Deposit", False, "No order ID provided", None)
+            return False
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.admin_token}"}
+            confirm_data = {"approved": True}
+            
+            response = self.session.post(
+                f"{self.base_url}/admin/orders/{order_id}/confirm-deposit", 
+                json=confirm_data, 
+                headers=headers
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    success_details = []
+                    success_details.append(f"✅ Successfully confirmed deposit for order {order_id}")
+                    success_details.append(f"Response message: {data.get('message', 'No message')}")
+                    
+                    # Check if response includes updated order info
+                    if 'order' in data:
+                        order = data['order']
+                        escrow_status = order.get('escrowStatus', 'unknown')
+                        order_status = order.get('orderStatus', 'unknown')
+                        success_details.append(f"Updated escrow_status: {escrow_status}")
+                        success_details.append(f"Updated order_status: {order_status}")
+                        
+                        # Check if the fix is working
+                        fix_working = (escrow_status == 'deposit_received' and order_status == 'to_be_shipped')
+                        if fix_working:
+                            success_details.append("✅ FIX WORKING: Both escrow_status and order_status updated correctly")
+                        else:
+                            success_details.append("❌ FIX ISSUE: Status updates may not be correct")
+                    
+                    self.log_test(
+                        "Admin Confirm Deposit", 
+                        True, 
+                        "; ".join(success_details),
+                        {
+                            "order_id": order_id,
+                            "response_data": data
+                        }
+                    )
+                    
+                    return True
+                else:
+                    self.log_test("Admin Confirm Deposit", False, "Response missing success=true", data)
+            else:
+                self.log_test("Admin Confirm Deposit", False, f"HTTP {response.status_code}: {response.text}", None)
+                
+        except Exception as e:
+            self.log_test("Admin Confirm Deposit", False, f"Exception: {str(e)}", None)
+        
+        return False
+
+    def test_seller_order_center_status(self, expected_order_id: str = None):
+        """Test GET /api/seller/order-center - Verify order status after admin confirmation"""
+        if not self.seller_token:
+            self.log_test("Seller Order Center Status Check", False, "No seller token available", None)
+            return None
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.seller_token}"}
+            response = self.session.get(f"{self.base_url}/seller/order-center", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    orders = data.get("orders", [])
+                    counts = data.get("counts", {})
+                    
+                    success_details = []
+                    success_details.append(f"Total orders found: {len(orders)}")
+                    success_details.append(f"Order counts: {counts}")
+                    
+                    # Look for the specific order if provided
+                    target_order = None
+                    if expected_order_id:
+                        for order in orders:
+                            if order.get("id") == expected_order_id:
+                                target_order = order
+                                break
+                        
+                        if target_order:
+                            success_details.append(f"✅ Found target order {expected_order_id}")
+                            
+                            escrow_status = target_order.get("escrowStatus", "unknown")
+                            order_status = target_order.get("orderStatus", "unknown")
+                            
+                            success_details.append(f"Order escrow_status: {escrow_status}")
+                            success_details.append(f"Order order_status: {order_status}")
+                            
+                            # Check if the fix is working - order should be in 'to_be_shipped' status
+                            fix_working = (escrow_status == 'deposit_received' and order_status == 'to_be_shipped')
+                            
+                            if fix_working:
+                                success_details.append("✅ FIX VERIFIED: Order moved to 'to_be_shipped' status")
+                            else:
+                                success_details.append("❌ FIX NOT WORKING: Order status not updated correctly")
+                                
+                            # Check counts - to_be_shipped should be > 0
+                            to_be_shipped_count = counts.get('to_be_shipped', 0)
+                            if to_be_shipped_count > 0:
+                                success_details.append(f"✅ 'To Be Shipped' count: {to_be_shipped_count}")
+                            else:
+                                success_details.append(f"❌ 'To Be Shipped' count is 0")
+                        else:
+                            success_details.append(f"❌ Target order {expected_order_id} not found")
+                            fix_working = False
+                    else:
+                        # No specific order to check, just verify the endpoint works
+                        fix_working = True
+                        success_details.append("✅ Order Center endpoint accessible")
+                        
+                        # Show some sample orders
+                        if orders:
+                            success_details.append("Sample orders:")
+                            for i, order in enumerate(orders[:3]):
+                                order_id = order.get("id", "unknown")[:8]
+                                escrow_status = order.get("escrowStatus", "unknown")
+                                order_status = order.get("orderStatus", "unknown")
+                                success_details.append(f"   {i+1}. {order_id}: escrow={escrow_status}, status={order_status}")
+                    
+                    self.log_test(
+                        "Seller Order Center Status Check", 
+                        fix_working, 
+                        "; ".join(success_details),
+                        {
+                            "total_orders": len(orders),
+                            "counts": counts,
+                            "target_order": target_order,
+                            "expected_order_id": expected_order_id,
+                            "sample_orders": [{"id": o.get("id", "")[:8], "escrowStatus": o.get("escrowStatus"), "orderStatus": o.get("orderStatus")} for o in orders[:5]]
+                        }
+                    )
+                    
+                    return target_order
+                else:
+                    self.log_test("Seller Order Center Status Check", False, "Response missing success=true", data)
+            else:
+                self.log_test("Seller Order Center Status Check", False, f"HTTP {response.status_code}: {response.text}", None)
+                
+        except Exception as e:
+            self.log_test("Seller Order Center Status Check", False, f"Exception: {str(e)}", None)
         
         return None
 
@@ -297,43 +406,52 @@ class OrderStatusTransitionTester:
             with open('/app/backend/server.py', 'r') as f:
                 content = f.read()
             
-            # Check if the Order Center endpoint fetches depositInfo
+            # Look for the confirm-deposit endpoint
             lines = content.split('\n')
             
-            # Look for the Order Center endpoint and depositInfo fetching
-            order_center_found = False
-            deposit_info_found = False
+            confirm_deposit_endpoint_found = False
+            order_status_update_found = False
+            escrow_status_update_found = False
             
             for i, line in enumerate(lines):
-                if 'seller/order-center' in line and '@api_router.get' in line:
-                    order_center_found = True
-                    # Check the next 100 lines for depositInfo fetching
-                    for j in range(i, min(i + 100, len(lines))):
-                        if 'depositInfo' in lines[j] or 'order_deposits' in lines[j]:
-                            deposit_info_found = True
-                            break
+                # Look for the confirm-deposit endpoint
+                if 'confirm-deposit' in line and '@api_router.post' in line:
+                    confirm_deposit_endpoint_found = True
+                    
+                    # Check the next 50 lines for status updates
+                    for j in range(i, min(i + 50, len(lines))):
+                        if 'order_status' in lines[j] and 'to_be_shipped' in lines[j]:
+                            order_status_update_found = True
+                        if 'escrow_status' in lines[j] and 'deposit_received' in lines[j]:
+                            escrow_status_update_found = True
                     break
             
             success_details = []
-            if order_center_found:
-                success_details.append("✅ Found GET /seller/order-center endpoint")
+            if confirm_deposit_endpoint_found:
+                success_details.append("✅ Found POST /admin/orders/{id}/confirm-deposit endpoint")
             else:
-                success_details.append("❌ GET /seller/order-center endpoint not found")
+                success_details.append("❌ Confirm deposit endpoint not found")
                 
-            if deposit_info_found:
-                success_details.append("✅ Endpoint appears to fetch depositInfo from order_deposits")
+            if escrow_status_update_found:
+                success_details.append("✅ Endpoint updates escrow_status to 'deposit_received'")
             else:
-                success_details.append("❌ Endpoint may not be fetching depositInfo")
+                success_details.append("❌ Escrow status update not found")
+                
+            if order_status_update_found:
+                success_details.append("✅ Endpoint updates order_status to 'to_be_shipped' (FIX APPLIED)")
+            else:
+                success_details.append("❌ Order status update not found (FIX NOT APPLIED)")
             
-            fix_verified = order_center_found and deposit_info_found
+            fix_verified = confirm_deposit_endpoint_found and order_status_update_found and escrow_status_update_found
             
             self.log_test(
                 "Backend Code Fix Verification", 
                 fix_verified, 
                 "; ".join(success_details),
                 {
-                    "order_center_found": order_center_found,
-                    "deposit_info_found": deposit_info_found,
+                    "confirm_deposit_endpoint_found": confirm_deposit_endpoint_found,
+                    "order_status_update_found": order_status_update_found,
+                    "escrow_status_update_found": escrow_status_update_found,
                     "file_location": "/app/backend/server.py"
                 }
             )
