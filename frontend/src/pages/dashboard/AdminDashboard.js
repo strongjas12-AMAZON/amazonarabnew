@@ -1878,7 +1878,7 @@ const AdminDashboard = () => {
                     <th className="text-left p-3 text-gray-400 font-medium hidden sm:table-cell">Email</th>
                     <th className="text-left p-3 text-gray-400 font-medium">Order Amount</th>
                     <th className="text-left p-3 text-gray-400 font-medium">Deposit (80%)</th>
-                    <th className="text-left p-3 text-gray-400 font-medium">Transaction Hash</th>
+                    <th className="text-left p-3 text-gray-400 font-medium">Payment Method</th>
                     <th className="text-left p-3 text-gray-400 font-medium hidden md:table-cell">Submitted</th>
                     <th className="text-left p-3 text-gray-400 font-medium text-right">Actions</th>
                   </tr>
@@ -1896,36 +1896,58 @@ const AdminDashboard = () => {
                       <td className="p-3 text-[#D4AF37] font-semibold">${deposit.orderAmount?.toFixed(2)}</td>
                       <td className="p-3 text-orange-400 font-bold">${deposit.depositRequired?.toFixed(2)}</td>
                       <td className="p-3">
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-gray-300 font-mono text-xs truncate max-w-[120px]" title={deposit.transactionHash}>
-                              {deposit.transactionHash}
-                            </span>
-                            <button
-                              onClick={() => {
-                                navigator.clipboard.writeText(deposit.transactionHash);
-                                toast.success('Transaction hash copied!');
-                              }}
-                              className="text-[#D4AF37] hover:text-[#f0c860] transition-colors"
-                              title="Copy transaction hash"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        {deposit.depositMethod === 'wallet_balance' ? (
+                          <div className="flex flex-col gap-1">
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-400">
+                              <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                               </svg>
-                            </button>
+                              Wallet Balance
+                            </span>
+                            <span className="text-xs text-gray-400">Pre-verified funds</span>
                           </div>
-                          <a
-                            href={`https://tronscan.org/#/transaction/${deposit.transactionHash}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-400 hover:text-blue-300 text-xs flex items-center gap-1"
-                          >
-                            Verify on TronScan
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                            </svg>
-                          </a>
-                        </div>
+                        ) : (
+                          <div className="flex flex-col gap-1">
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-500/20 text-blue-400">
+                              <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              USDT TRC20
+                            </span>
+                            {deposit.transactionHash && (
+                              <div className="flex items-center gap-1 mt-1">
+                                <span className="text-gray-300 font-mono text-xs truncate max-w-[100px]" title={deposit.transactionHash}>
+                                  {deposit.transactionHash}
+                                </span>
+                                <button
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(deposit.transactionHash);
+                                    toast.success('Transaction hash copied!');
+                                  }}
+                                  className="text-[#D4AF37] hover:text-[#f0c860] transition-colors"
+                                  title="Copy transaction hash"
+                                >
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                  </svg>
+                                </button>
+                              </div>
+                            )}
+                            {deposit.transactionHash && (
+                              <a
+                                href={`https://tronscan.org/#/transaction/${deposit.transactionHash}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-400 hover:text-blue-300 text-xs flex items-center gap-1"
+                              >
+                                Verify on TronScan
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                              </a>
+                            )}
+                          </div>
+                        )}
                         {deposit.notes && (
                           <p className="text-xs text-gray-500 mt-1 italic">Note: {deposit.notes}</p>
                         )}
