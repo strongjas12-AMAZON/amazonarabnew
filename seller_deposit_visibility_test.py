@@ -520,6 +520,8 @@ class SellerDepositVisibilityTester:
         # Step 2: Admin login to check existing deposit confirmations
         if self.test_admin_login():
             self.test_admin_get_deposit_confirmations()
+            # Try to create test seller if needed
+            self.test_create_test_seller_if_needed()
         
         # Step 3: Seller login and check order center
         if not self.test_seller_login():
