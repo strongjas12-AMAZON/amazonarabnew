@@ -78,7 +78,7 @@ const COURIERS = [
   { code: 'other', name: 'Other Courier', icon: '📨' },
 ];
 
-const OrderCenter = () => {
+const OrderCenter = ({ onDepositSubmitted }) => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('to_be_shipped');
   const [orders, setOrders] = useState([]);
@@ -203,6 +203,11 @@ const OrderCenter = () => {
       
       // Refresh orders to show updated status
       await fetchOrders(activeTab === 'after_sales' ? null : activeTab);
+      
+      // Notify parent component to refresh pending deposit orders
+      if (onDepositSubmitted) {
+        await onDepositSubmitted();
+      }
     } catch (error) {
       const errorMsg = error.response?.data?.detail || 'Failed to submit payment proof';
       toast.error(errorMsg);
@@ -652,6 +657,52 @@ const OrderCenter = () => {
                   <Send className="w-5 h-5" />
                   Pay via USDT
                 </button>
+              </div>
+            </div>
+          )}
+          
+          {/* Pending Admin Approval - When USDT deposit proof submitted but not yet confirmed */}
+          {order.escrowStatus === 'awaiting_seller_deposit' && order.depositInfo?.depositStatus === 'pending' && (
+            <div className="w-full p-6 bg-gradient-to-br from-blue-500/20 to-purple-500/20 border-2 border-blue-500/50 rounded-xl shadow-xl">
+              <div className="text-center">
+                <div className="flex items-center justify-center gap-2 mb-3">
+                  <Clock className="w-6 h-6 text-blue-400 animate-pulse" />
+                  <span className="text-blue-400 font-bold text-xl">⏳ Pending Admin Approval</span>
+                </div>
+                <p className="text-gray-300 text-base mb-2">
+                  Your deposit payment proof has been submitted successfully
+                </p>
+                <div className="bg-[rgba(0,0,0,0.3)] rounded-lg p-4 mt-4">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-400">Deposit Amount:</span>
+                    <span className="text-[#D4AF37] font-bold">${order.depositRequired?.toFixed(2) || '0.00'}</span>
+                  </div>
+                  {order.depositInfo.transactionHash && (
+                    <div className="flex items-start justify-between text-sm mt-2 pt-2 border-t border-white/10">
+                      <span className="text-gray-400">Transaction:</span>
+                      <span className="text-blue-300 font-mono text-xs break-all ml-2">
+                        {order.depositInfo.transactionHash.slice(0, 20)}...
+                      </span>
+                    </div>
+                  )}
+                  {order.depositInfo.submittedAt && (
+                    <div className="flex items-center justify-between text-sm mt-2 pt-2 border-t border-white/10">
+                      <span className="text-gray-400">Submitted:</span>
+                      <span className="text-gray-300">
+                        {new Date(order.depositInfo.submittedAt).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-gray-400 mt-4">
+                  Our admin team is verifying your transaction on the blockchain. 
+                  You'll receive an email notification once approved (usually within 24 hours).
+                </p>
               </div>
             </div>
           )}

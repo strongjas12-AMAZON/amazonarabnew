@@ -1922,12 +1922,17 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
         seller_amounts = {}  # Track amount per seller
         
         for item in req.items:
+            # Handle both productId (camelCase) and product_id (snake_case)
+            product_id = item.get('productId') or item.get('product_id')
+            if not product_id:
+                raise HTTPException(status_code=400, detail="Missing productId or product_id in order items")
+            
             item_data = {
                 'id': str(uuid.uuid4()),
                 'order_id': order_id,
-                'product_id': item['productId'],
-                'quantity': item['quantity'],
-                'price': item['price']
+                'product_id': product_id,
+                'quantity': item.get('quantity', 1),
+                'price': item.get('price', 0)
             }
             supabase_admin.table('order_items').insert(item_data).execute()
             order_items_list.append(item_data)
@@ -1936,14 +1941,14 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
             try:
                 product_result = supabase_admin.table('store_products')\
                     .select('*, stores(seller_id)')\
-                    .eq('id', item['productId'])\
+                    .eq('id', product_id)\
                     .execute()
                 
                 if product_result.data:
                     store = product_result.data[0].get('stores')
                     if store:
                         seller_id = store.get('seller_id')
-                        item_total = float(item['price']) * int(item['quantity'])
+                        item_total = float(item.get('price', 0)) * int(item.get('quantity', 1))
                         if seller_id not in seller_amounts:
                             seller_amounts[seller_id] = 0
                         seller_amounts[seller_id] += item_total
@@ -2741,7 +2746,8 @@ async def update_order_status(order_id: str, request: UpdateOrderStatusRequest, 
             for seller_id, earnings_amount in seller_earnings.items():
                 seller_wallet = await get_or_create_seller_wallet(seller_id)
                 current_balance = float(seller_wallet.get('balance', 0))
-                current_deposit_balance = float(seller_wallet.get('depositBalance', 0))
+                # Handle depositBalance - may not exist if migration not run
+                current_deposit_balance = float(seller_wallet.get('depositBalance') or seller_wallet.get('deposit_balance', 0))
                 current_total_earnings = float(seller_wallet.get('totalEarnings') or seller_wallet.get('total_earnings', 0))
                 
                 # Get deposit for this order to return it
@@ -2755,42 +2761,36 @@ async def update_order_status(order_id: str, request: UpdateOrderStatusRequest, 
                 if deposit_result.data:
                     deposit_to_return = float(deposit_result.data[0].get('deposited_amount', 0))
                 
-                # Add earnings to balance + return deposit from depositBalance
-                new_balance = current_balance + earnings_amount
+                # IMPORTANT: Balance should ONLY change through approved recharge requests
+                # Do NOT add earnings to balance - only track in totalEarnings
+                # Do NOT modify balance for deposit returns
                 new_deposit_balance = max(current_deposit_balance - deposit_to_return, 0)
                 new_total_earnings = current_total_earnings + earnings_amount
                 
-                supabase_admin.table('seller_wallets').update({
-                    'balance': new_balance,
-                    'depositBalance': new_deposit_balance,
+                # Prepare update data - DO NOT UPDATE BALANCE, only totalEarnings and depositBalance
+                wallet_update = {
                     'totalEarnings': new_total_earnings,
                     'updatedAt': datetime.now(timezone.utc).isoformat()
-                }).eq('userId', seller_id).execute()
+                }
                 
-                # Create transaction record for earnings
+                # Only update depositBalance if column exists (migration was run)
+                if 'depositBalance' in seller_wallet or 'deposit_balance' in seller_wallet:
+                    wallet_update['depositBalance'] = new_deposit_balance
+                
+                supabase_admin.table('seller_wallets').update(wallet_update).eq('userId', seller_id).execute()
+                
+                # Create transaction record for earnings tracking (not balance change)
+                # NOTE: This records the earning but does NOT change wallet balance
                 await create_wallet_transaction(
                     user_id=seller_id,
                     user_role='seller',
                     transaction_type='earning',
                     amount=earnings_amount,
                     previous_balance=current_balance,
-                    new_balance=new_balance,
+                    new_balance=current_balance,  # Balance unchanged - only recharge requests change balance
                     order_id=order_id,
-                    description=f"Earnings from order: ${earnings_amount:.2f}"
+                    description=f"Earnings from order: ${earnings_amount:.2f} (Deposit: ${deposit_to_return:.2f} returned) [Balance unchanged - only recharge requests modify balance]"
                 )
-                
-                # Create transaction record for deposit return (if any)
-                if deposit_to_return > 0:
-                    await create_wallet_transaction(
-                        user_id=seller_id,
-                        user_role='seller',
-                        transaction_type='deposit_return',
-                        amount=deposit_to_return,
-                        previous_balance=new_balance,
-                        new_balance=new_balance,  # Balance already updated with earnings
-                        order_id=order_id,
-                        description=f"Deposit returned: ${deposit_to_return:.2f}"
-                    )
         
         # Send email notifications based on status change
         if result.data:
@@ -5071,7 +5071,10 @@ async def get_orders_pending_deposit(current_user: dict = Depends(get_current_us
                     'depositInfo': {
                         'requiredAmount': float(deposit_info['required_amount']) if deposit_info else 0,
                         'depositedAmount': float(deposit_info['deposited_amount']) if deposit_info else 0,
-                        'isComplete': deposit_info['is_deposit_complete'] if deposit_info else False
+                        'isComplete': deposit_info['is_deposit_complete'] if deposit_info else False,
+                        'depositStatus': deposit_info.get('deposit_status'),
+                        'transactionHash': deposit_info.get('transaction_hash'),
+                        'submittedAt': deposit_info.get('submitted_at')
                     } if deposit_info else None
                 })
         
@@ -5597,7 +5600,7 @@ async def confirm_delivery(order_id: str, current_user: dict = Depends(get_curre
         order = order_result.data[0]
         
         # Verify buyer owns this order
-        if order.get('buyerId') != user_id:
+        if order.get('buyer_id') != user_id:
             raise HTTPException(status_code=403, detail="You can only confirm your own orders")
         
         if order.get('escrow_status') not in ['shipped', 'delivered']:
@@ -5607,7 +5610,7 @@ async def confirm_delivery(order_id: str, current_user: dict = Depends(get_curre
         supabase_admin.table('orders')\
             .update({
                 'escrow_status': 'delivered',
-                'deliveryConfirmedAt': datetime.now(timezone.utc).isoformat()
+                'delivery_confirmed_at': datetime.now(timezone.utc).isoformat()
             })\
             .eq('id', order_id)\
             .execute()
