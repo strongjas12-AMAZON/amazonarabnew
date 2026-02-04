@@ -3758,6 +3758,32 @@ async def get_seller_order_detail(order_id: str, current_user: dict = Depends(ge
             raise HTTPException(status_code=403, detail="You don't have products in this order")
         
         order['order_items'] = seller_items
+        
+        # Fetch deposit info for this order and seller
+        try:
+            deposit_result = supabase_admin.table('order_deposits')\
+                .select('*')\
+                .eq('order_id', order_id)\
+                .eq('seller_id', current_user['id'])\
+                .execute()
+            
+            if deposit_result.data:
+                deposit = deposit_result.data[0]
+                order['depositInfo'] = {
+                    'requiredAmount': float(deposit.get('required_amount', 0)),
+                    'depositedAmount': float(deposit.get('deposited_amount', 0)),
+                    'isComplete': deposit.get('is_deposit_complete', False),
+                    'depositStatus': deposit.get('deposit_status'),
+                    'depositMethod': deposit.get('deposit_method'),
+                    'transactionHash': deposit.get('transaction_hash'),
+                    'submittedAt': deposit.get('submitted_at')
+                }
+            else:
+                order['depositInfo'] = None
+        except Exception as e:
+            logging.warning(f"Could not fetch deposit info for order detail {order_id}: {str(e)}")
+            order['depositInfo'] = None
+        
         return {"success": True, "order": format_order_center_response(order)}
     except HTTPException:
         raise
