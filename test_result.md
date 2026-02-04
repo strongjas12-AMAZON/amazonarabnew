@@ -265,6 +265,18 @@ backend:
         agent: "testing"
         comment: "❌ CRITICAL DATABASE SCHEMA ISSUE: Comprehensive audit reveals admin product creation still failing. GET /api/admin/products works correctly (returns 111 products from product_catalog), but POST /api/admin/products fails with database error: 'Could not find the is_active column of product_catalog in the schema cache'. This indicates the product_catalog table schema is missing the is_active column that the backend code expects. The backend code tries to set is_active=True when creating products, but this column doesn't exist in the database. REQUIRES DATABASE SCHEMA UPDATE: Need to add is_active column to product_catalog table or modify backend code to not use this column."
 
+  - task: "Order Creation Fix - Accept Both productId and product_id (PRIORITY FIX)"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ FIXES VERIFICATION - ORDER CREATION FULLY FIXED: Tested the specific fix for 'Missing productId' error when creating orders. SUCCESS: Order creation now works correctly with product_id (snake_case format). No 'Missing productId' error occurs. Order created successfully (Order ID: c37eb769-3a82-409f-a88b-ccb5a673ab83) with product_id 47f4b3a4-b511-4f91-b2c4-800eeb0ea754. Order items saved correctly with 1 item. Backend accepts both productId and product_id field names as intended. This fix is working perfectly."
+
 backend:
   - task: "Shipping Address Endpoints - Fix 'Buyer access required' Error"
     implemented: true
