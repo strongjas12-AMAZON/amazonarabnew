@@ -487,7 +487,10 @@ class OrderStatusTransitionTester:
             print("\n❌ CRITICAL: Admin login failed - cannot proceed with testing")
             return
         
-        # Step 3: Get pending deposit confirmations
+        # Step 3: Check all orders in system first
+        awaiting_deposit_orders = self.test_admin_get_all_orders()
+        
+        # Step 4: Get pending deposit confirmations
         pending_deposit = self.test_admin_get_deposit_confirmations()
         
         if not pending_deposit:
