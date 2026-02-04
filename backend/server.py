@@ -5600,7 +5600,7 @@ async def confirm_delivery(order_id: str, current_user: dict = Depends(get_curre
         order = order_result.data[0]
         
         # Verify buyer owns this order
-        if order.get('buyerId') != user_id:
+        if order.get('buyer_id') != user_id:
             raise HTTPException(status_code=403, detail="You can only confirm your own orders")
         
         if order.get('escrow_status') not in ['shipped', 'delivered']:
