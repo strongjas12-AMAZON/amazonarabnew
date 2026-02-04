@@ -114,21 +114,68 @@ const OrderCenter = ({ onDepositSubmitted }) => {
   });
   const [submittingUsdtDeposit, setSubmittingUsdtDeposit] = useState(false);
 
-  // Fetch orders for Order Center
-  const fetchOrders = useCallback(async (status = null) => {
-    try {
-      setLoading(true);
-      const params = status ? { status } : {};
-      const response = await api.get('/seller/order-center', { params });
-      setOrders(response.data.orders || []);
-      setCounts(response.data.counts || {});
-    } catch (error) {
-      console.error('Failed to fetch orders:', error);
-      toast.error('Failed to load orders');
-    } finally {
-      setLoading(false);
+  // Add refs for debouncing and preventing race conditions
+  const fetchTimeoutRef = useRef(null);
+  const isFetchingRef = useRef(false);
+  const lastFetchTimeRef = useRef(0);
+
+  // Debounced fetch with race condition prevention
+  const debouncedFetchOrders = useCallback((status = null, immediate = false) => {
+    // Clear any pending fetch
+    if (fetchTimeoutRef.current) {
+      clearTimeout(fetchTimeoutRef.current);
     }
-  }, []); // Remove all dependencies to prevent recreation
+
+    const doFetch = async () => {
+      // Prevent multiple simultaneous fetches
+      if (isFetchingRef.current) {
+        console.log('Fetch already in progress, skipping...');
+        return;
+      }
+
+      // Throttle: minimum 500ms between fetches
+      const now = Date.now();
+      const timeSinceLastFetch = now - lastFetchTimeRef.current;
+      if (timeSinceLastFetch < 500 && !immediate) {
+        console.log('Throttling fetch, too soon since last fetch');
+        return;
+      }
+
+      try {
+        isFetchingRef.current = true;
+        lastFetchTimeRef.current = now;
+        setLoading(true);
+        
+        const params = status ? { status } : {};
+        const response = await api.get('/seller/order-center', { params });
+        
+        // Only update state if component is still mounted and this is the latest fetch
+        setOrders(response.data.orders || []);
+        setCounts(response.data.counts || {});
+      } catch (error) {
+        console.error('Failed to fetch orders:', error);
+        // Only show error toast if not a network timeout or abort
+        if (error.code !== 'ECONNABORTED' && !error.message?.includes('timeout')) {
+          toast.error('Failed to load orders');
+        }
+      } finally {
+        setLoading(false);
+        isFetchingRef.current = false;
+      }
+    };
+
+    if (immediate) {
+      doFetch();
+    } else {
+      // Debounce: wait 300ms before fetching
+      fetchTimeoutRef.current = setTimeout(doFetch, 300);
+    }
+  }, []);
+
+  // Fetch orders for Order Center - keep for compatibility
+  const fetchOrders = useCallback((status = null) => {
+    debouncedFetchOrders(status, true);
+  }, [debouncedFetchOrders]);
 
   // Fetch refunds
   const fetchRefunds = useCallback(async () => {
