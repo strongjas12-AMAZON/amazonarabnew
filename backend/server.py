@@ -2652,7 +2652,7 @@ async def update_order_status(order_id: str, request: UpdateOrderStatusRequest, 
             # When paid, set order_status to 'to_be_shipped' so seller can ship
             update_data['order_status'] = 'to_be_shipped'
             # NEW: Also set escrow status to awaiting_seller_deposit
-            update_data['escrowStatus'] = 'awaiting_seller_deposit'
+            update_data['escrow_status'] = 'awaiting_seller_deposit'
             
             # NEW: Record payment to platform wallet and create deposit requirements
             try:
