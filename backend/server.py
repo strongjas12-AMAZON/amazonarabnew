@@ -5374,11 +5374,11 @@ async def get_pending_deposit_confirmations(current_user: dict = Depends(get_cur
         if current_user.get('role') != 'admin':
             raise HTTPException(status_code=403, detail="Admin access required")
         
-        # Get all pending deposit confirmations (both USDT payment and wallet balance)
+        # Get all pending deposit confirmations (both USDT payment and internal wallet)
         deposits_result = supabase_admin.table('order_deposits')\
             .select('*, orders(id, total_amount, created_at, buyer_id), users!seller_id(id, name, email)')\
             .eq('deposit_status', 'pending')\
-            .in_('deposit_method', ['usdt_payment', 'wallet_balance'])\
+            .in_('deposit_method', ['usdt_payment', 'internal_wallet'])\
             .order('submitted_at', desc=True)\
             .execute()
         
