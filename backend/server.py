@@ -5732,13 +5732,13 @@ async def confirm_delivery(order_id: str, current_user: dict = Depends(get_curre
         if order.get('buyer_id') != user_id:
             raise HTTPException(status_code=403, detail="You can only confirm your own orders")
         
-        if order.get('escrow_status') not in ['shipped', 'delivered']:
+        if order.get('escrowStatus') not in ['shipped', 'delivered']:
             raise HTTPException(status_code=400, detail="Order must be shipped before confirming delivery")
         
         # 2. Update order to delivered
         supabase_admin.table('orders')\
             .update({
-                'escrow_status': 'delivered',
+                'escrowStatus': 'delivered',
                 'delivery_confirmed_at': datetime.now(timezone.utc).isoformat()
             })\
             .eq('id', order_id)\
