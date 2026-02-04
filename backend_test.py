@@ -651,7 +651,7 @@ class OrderCenterStatusUpdateTester:
     def generate_summary(self):
         """Generate test summary"""
         print("\n" + "=" * 70)
-        print("📊 SELLER WALLET BALANCE DEDUCTION TEST SUMMARY")
+        print("📊 ORDER CENTER STATUS UPDATE TEST SUMMARY")
         print("=" * 70)
         
         total_tests = len(self.test_results)
@@ -682,12 +682,14 @@ class OrderCenterStatusUpdateTester:
         # Key findings
         seller_login_working = any(r["success"] and "Seller Login" in r["test"] for r in self.test_results)
         deposit_working = any(r["success"] and "Deposit For Order" in r["test"] for r in self.test_results)
+        order_center_working = any(r["success"] and "Order Center Status" in r["test"] for r in self.test_results)
         balance_deducted = any(r["success"] and "Final Wallet Balance" in r["test"] for r in self.test_results)
         admin_access = any(r["success"] and "Admin Login" in r["test"] for r in self.test_results)
         
         print("🎯 KEY FINDINGS:")
         print(f"   • Seller Authentication: {'✅ WORKING' if seller_login_working else '❌ BROKEN'}")
         print(f"   • POST /api/seller/wallet/deposit-for-order: {'✅ WORKING' if deposit_working else '❌ BROKEN'}")
+        print(f"   • GET /api/seller/order-center (depositInfo): {'✅ WORKING' if order_center_working else '❌ BROKEN'}")
         print(f"   • Wallet Balance Deduction: {'✅ WORKING' if balance_deducted else '❌ BROKEN'}")
         print(f"   • Admin Deposit Confirmations Access: {'✅ WORKING' if admin_access else '❌ BROKEN'}")
         
@@ -701,16 +703,16 @@ class OrderCenterStatusUpdateTester:
             print(f"   • Expected Deduction: ${EXPECTED_DEPOSIT_AMOUNT:.2f}")
         
         # Overall assessment
-        if deposit_working and balance_deducted:
-            print("\n🎉 SELLER WALLET BALANCE DEDUCTION FIX IS WORKING!")
-            print("   ✅ Deposit amount is correctly calculated (not $0)")
-            print("   ✅ Wallet balance is properly deducted")
-            print("   ✅ The snake_case vs camelCase issue has been resolved")
+        if order_center_working and deposit_working:
+            print("\n🎉 ORDER CENTER STATUS UPDATE FIX IS WORKING!")
+            print("   ✅ Deposit creates proper depositInfo record")
+            print("   ✅ Order Center shows depositInfo with pending status")
+            print("   ✅ Frontend can now display 'Confirmation Awaiting Admin Review'")
         elif deposit_working:
-            print("\n⚠️  PARTIAL SUCCESS - Deposit works but balance deduction may have issues")
+            print("\n⚠️  PARTIAL SUCCESS - Deposit works but Order Center may not show depositInfo")
         else:
-            print("\n🚨 FIX NOT WORKING - Seller wallet balance deduction still broken")
-            print("   ❌ The snake_case vs camelCase issue may still exist")
+            print("\n🚨 FIX NOT WORKING - Order Center status update still broken")
+            print("   ❌ The /seller/order-center endpoint may not be fetching depositInfo")
 
 
 if __name__ == "__main__":
