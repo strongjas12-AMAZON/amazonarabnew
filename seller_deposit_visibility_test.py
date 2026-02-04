@@ -483,9 +483,9 @@ class SellerDepositVisibilityTester:
         # Step 1: Verify the fix in backend code
         self.test_backend_code_column_fix_verification()
         
-        # Step 2: Admin login to check existing orders
+        # Step 2: Admin login to check existing deposit confirmations
         if self.test_admin_login():
-            self.test_admin_get_orders_with_deposit_info()
+            self.test_admin_get_deposit_confirmations()
         
         # Step 3: Seller login and check order center
         if not self.test_seller_login():
