@@ -5506,8 +5506,8 @@ async def confirm_seller_deposit(
                 .eq('order_id', order_id)\
                 .execute()
             
-            # If wallet balance deposit was rejected, return the funds to seller's wallet
-            if deposit_method == 'wallet_balance':
+            # If internal wallet deposit was rejected, return the funds to seller's wallet
+            if deposit_method == 'internal_wallet':
                 try:
                     seller_id = deposit.get('seller_id')
                     deposit_amount = float(deposit.get('deposited_amount', 0))
