@@ -5144,7 +5144,7 @@ async def deposit_for_order(req: SellerDepositRequest, current_user: dict = Depe
         
         current_balance = float(wallet.get('balance', 0))
         deposit_balance = float(wallet.get('depositBalance', 0))
-        required_deposit = float(order.get('depositRequired', 0))
+        required_deposit = float(order.get('deposit_required', 0))  # Fixed: use snake_case column name
         
         # 3. Verify seller has enough balance to deposit
         if current_balance < required_deposit:
