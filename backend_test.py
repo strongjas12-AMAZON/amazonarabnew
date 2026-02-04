@@ -800,6 +800,7 @@ class OrderCenterStatusUpdateTester:
         # Key findings
         seller_login_working = any(r["success"] and "Seller Login" in r["test"] for r in self.test_results)
         deposit_working = any(r["success"] and "Deposit For Order" in r["test"] for r in self.test_results)
+        order_center_structure = any(r["success"] and "Order Center DepositInfo Structure" in r["test"] for r in self.test_results)
         order_center_working = any(r["success"] and "Order Center Status" in r["test"] for r in self.test_results)
         balance_deducted = any(r["success"] and "Final Wallet Balance" in r["test"] for r in self.test_results)
         admin_access = any(r["success"] and "Admin Login" in r["test"] for r in self.test_results)
@@ -807,6 +808,7 @@ class OrderCenterStatusUpdateTester:
         print("🎯 KEY FINDINGS:")
         print(f"   • Seller Authentication: {'✅ WORKING' if seller_login_working else '❌ BROKEN'}")
         print(f"   • POST /api/seller/wallet/deposit-for-order: {'✅ WORKING' if deposit_working else '❌ BROKEN'}")
+        print(f"   • GET /api/seller/order-center (endpoint): {'✅ WORKING' if order_center_structure else '❌ BROKEN'}")
         print(f"   • GET /api/seller/order-center (depositInfo): {'✅ WORKING' if order_center_working else '❌ BROKEN'}")
         print(f"   • Wallet Balance Deduction: {'✅ WORKING' if balance_deducted else '❌ BROKEN'}")
         print(f"   • Admin Deposit Confirmations Access: {'✅ WORKING' if admin_access else '❌ BROKEN'}")
