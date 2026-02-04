@@ -554,7 +554,7 @@ class SellerDepositVisibilityTester:
         if backend_fix_verified:
             print("   ✅ Backend code uses camelCase column names (escrowStatus, depositRequired)")
             
-            if admin_login_working and admin_orders_working:
+            if admin_login_working and admin_deposits_working:
                 print("   ✅ Admin can access orders and see deposit field structure")
                 
                 if seller_login_working and order_center_working:
