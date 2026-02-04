@@ -41,12 +41,15 @@ EXPECTED_DEPOSIT_AMOUNT = 39.99  # Updated to match review request
 EXPECTED_INITIAL_BALANCE = 1000.00  # Expected initial wallet balance
 EXPECTED_FINAL_BALANCE = 960.01  # Expected balance after deduction (approximately)
 
-class AdminDepositConfirmationsTester:
+class SellerWalletBalanceDeductionTester:
     def __init__(self):
         self.base_url = BASE_URL
         self.session = requests.Session()
+        self.seller_token = None
         self.admin_token = None
         self.test_results = []
+        self.initial_balance = None
+        self.final_balance = None
         
     def log_test(self, test_name: str, success: bool, details: str = "", response_data: Any = None):
         """Log test result"""
