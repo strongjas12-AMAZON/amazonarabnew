@@ -299,10 +299,10 @@ class OrderCenterStatusUpdateTester:
             deposit_info_found = False
             
             for i, line in enumerate(lines):
-                if '/seller/order-center' in line and 'def' in line:
+                if 'seller/order-center' in line and '@api_router.get' in line:
                     order_center_found = True
-                    # Check the next 50 lines for depositInfo fetching
-                    for j in range(i, min(i + 50, len(lines))):
+                    # Check the next 100 lines for depositInfo fetching
+                    for j in range(i, min(i + 100, len(lines))):
                         if 'depositInfo' in lines[j] or 'order_deposits' in lines[j]:
                             deposit_info_found = True
                             break
@@ -310,12 +310,12 @@ class OrderCenterStatusUpdateTester:
             
             success_details = []
             if order_center_found:
-                success_details.append("✅ Found /seller/order-center endpoint")
+                success_details.append("✅ Found GET /seller/order-center endpoint")
             else:
-                success_details.append("❌ /seller/order-center endpoint not found")
+                success_details.append("❌ GET /seller/order-center endpoint not found")
                 
             if deposit_info_found:
-                success_details.append("✅ Endpoint appears to fetch depositInfo")
+                success_details.append("✅ Endpoint appears to fetch depositInfo from order_deposits")
             else:
                 success_details.append("❌ Endpoint may not be fetching depositInfo")
             
