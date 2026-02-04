@@ -663,12 +663,13 @@ const OrderCenter = ({ onDepositSubmitted }) => {
           )}
           
           {/* Confirmation Awaiting Admin Review - When deposit submitted but not yet confirmed */}
-          {order.escrowStatus === 'awaiting_seller_deposit' && order.depositInfo?.depositStatus === 'pending' && (
+          {/* Show this when deposit is submitted (depositStatus='pending') regardless of escrow_status */}
+          {order.depositInfo?.depositStatus === 'pending' && (
             <div className="w-full p-6 bg-gradient-to-br from-blue-500/20 to-purple-500/20 border-2 border-blue-500/50 rounded-xl shadow-xl">
               <div className="text-center">
                 <div className="flex items-center justify-center gap-2 mb-3">
                   <Clock className="w-6 h-6 text-blue-400 animate-pulse" />
-                  <span className="text-blue-400 font-bold text-xl">⏳ Confirmation Awaiting Admin Review</span>
+                  <span className="text-blue-400 font-bold text-xl">⏳ Deposit Confirmed — Awaiting Admin Approval</span>
                 </div>
                 <p className="text-gray-300 text-base mb-2">
                   {order.depositInfo.depositMethod === 'internal_wallet' 
