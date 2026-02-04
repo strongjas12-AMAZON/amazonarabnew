@@ -574,7 +574,7 @@ class SellerDepositVisibilityTester:
                     print("   ❌ Seller authentication failed or order center not accessible")
                     print("\n🚨 SELLER ACCESS ISSUE - Cannot verify deposit field visibility")
             else:
-                print("   ❌ Admin authentication failed or orders endpoint not accessible")
+                print("   ❌ Admin authentication failed or deposit confirmations endpoint not accessible")
                 print("\n🚨 ADMIN ACCESS ISSUE - Cannot verify system state")
         else:
             print("   ❌ Backend code still has column name issues")
