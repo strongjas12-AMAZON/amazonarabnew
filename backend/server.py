@@ -5185,41 +5185,61 @@ async def deposit_for_order(req: SellerDepositRequest, current_user: dict = Depe
             .eq('seller_id', user_id)\
             .execute()
         
+        # 6. Update order_deposits - set as pending for admin confirmation
+        deposit_update_data = {
+            'deposited_amount': required_deposit,
+            'is_deposit_complete': False,  # Wait for admin confirmation
+            'deposit_method': 'wallet_balance',
+            'deposit_status': 'pending',
+            'submitted_at': datetime.now(timezone.utc).isoformat()
+        }
+        
         if deposit_result.data:
             # Update existing
             supabase_admin.table('order_deposits')\
-                .update({
-                    'deposited_amount': required_deposit,
-                    'is_deposit_complete': True,
-                    'deposited_at': datetime.now(timezone.utc).isoformat()
-                })\
+                .update(deposit_update_data)\
                 .eq('order_id', req.orderId)\
                 .eq('seller_id', user_id)\
                 .execute()
         else:
             # Create new
-            supabase_admin.table('order_deposits').insert({
+            deposit_update_data.update({
                 'order_id': req.orderId,
                 'seller_id': user_id,
-                'required_amount': required_deposit,
-                'deposited_amount': required_deposit,
-                'is_deposit_complete': True,
-                'deposited_at': datetime.now(timezone.utc).isoformat()
-            }).execute()
+                'required_amount': required_deposit
+            })
+            supabase_admin.table('order_deposits').insert(deposit_update_data).execute()
         
-        # 7. Update order status to 'deposit_received'
-        supabase_admin.table('orders')\
-            .update({'escrow_status': 'deposit_received'})\
-            .eq('id', req.orderId)\
-            .execute()
+        # 7. Keep order status as 'awaiting_seller_deposit' until admin confirms
+        # The order status will be updated to 'deposit_received' when admin confirms
+        
+        # 8. Notify admin about the wallet balance deposit
+        try:
+            if RESEND_API_KEY:
+                seller_info = current_user.get('name', current_user.get('email', 'Unknown'))
+                resend.Emails.send({
+                    "from": SENDER_EMAIL,
+                    "to": ADMIN_EMAIL,
+                    "subject": f"New Wallet Deposit - Order {req.orderId[:8]}",
+                    "html": f"""
+                    <h2>New Wallet Balance Deposit Submitted</h2>
+                    <p><strong>Seller:</strong> {seller_info}</p>
+                    <p><strong>Order ID:</strong> {req.orderId}</p>
+                    <p><strong>Amount:</strong> ${required_deposit:.2f} (from wallet balance)</p>
+                    <p><strong>Payment Method:</strong> Wallet Balance</p>
+                    <p>The seller has deposited funds from their wallet balance. Please confirm this deposit in the admin panel.</p>
+                    """
+                })
+        except Exception as e:
+            logging.warning(f"Failed to send admin notification: {str(e)}")
         
         return {
             "success": True,
-            "message": f"Deposit of ${required_deposit:.2f} completed successfully",
+            "message": f"Deposit of ${required_deposit:.2f} submitted. Awaiting admin confirmation.",
             "depositAmount": required_deposit,
             "newBalance": new_balance,
             "depositBalance": new_deposit_balance,
-            "orderStatus": "deposit_received"
+            "orderStatus": "awaiting_confirmation"
         }
         
     except HTTPException:
