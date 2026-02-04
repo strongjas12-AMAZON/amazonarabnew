@@ -139,7 +139,70 @@ class OrderStatusTransitionTester:
             self.log_test("Admin Login", False, f"Exception: {str(e)}", None)
         return False
 
-    def test_admin_get_deposit_confirmations(self):
+    def test_admin_get_all_orders(self):
+        """Test GET /api/admin/orders - Check all orders in system"""
+        if not self.admin_token:
+            self.log_test("Admin Get All Orders", False, "No admin token available", None)
+            return None
+            
+        try:
+            headers = {"Authorization": f"Bearer {self.admin_token}"}
+            response = self.session.get(f"{self.base_url}/admin/orders", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    orders = data.get("orders", [])
+                    
+                    success_details = []
+                    success_details.append(f"Total orders in system: {len(orders)}")
+                    
+                    # Look for orders with escrow_status awaiting_seller_deposit
+                    awaiting_deposit_orders = []
+                    for order in orders:
+                        escrow_status = order.get("escrowStatus", "")
+                        if escrow_status == "awaiting_seller_deposit":
+                            awaiting_deposit_orders.append(order)
+                    
+                    if awaiting_deposit_orders:
+                        success_details.append(f"✅ Found {len(awaiting_deposit_orders)} orders awaiting seller deposit")
+                        for order in awaiting_deposit_orders[:3]:  # Show first 3
+                            order_id = order.get("id", "unknown")[:8]
+                            total_amount = order.get("totalAmount", 0)
+                            success_details.append(f"   Order {order_id}: ${total_amount}")
+                    else:
+                        success_details.append("⚠️  No orders awaiting seller deposit found")
+                    
+                    # Show sample orders
+                    if orders:
+                        success_details.append("Sample orders:")
+                        for i, order in enumerate(orders[:3]):
+                            order_id = order.get("id", "unknown")[:8]
+                            escrow_status = order.get("escrowStatus", "unknown")
+                            order_status = order.get("orderStatus", "unknown")
+                            success_details.append(f"   {i+1}. {order_id}: escrow={escrow_status}, status={order_status}")
+                    
+                    self.log_test(
+                        "Admin Get All Orders", 
+                        True, 
+                        "; ".join(success_details),
+                        {
+                            "total_orders": len(orders),
+                            "awaiting_deposit_orders": len(awaiting_deposit_orders),
+                            "sample_orders": orders[:3]
+                        }
+                    )
+                    
+                    return awaiting_deposit_orders
+                else:
+                    self.log_test("Admin Get All Orders", False, "Response missing success=true", data)
+            else:
+                self.log_test("Admin Get All Orders", False, f"HTTP {response.status_code}: {response.text}", None)
+                
+        except Exception as e:
+            self.log_test("Admin Get All Orders", False, f"Exception: {str(e)}", None)
+        
+        return None
         """Test GET /api/admin/deposit-confirmations - Find pending deposits"""
         if not self.admin_token:
             self.log_test("Admin Get Deposit Confirmations", False, "No admin token available", None)
