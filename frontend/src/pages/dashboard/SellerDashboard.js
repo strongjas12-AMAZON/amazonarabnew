@@ -1495,7 +1495,7 @@ const SellerDashboard = () => {
 
       {/* Order Center Section */}
       {activeTab === 'orderCenter' && (
-        <OrderCenter />
+        <OrderCenter onDepositSubmitted={fetchPendingDepositOrders} />
       )}
 
       {/* Wallet Recharge Modal */}
