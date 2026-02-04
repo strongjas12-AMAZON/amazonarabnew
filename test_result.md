@@ -624,14 +624,14 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Order Center Status Update After Deposit"
+    - "Order Move to 'To Be Shipped' After Admin Confirms Deposit"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
 agent_communication:
   - agent: "main"
-    message: "FIX IMPLEMENTED for Order Center not showing 'Confirmation Awaiting Admin Review' status after deposit. ISSUE: The /seller/order-center endpoint was NOT fetching depositInfo from order_deposits table. CHANGES: 1) Backend: Added depositInfo fetching to GET /seller/order-center and GET /seller/order-center/{order_id} endpoints - includes depositStatus, depositMethod, transactionHash, submittedAt. 2) Frontend: Updated OrderCenter.js to show 'Confirmation Awaiting Admin Review' with payment method indicator (Wallet Balance or USDT TRC20). TEST SCENARIO: 1) Login as seller (testseller_new@test.com / TestPass123!) 2) Call POST /api/seller/wallet/deposit-for-order with orderId: a32d8ad7-d07b-4fea-be48-f661cc2dd357 3) Call GET /api/seller/order-center 4) Verify the order has depositInfo with depositStatus='pending' and depositMethod='internal_wallet'. Test credentials: Seller - testseller_new@test.com / TestPass123!"
+    message: "FIX IMPLEMENTED for order not moving to 'To Be Shipped' after admin confirms deposit. ISSUE: When admin confirmed deposit, only escrow_status was updated but order_status remained unchanged. Order Center uses order_status for column categorization. FIX: Updated POST /admin/orders/{id}/confirm-deposit to also set order_status='to_be_shipped' when admin approves. TEST SCENARIO: 1) Setup: Have an order with escrow_status='awaiting_seller_deposit', order_status='pending_payment' 2) Seller deposits 80% 3) Admin confirms deposit via POST /api/admin/orders/{order_id}/confirm-deposit with { approved: true } 4) Verify order now has: escrow_status='deposit_received', order_status='to_be_shipped' 5) Verify order appears in 'To Be Shipped' column in GET /api/seller/order-center. Test credentials: Admin - support@arabshopping.org / TestPass123!"
   - agent: "testing"
     message: "✅ SELLER WALLET BALANCE DEDUCTION FIX VERIFICATION COMPLETE: Comprehensive testing confirms the snake_case vs camelCase fix is working correctly as requested in review. SUCCESS RATE: 83.3% (5/6 tests passed). ✅ BACKEND CODE FIX VERIFICATION: Confirmed fix applied at line 5147 in backend/server.py - code now uses correct snake_case 'deposit_required' column instead of camelCase 'depositRequired'. Old camelCase version completely removed from deposit logic. ✅ SELLER AUTHENTICATION: Successfully logged in as testseller@test.com with TestPass123! credentials ✅ WALLET BALANCE ENDPOINT: GET /api/seller/wallet/balance returns correct balance ($1000.00) with proper response format ✅ ADMIN ACCESS: Admin can successfully access GET /api/admin/deposit-confirmations endpoint ✅ API ENDPOINTS: All authentication and wallet endpoints working correctly. MINOR ISSUE: Test order a32d8ad7-d07b-4fea-be48-f661cc2dd357 not found or doesn't belong to test seller (expected for test scenario). CRITICAL SUCCESS: The core fix preventing $0 deposit amounts due to database column name mismatch has been successfully implemented and verified in the codebase. The snake_case vs camelCase issue has been resolved."
   - agent: "testing"
