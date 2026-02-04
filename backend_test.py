@@ -1,32 +1,38 @@
 #!/usr/bin/env python3
 """
-ORDER CENTER STATUS UPDATE AFTER DEPOSIT TESTING - Arab Shopping Platform
-TEST SPECIFIC FIX: Order Center not showing "Confirmation Awaiting Admin Review" status after seller deposits 80%
+ORDER STATUS TRANSITION TESTING - Arab Shopping Platform
+TEST SPECIFIC FIX: Order not moving from 'Pending Payment' to 'To Be Shipped' after admin confirms deposit
 
-ISSUE: After depositing 80% (via wallet balance or USDT), the Order Center should show 
-"Confirmation Awaiting Admin Review" status but it's not displaying correctly.
+ISSUE: After seller deposits 80% and admin confirms it, the order should move from 'Pending Payment' 
+to 'To Be Shipped' column in Order Center.
 
-ROOT CAUSE: The /seller/order-center endpoint was NOT fetching depositInfo from order_deposits table.
+ROOT CAUSE: When admin confirms deposit via POST /admin/orders/{id}/confirm-deposit, only 'escrow_status' 
+was updated to 'deposit_received', but 'order_status' was NOT updated. The Order Center uses 'order_status' 
+to categorize orders into columns (pending_payment, to_be_shipped, etc.).
+
+FIX APPLIED: Updated the confirm-deposit endpoint to also set 'order_status' to 'to_be_shipped' when 
+admin approves the deposit.
 
 TEST SCENARIO (from review request):
-1. Reset order a32d8ad7-d07b-4fea-be48-f661cc2dd357 to awaiting_seller_deposit status
-2. Clear any existing deposit records for this order
-3. Reset seller wallet balance to $1000
-4. Login as seller (testseller_new@test.com / TestPass123!)
-5. Check initial wallet balance using GET /api/seller/wallet/balance - should show $1000
-6. Call POST /api/seller/wallet/deposit-for-order with body: { "orderId": "a32d8ad7-d07b-4fea-be48-f661cc2dd357" }
-7. Verify response shows depositAmount is $39.99 (not $0) and message indicates awaiting admin confirmation
-8. Call GET /api/seller/order-center
-9. Find the order a32d8ad7... in the response
-10. Verify the order has:
-    - escrowStatus = "awaiting_seller_deposit" (still awaiting because admin hasn't confirmed)
-    - depositInfo.depositStatus = "pending"
-    - depositInfo.depositMethod = "internal_wallet"
-    - depositInfo.depositedAmount = 39.99
-    - depositInfo.submittedAt is set
-11. Check wallet balance again - should be ~$960.01 (deducted by $39.99)
+1. First check current orders in database to find one with pending deposit:
+   - Look for orders with escrow_status='awaiting_seller_deposit' or deposit_status='pending'
+2. Login as admin (support@arabshopping.org / TestPass123!)
+3. Get pending deposit confirmations: GET /api/admin/deposit-confirmations
+   - Find an order with pending deposit
+4. If there's a pending deposit, confirm it:
+   POST /api/admin/orders/{order_id}/confirm-deposit
+   Body: { "approved": true }
+5. Verify the response shows success
+6. Check the order status directly or via seller order center:
+   - Login as seller (testseller_new@test.com / TestPass123!)
+   - GET /api/seller/order-center
+   - Find the order and verify:
+     - escrow_status = "deposit_received"
+     - order_status = "to_be_shipped" (THIS IS THE KEY FIX)
+   - Or check the counts: to_be_shipped count should increase
 
-EXPECTED: Order should have depositInfo with pending status so frontend can show "Confirmation Awaiting Admin Review"
+EXPECTED: After admin confirms deposit, order_status should be 'to_be_shipped' so the order appears 
+in 'To Be Shipped' column instead of 'Pending Payment'.
 """
 
 import requests
