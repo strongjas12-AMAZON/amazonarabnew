@@ -195,8 +195,8 @@ class OrderCenterStatusUpdateTester:
             
         try:
             headers = {"Authorization": f"Bearer {self.seller_token}"}
-            # The API expects orderId only according to review request
-            deposit_data = {"orderId": EXPECTED_ORDER_ID}
+            # The API expects both orderId and amount
+            deposit_data = {"orderId": EXPECTED_ORDER_ID, "amount": EXPECTED_DEPOSIT_AMOUNT}
             
             response = self.session.post(f"{self.base_url}/seller/wallet/deposit-for-order", json=deposit_data, headers=headers)
             
