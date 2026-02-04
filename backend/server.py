@@ -1988,20 +1988,6 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
                     }).execute()
             except Exception as e:
                 logging.warning(f"Could not update platform wallet: {str(e)}")
-            
-            # Create deposit requirements for each seller
-            for seller_id, seller_amount in seller_amounts.items():
-                seller_deposit = seller_amount * 0.8  # 80% of seller's portion
-                try:
-                    supabase_admin.table('order_deposits').insert({
-                        'order_id': order_id,
-                        'seller_id': seller_id,
-                        'required_amount': seller_deposit,
-                        'deposited_amount': 0,
-                        'is_deposit_complete': False
-                    }).execute()
-                except Exception as e:
-                    logging.warning(f"Could not create deposit requirement for seller {seller_id}: {str(e)}")
         
         # If wallet payment, update transaction with order_id
         if req.useWallet:
