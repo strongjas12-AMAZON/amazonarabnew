@@ -1960,13 +1960,8 @@ async def create_order(request: Request, req: CreateOrderRequest, current_user: 
             except Exception as e:
                 logging.warning(f"Could not fetch seller for product {item['productId']}: {str(e)}")
         
-        # If payment is confirmed (wallet payment), immediately move to awaiting_seller_deposit
+        # If payment is confirmed (wallet payment), record platform balance and create deposit requirements
         if req.useWallet or payment_status == 'paid':
-            # Update order to awaiting_seller_deposit
-            supabase_admin.table('orders').update({
-                'escrow_status': 'awaiting_seller_deposit'
-            }).eq('id', order_id).execute()
-            
             # Record platform balance transaction (buyer payment received)
             try:
                 platform_balance = supabase_admin.table('platform_balance')\
