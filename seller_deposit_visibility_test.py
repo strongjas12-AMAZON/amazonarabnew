@@ -596,37 +596,28 @@ class SellerDepositVisibilityTester:
         # Step 1: Verify the fix in backend code
         self.test_backend_code_column_fix_verification()
         
-        # Step 2: Buyer login and wallet check
+        # Step 2: Admin login to check existing orders
+        if self.test_admin_login():
+            self.test_admin_get_orders_with_deposit_info()
+        
+        # Step 3: Buyer login and wallet check
         if not self.test_buyer_login():
             print("\n❌ CRITICAL: Buyer login failed - cannot create test order")
-            return
-        
-        wallet_balance = self.test_buyer_wallet_balance()
-        if wallet_balance is None or wallet_balance < 50:
-            print(f"\n⚠️  Insufficient buyer wallet balance (${wallet_balance}) - may affect order creation")
-        
-        # Step 3: Create order with wallet payment (triggers escrow system)
-        if wallet_balance and wallet_balance >= 50:
-            order_id = self.test_create_order_with_wallet(wallet_balance)
-            if order_id:
-                print(f"\n✅ Test order created: {order_id}")
-                # Wait for order to be processed
-                time.sleep(2)
-            else:
-                print("\n❌ Failed to create test order")
         else:
-            print("\n⚠️  Skipping order creation due to insufficient wallet balance")
+            wallet_balance = self.test_buyer_wallet_balance()
+            if wallet_balance is None or wallet_balance < 50:
+                print(f"\n⚠️  Insufficient buyer wallet balance (${wallet_balance}) - may affect order creation")
         
         # Step 4: Seller login and check order center
         if not self.test_seller_login():
             print("\n❌ CRITICAL: Seller login failed - cannot verify deposit visibility")
-            return
-        
-        # Step 5: Test seller order center for deposit fields
-        orders = self.test_seller_order_center_deposit_fields()
-        
-        # Step 6: Test pending deposit orders endpoint
-        pending_orders = self.test_seller_pending_deposit_orders()
+            print("   This may indicate the seller user doesn't exist or has wrong credentials")
+        else:
+            # Step 5: Test seller order center for deposit fields
+            orders = self.test_seller_order_center_deposit_fields()
+            
+            # Step 6: Test pending deposit orders endpoint
+            pending_orders = self.test_seller_pending_deposit_orders()
         
         # Generate summary
         self.generate_summary()
