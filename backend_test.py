@@ -29,16 +29,17 @@ BASE_URL = "https://repo-twin-2.preview.emergentagent.com/api"
 
 # Test Credentials from review request
 ADMIN_EMAIL = "support@arabshopping.org"
-ADMIN_PASSWORD = "Hadi1247@"  # Actual admin password from backend code
-SELLER_EMAIL = "testseller@test.com"
+ADMIN_PASSWORD = "TestPass123!"  # Updated to match review request
+SELLER_EMAIL = "testseller_new@test.com"  # Updated to match review request
 SELLER_PASSWORD = "TestPass123!"
 BUYER_EMAIL = "testbuyer@test.com"
 BUYER_PASSWORD = "TestPass123!"
 
 # Expected test data from review request
-EXPECTED_ORDER_ID = "b6229b1b-d2b4-4b8e-ab20-cb75947b203e"
-EXPECTED_DEPOSIT_AMOUNT = 31.99
-EXPECTED_DEPOSIT_METHOD = "internal_wallet"
+EXPECTED_ORDER_ID = "a32d8ad7-d07b-4fea-be48-f661cc2dd357"  # Updated to match review request
+EXPECTED_DEPOSIT_AMOUNT = 39.99  # Updated to match review request
+EXPECTED_INITIAL_BALANCE = 1000.00  # Expected initial wallet balance
+EXPECTED_FINAL_BALANCE = 960.01  # Expected balance after deduction (approximately)
 
 class AdminDepositConfirmationsTester:
     def __init__(self):
