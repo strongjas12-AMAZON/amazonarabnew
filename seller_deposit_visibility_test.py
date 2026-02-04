@@ -543,7 +543,7 @@ class SellerDepositVisibilityTester:
         print("🎯 KEY FINDINGS:")
         print(f"   • Admin Authentication: {'✅ WORKING' if admin_login_working else '❌ BROKEN'}")
         print(f"   • Seller Authentication: {'✅ WORKING' if seller_login_working else '❌ BROKEN'}")
-        print(f"   • GET /api/admin/orders (Deposit Fields): {'✅ WORKING' if admin_orders_working else '❌ BROKEN'}")
+        print(f"   • GET /api/admin/deposit-confirmations: {'✅ WORKING' if admin_deposits_working else '❌ BROKEN'}")
         print(f"   • GET /api/seller/order-center (Deposit Fields): {'✅ WORKING' if order_center_working else '❌ BROKEN'}")
         print(f"   • GET /api/seller/orders/pending-deposit: {'✅ WORKING' if pending_deposits_working else '❌ BROKEN'}")
         print(f"   • Backend Code Fix (camelCase columns): {'✅ VERIFIED' if backend_fix_verified else '❌ NOT FOUND'}")
