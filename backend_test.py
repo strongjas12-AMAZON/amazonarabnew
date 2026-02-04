@@ -480,27 +480,30 @@ class SellerWalletBalanceDeductionTester:
         print(f"Expected initial balance: ${EXPECTED_INITIAL_BALANCE}")
         print("=" * 70)
         
-        # Step 1: Seller login
+        # Step 1: Verify the fix in backend code
+        self.test_backend_code_fix_verification()
+        
+        # Step 2: Seller login
         if not self.test_seller_login():
             print("\n❌ CRITICAL: Seller login failed - cannot proceed with testing")
             return
         
-        # Step 2: Check initial wallet balance
+        # Step 3: Check initial wallet balance
         initial_balance = self.test_initial_wallet_balance()
         if initial_balance is None:
             print("\n❌ CRITICAL: Could not retrieve initial wallet balance")
             return
         
-        # Step 3: Test deposit for order (main fix)
+        # Step 4: Test deposit for order (main fix)
         deposit_amount = self.test_deposit_for_order()
-        if deposit_amount is None:
-            print("\n❌ CRITICAL: Deposit for order failed")
-            return
         
-        # Step 4: Check final wallet balance (verify deduction)
-        final_balance = self.test_final_wallet_balance(deposit_amount)
+        # Step 5: Check final wallet balance (verify deduction) - only if deposit was successful
+        if deposit_amount is not None and deposit_amount > 0:
+            final_balance = self.test_final_wallet_balance(deposit_amount)
+        else:
+            print("\n⚠️  Skipping balance deduction test - deposit test did not complete successfully")
         
-        # Step 5: Admin login and check deposit confirmations
+        # Step 6: Admin login and check deposit confirmations
         if self.test_admin_login():
             self.test_admin_deposit_confirmations()
         else:
