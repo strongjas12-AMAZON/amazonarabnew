@@ -128,14 +128,29 @@ const SellerDashboard = () => {
         api.get('/seller/store/products'),  // Use new store system endpoint
         api.get('/orders/my')
       ]);
-      setMyProducts(myProductsRes.data.products || []);
+      const storeProducts = myProductsRes.data.products || [];
+      setMyProducts(storeProducts);
       setOrders(ordersRes.data.orders || []);
       
       // Fetch catalog if seller is verified
       if (user?.verificationStatus === 'verified') {
         try {
           const catalogRes = await api.get('/seller/catalog/products');
-          setCatalogProducts(catalogRes.data.products || []);
+          const catalogProductsList = catalogRes.data.products || [];
+          
+          // Mark catalog products as selected if they're already in the seller's store
+          const catalogWithSelectionStatus = catalogProductsList.map(catalogProduct => {
+            const isInStore = storeProducts.some(storeProduct => 
+              storeProduct.catalogProductId === catalogProduct.id || 
+              storeProduct.catalog_product_id === catalogProduct.id
+            );
+            return {
+              ...catalogProduct,
+              isSelected: isInStore
+            };
+          });
+          
+          setCatalogProducts(catalogWithSelectionStatus);
         } catch (err) {
           console.log('Catalog not available');
           setCatalogProducts([]);
