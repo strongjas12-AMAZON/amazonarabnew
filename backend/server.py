@@ -3191,9 +3191,8 @@ async def admin_update_payout_status(
         )
         updated = result.data[0] if result.data else {**payout, **update_data}
         
-        # If this is a wallet_balance payout and status is 'approved' or 'paid', deduct from wallet balance
-        payout_type = payout.get("payoutType") or payout.get("payout_type", "earnings")
-        if payout_type == "wallet_balance" and req.status in ("approved", "paid"):
+        # When payout is approved or paid, deduct from seller's wallet balance
+        if req.status in ("approved", "paid"):
             seller_id = payout.get("sellerId") or payout.get("seller_id")
             payout_amount = float(payout.get("requestedAmount") or payout.get("requested_amount", 0))
             
