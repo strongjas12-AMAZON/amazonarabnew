@@ -2137,7 +2137,9 @@ async def get_seller_earnings(current_user: dict = Depends(get_current_user)):
                 store_product = item.get("store_products") or {}
                 # Check if this product belongs to the current seller
                 if store_product.get("seller_id") == current_user["id"]:
-                    total_earnings += float(item.get("price", 0)) * int(item.get("quantity", 0))
+                    # Sellers earn 20% of each order amount
+                    full_amount = float(item.get("price", 0)) * int(item.get("quantity", 0))
+                    total_earnings += full_amount * 0.20  # 20% commission
 
         # 2) Fetch payout requests for this seller
         payouts_result = (
