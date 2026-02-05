@@ -3193,6 +3193,34 @@ async def admin_update_payout_status(
             .execute()
         )
         updated = result.data[0] if result.data else {**payout, **update_data}
+        
+        # If this is a wallet_balance payout and status is 'approved' or 'paid', deduct from wallet balance
+        payout_type = payout.get("payoutType") or payout.get("payout_type", "earnings")
+        if payout_type == "wallet_balance" and req.status in ("approved", "paid"):
+            seller_id = payout.get("sellerId") or payout.get("seller_id")
+            payout_amount = float(payout.get("requestedAmount") or payout.get("requested_amount", 0))
+            
+            # Get seller wallet
+            seller_wallet = await get_or_create_seller_wallet(seller_id)
+            current_balance = float(seller_wallet.get('balance', 0))
+            new_balance = max(current_balance - payout_amount, 0)
+            
+            # Update wallet balance
+            supabase_admin.table('seller_wallets').update({
+                'balance': new_balance,
+                'updatedAt': datetime.now(timezone.utc).isoformat()
+            }).eq('userId', seller_id).execute()
+            
+            # Create transaction record
+            await create_wallet_transaction(
+                user_id=seller_id,
+                user_role='seller',
+                transaction_type='payout',
+                amount=payout_amount,
+                previous_balance=current_balance,
+                new_balance=new_balance,
+                description=f"Wallet balance payout: ${payout_amount:.2f} - {req.status}"
+            )
 
         return {"success": True, "payoutRequest": format_payout_request_response(updated)}
     except HTTPException:
