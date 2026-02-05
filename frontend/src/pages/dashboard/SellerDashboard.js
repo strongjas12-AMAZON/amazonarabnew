@@ -1214,7 +1214,7 @@ const SellerDashboard = () => {
                 <p className="text-gray-400 text-sm">Withdrawable</p>
               </div>
               <p className="text-2xl font-bold text-green-400">
-                ${walletBalance ? (walletBalance.withdrawableBalance || 0).toFixed(2) : '0.00'}
+                ${walletBalance ? (walletBalance.balance || 0).toFixed(2) : '0.00'}
               </p>
             </div>
             <div className="p-4 bg-[rgba(30,30,30,0.8)] rounded-lg border border-[rgba(212,175,55,0.2)]">
