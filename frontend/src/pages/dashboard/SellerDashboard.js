@@ -166,6 +166,15 @@ const SellerDashboard = () => {
       console.error('Failed to load recharge history', error);
     }
   };
+  
+  const fetchWalletPayoutHistory = async () => {
+    try {
+      const res = await api.get('/seller/wallet/payout-requests');
+      setWalletPayoutHistory(res.data.payoutRequests || []);
+    } catch (error) {
+      console.error('Failed to load wallet payout history', error);
+    }
+  };
 
   const handleRechargeSubmit = async (e) => {
     e.preventDefault();
