@@ -2212,6 +2212,7 @@ async def create_payout_request(req: CreatePayoutRequest, current_user: dict = D
             "requestedAmount": req.requestedAmount,
             "status": "pending",
             "payoutWallet": wallet_address,
+            "payoutType": "earnings",  # NEW: Differentiate from wallet_balance payout
             "requestDate": datetime.now(timezone.utc).isoformat(),
             "createdAt": datetime.now(timezone.utc).isoformat(),
             "updatedAt": datetime.now(timezone.utc).isoformat(),
