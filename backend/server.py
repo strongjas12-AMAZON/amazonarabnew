@@ -2378,12 +2378,11 @@ async def get_seller_wallet_payout_requests(current_user: dict = Depends(get_cur
         raise HTTPException(status_code=403, detail="Only sellers can view wallet payout requests")
 
     try:
-        # Get wallet balance payout requests for this seller
+        # Get all payout requests for this seller
         payouts_result = (
             supabase_admin.table("payout_requests")
             .select("*")
             .eq("sellerId", current_user["id"])
-            .eq("payoutType", "wallet_balance")
             .order("requestDate", desc=True)
             .execute()
         )
