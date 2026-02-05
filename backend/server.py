@@ -2308,6 +2308,95 @@ async def get_seller_recharge_requests(current_user: dict = Depends(get_current_
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@api_router.post("/seller/wallet/payout-requests")
+async def create_wallet_payout_request(req: CreatePayoutRequest, current_user: dict = Depends(get_current_user)):
+    """Seller creates a payout request from their wallet balance (separate from earnings payout)."""
+    if current_user["role"] != "seller":
+        raise HTTPException(status_code=403, detail="Only sellers can request wallet payouts")
+
+    if req.requestedAmount <= 0:
+        raise HTTPException(status_code=400, detail="Requested amount must be greater than zero")
+    
+    # Validate wallet address is provided
+    if not req.payoutWallet or not req.payoutWallet.strip():
+        raise HTTPException(status_code=400, detail="USDT TRC20 wallet address is required")
+    
+    # Basic TRC20 wallet validation (starts with 'T' and is 34 characters)
+    wallet_address = req.payoutWallet.strip()
+    if not wallet_address.startswith('T') or len(wallet_address) != 34:
+        raise HTTPException(status_code=400, detail="Invalid USDT TRC20 wallet address. Must start with 'T' and be 34 characters long")
+
+    try:
+        # Get seller's wallet balance
+        wallet = await get_or_create_seller_wallet(current_user['id'])
+        wallet_balance = float(wallet.get('balance', 0))
+        
+        # Check pending wallet payout requests
+        pending_result = (
+            supabase_admin.table("payout_requests")
+            .select("requestedAmount")
+            .eq("sellerId", current_user["id"])
+            .eq("payoutType", "wallet_balance")
+            .eq("status", "pending")
+            .execute()
+        )
+        pending_amount = sum(float(p.get("requestedAmount", 0)) for p in (pending_result.data or []))
+        available_balance = wallet_balance - pending_amount
+
+        if req.requestedAmount > available_balance:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Requested amount exceeds available wallet balance. Available: ${available_balance:.2f}"
+            )
+
+        data = {
+            "sellerId": current_user["id"],
+            "requestedAmount": req.requestedAmount,
+            "status": "pending",
+            "payoutWallet": wallet_address,
+            "payoutType": "wallet_balance",  # NEW: Differentiate from earnings payout
+            "requestDate": datetime.now(timezone.utc).isoformat(),
+            "createdAt": datetime.now(timezone.utc).isoformat(),
+            "updatedAt": datetime.now(timezone.utc).isoformat(),
+        }
+
+        result = supabase_admin.table("payout_requests").insert(data).execute()
+        created = result.data[0] if result.data else data
+
+        return {"success": True, "payoutRequest": format_payout_request_response(created)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Create wallet payout request error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/seller/wallet/payout-requests")
+async def get_seller_wallet_payout_requests(current_user: dict = Depends(get_current_user)):
+    """Seller views their wallet balance payout request history"""
+    if current_user["role"] != "seller":
+        raise HTTPException(status_code=403, detail="Only sellers can view wallet payout requests")
+
+    try:
+        # Get wallet balance payout requests for this seller
+        payouts_result = (
+            supabase_admin.table("payout_requests")
+            .select("*")
+            .eq("sellerId", current_user["id"])
+            .eq("payoutType", "wallet_balance")
+            .order("requestDate", desc=True)
+            .execute()
+        )
+
+        payouts = [format_payout_request_response(p) for p in (payouts_result.data or [])]
+
+        return {"success": True, "payoutRequests": payouts}
+    except Exception as e:
+        logging.error(f"Get wallet payout requests error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
 @api_router.get("/seller/wallet/balance")
 async def get_seller_wallet_balance(current_user: dict = Depends(get_current_user)):
     """Get seller's wallet balance (from recharges) and total summary"""
