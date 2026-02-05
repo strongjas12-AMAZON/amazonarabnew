@@ -2312,7 +2312,7 @@ async def get_seller_recharge_requests(current_user: dict = Depends(get_current_
 
 @api_router.post("/seller/wallet/payout-requests")
 async def create_wallet_payout_request(req: CreatePayoutRequest, current_user: dict = Depends(get_current_user)):
-    """Seller creates a payout request from their wallet balance (separate from earnings payout)."""
+    """Seller creates a payout request from their wallet balance."""
     if current_user["role"] != "seller":
         raise HTTPException(status_code=403, detail="Only sellers can request wallet payouts")
 
@@ -2333,12 +2333,11 @@ async def create_wallet_payout_request(req: CreatePayoutRequest, current_user: d
         wallet = await get_or_create_seller_wallet(current_user['id'])
         wallet_balance = float(wallet.get('balance', 0))
         
-        # Check pending wallet payout requests
+        # Check pending wallet payout requests (all pending requests for this seller)
         pending_result = (
             supabase_admin.table("payout_requests")
             .select("requestedAmount")
             .eq("sellerId", current_user["id"])
-            .eq("payoutType", "wallet_balance")
             .eq("status", "pending")
             .execute()
         )
@@ -2356,7 +2355,6 @@ async def create_wallet_payout_request(req: CreatePayoutRequest, current_user: d
             "requestedAmount": req.requestedAmount,
             "status": "pending",
             "payoutWallet": wallet_address,
-            "payoutType": "wallet_balance",  # NEW: Differentiate from earnings payout
             "requestDate": datetime.now(timezone.utc).isoformat(),
             "createdAt": datetime.now(timezone.utc).isoformat(),
             "updatedAt": datetime.now(timezone.utc).isoformat(),
