@@ -42,6 +42,12 @@ const SellerDashboard = () => {
   const [rechargeHistory, setRechargeHistory] = useState([]);
   const [walletBalance, setWalletBalance] = useState(null);
   
+  // Wallet payout states (NEW)
+  const [walletPayoutAmount, setWalletPayoutAmount] = useState('');
+  const [walletPayoutWallet, setWalletPayoutWallet] = useState('');
+  const [walletPayoutSubmitting, setWalletPayoutSubmitting] = useState(false);
+  const [walletPayoutHistory, setWalletPayoutHistory] = useState([]);
+  
   // NEW: Escrow + Deposit system states
   const [pendingDepositOrders, setPendingDepositOrders] = useState([]);
   const [depositingOrderId, setDepositingOrderId] = useState(null);
