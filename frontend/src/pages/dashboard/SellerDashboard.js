@@ -42,6 +42,12 @@ const SellerDashboard = () => {
   const [rechargeHistory, setRechargeHistory] = useState([]);
   const [walletBalance, setWalletBalance] = useState(null);
   
+  // Wallet payout states (NEW)
+  const [walletPayoutAmount, setWalletPayoutAmount] = useState('');
+  const [walletPayoutWallet, setWalletPayoutWallet] = useState('');
+  const [walletPayoutSubmitting, setWalletPayoutSubmitting] = useState(false);
+  const [walletPayoutHistory, setWalletPayoutHistory] = useState([]);
+  
   // NEW: Escrow + Deposit system states
   const [pendingDepositOrders, setPendingDepositOrders] = useState([]);
   const [depositingOrderId, setDepositingOrderId] = useState(null);
@@ -55,6 +61,7 @@ const SellerDashboard = () => {
       fetchEarnings();
       fetchRechargeHistory();
       fetchWalletBalance();
+      fetchWalletPayoutHistory(); // NEW: Fetch wallet payout history
       fetchPendingDepositOrders(); // NEW: Fetch orders needing deposits
     }
   }, [user]);
@@ -121,14 +128,29 @@ const SellerDashboard = () => {
         api.get('/seller/store/products'),  // Use new store system endpoint
         api.get('/orders/my')
       ]);
-      setMyProducts(myProductsRes.data.products || []);
+      const storeProducts = myProductsRes.data.products || [];
+      setMyProducts(storeProducts);
       setOrders(ordersRes.data.orders || []);
       
       // Fetch catalog if seller is verified
       if (user?.verificationStatus === 'verified') {
         try {
           const catalogRes = await api.get('/seller/catalog/products');
-          setCatalogProducts(catalogRes.data.products || []);
+          const catalogProductsList = catalogRes.data.products || [];
+          
+          // Mark catalog products as selected if they're already in the seller's store
+          const catalogWithSelectionStatus = catalogProductsList.map(catalogProduct => {
+            const isInStore = storeProducts.some(storeProduct => 
+              storeProduct.catalogProductId === catalogProduct.id || 
+              storeProduct.catalog_product_id === catalogProduct.id
+            );
+            return {
+              ...catalogProduct,
+              isSelected: isInStore
+            };
+          });
+          
+          setCatalogProducts(catalogWithSelectionStatus);
         } catch (err) {
           console.log('Catalog not available');
           setCatalogProducts([]);
@@ -157,6 +179,15 @@ const SellerDashboard = () => {
       setRechargeHistory(res.data.rechargeRequests || []);
     } catch (error) {
       console.error('Failed to load recharge history', error);
+    }
+  };
+  
+  const fetchWalletPayoutHistory = async () => {
+    try {
+      const res = await api.get('/seller/wallet/payout-requests');
+      setWalletPayoutHistory(res.data.payoutRequests || []);
+    } catch (error) {
+      console.error('Failed to load wallet payout history', error);
     }
   };
 
@@ -1198,7 +1229,7 @@ const SellerDashboard = () => {
                 <p className="text-gray-400 text-sm">Withdrawable</p>
               </div>
               <p className="text-2xl font-bold text-green-400">
-                ${walletBalance ? (walletBalance.withdrawableBalance || 0).toFixed(2) : '0.00'}
+                ${walletBalance ? (walletBalance.balance || 0).toFixed(2) : '0.00'}
               </p>
             </div>
             <div className="p-4 bg-[rgba(30,30,30,0.8)] rounded-lg border border-[rgba(212,175,55,0.2)]">
@@ -1293,7 +1324,7 @@ const SellerDashboard = () => {
       {activeTab === 'payouts' && (
         <div className="luxury-card mb-8">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white">Payouts & Earnings</h2>
+            <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white">Wallet Balance & Withdrawals</h2>
             <button
               onClick={() => setShowRechargeModal(true)}
               className="luxury-button flex items-center gap-2"
@@ -1303,191 +1334,190 @@ const SellerDashboard = () => {
             </button>
           </div>
 
-          {!earnings ? (
-            <p className="text-gray-400 text-center py-8">Earnings data is not available yet.</p>
-          ) : (
-            <div className="space-y-8">
-              {/* Summary */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="space-y-8">
+            {/* Wallet Balance Summary */}
+            {walletBalance && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="p-4 bg-[rgba(30,30,30,0.8)] rounded-lg border border-[rgba(212,175,55,0.2)]">
-                  <p className="text-gray-400 text-sm mb-1">Total Earnings</p>
-                  <p className="text-2xl font-bold text-green-400">${earnings.totalEarnings.toFixed(2)}</p>
-                </div>
-                <div className="p-4 bg-[rgba(30,30,30,0.8)] rounded-lg border border-[rgba(212,175,55,0.2)]">
-                  <p className="text-gray-400 text-sm mb-1">Available Balance</p>
-                  <p className="text-2xl font-bold text-[#D4AF37]">${earnings.availableBalance.toFixed(2)}</p>
-                </div>
-                <div className="p-4 bg-[rgba(30,30,30,0.8)] rounded-lg border border-[rgba(212,175,55,0.2)]">
-                  <p className="text-gray-400 text-sm mb-1">Pending Withdrawals</p>
-                  <p className="text-2xl font-bold text-yellow-400">${earnings.pendingWithdrawals.toFixed(2)}</p>
-                </div>
-              </div>
-
-              {/* Payout Request Form */}
-              <div className="border-t border-[rgba(212,175,55,0.1)] pt-6">
-                <h3 className="text-lg font-semibold text-white mb-2">Request Payout</h3>
-                <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                  <p className="text-sm text-blue-300 flex items-start gap-2">
-                    <Wallet className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                    <span>
-                      <strong>Important:</strong> You must provide a valid USDT TRC20 wallet address to receive your payout. 
-                      TRC20 addresses start with 'T' and are exactly 34 characters long.
-                    </span>
+                  <p className="text-gray-400 text-sm mb-1">Available Wallet Balance</p>
+                  <p className="text-2xl font-bold text-green-400">${walletBalance.balance.toFixed(2)}</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Includes 20% earnings from completed orders + recharges
                   </p>
                 </div>
-                <p className="text-xs text-gray-500 mb-4">
-                  Payouts are processed manually by admin. You can request a payout up to your available balance.
+                <div className="p-4 bg-[rgba(30,30,30,0.8)] rounded-lg border border-[rgba(212,175,55,0.2)]">
+                  <p className="text-gray-400 text-sm mb-1">Total Earnings (20%)</p>
+                  <p className="text-2xl font-bold text-[#D4AF37]">${earnings ? earnings.totalEarnings.toFixed(2) : '0.00'}</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Cumulative 20% commission from all completed orders
+                  </p>
+                </div>
+              </div>
+            )}
+            
+            {/* Wallet Withdrawal Form */}
+            <div className="border-t border-[rgba(212,175,55,0.1)] pt-6">
+              <h3 className="text-lg font-semibold text-white mb-2">Request Withdrawal</h3>
+              <div className="mb-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+                <p className="text-sm text-green-300 flex items-start gap-2">
+                  <Wallet className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <span>
+                    <strong>Wallet Balance Withdrawal:</strong> You can withdraw your wallet balance (which includes 20% earnings from completed orders) at any time. 
+                    Provide a valid USDT TRC20 wallet address to receive your payout.
+                  </span>
                 </p>
-                <form
-                  className="space-y-4"
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    if (!earnings) return;
-                    const amount = parseFloat(payoutAmount || '0');
-                    if (!amount || amount <= 0) {
-                      toast.error('Enter a valid amount');
-                      return;
-                    }
-                    if (amount > earnings.availableBalance) {
-                      toast.error('Amount exceeds available balance');
-                      return;
-                    }
-                    if (!payoutWallet || payoutWallet.trim() === '') {
-                      toast.error('Please enter your wallet address');
-                      return;
-                    }
-                    try {
-                      setPayoutSubmitting(true);
-                      await api.post('/seller/payout-requests', {
-                        requestedAmount: amount,
-                        payoutWallet: payoutWallet.trim(),
-                      });
-                      toast.success('Payout request submitted');
-                      setPayoutAmount('');
-                      setPayoutWallet('');
-                      await fetchEarnings();
-                    } catch (error) {
-                      toast.error(error.response?.data?.detail || 'Failed to submit payout request');
-                    } finally {
-                      setPayoutSubmitting(false);
-                    }
-                  }}
+              </div>
+              
+              <form
+                className="space-y-4"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!walletBalance) return;
+                  const amount = parseFloat(walletPayoutAmount || '0');
+                  if (!amount || amount <= 0) {
+                    toast.error('Enter a valid amount');
+                    return;
+                  }
+                  if (amount > walletBalance.balance) {
+                    toast.error('Amount exceeds available wallet balance');
+                    return;
+                  }
+                  if (!walletPayoutWallet || walletPayoutWallet.trim() === '') {
+                    toast.error('Please enter your wallet address');
+                    return;
+                  }
+                  try {
+                    setWalletPayoutSubmitting(true);
+                    await api.post('/seller/wallet/payout-requests', {
+                      requestedAmount: amount,
+                      payoutWallet: walletPayoutWallet.trim(),
+                    });
+                    toast.success('Withdrawal request submitted');
+                    setWalletPayoutAmount('');
+                    setWalletPayoutWallet('');
+                    await fetchWalletBalance();
+                    await fetchWalletPayoutHistory();
+                  } catch (error) {
+                    toast.error(error.response?.data?.detail || 'Failed to submit withdrawal request');
+                  } finally {
+                    setWalletPayoutSubmitting(false);
+                  }
+                }}
+              >
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Amount to withdraw (USD)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={walletPayoutAmount}
+                      onChange={(e) => setWalletPayoutAmount(e.target.value)}
+                      className="luxury-input w-full"
+                      placeholder="Enter amount"
+                      required
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      USDT TRC20 Wallet Address <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={walletPayoutWallet}
+                      onChange={(e) => setWalletPayoutWallet(e.target.value)}
+                      className="luxury-input w-full font-mono text-sm"
+                      placeholder="Enter your TRC20 wallet address (starts with T)"
+                      minLength={34}
+                      maxLength={34}
+                      pattern="T[A-Za-z0-9]{33}"
+                      title="Must be a valid TRC20 wallet address (34 characters, starts with T)"
+                      required
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      ⓘ Must be a valid USDT TRC20 wallet address (34 characters, starts with 'T')
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="submit"
+                  disabled={walletPayoutSubmitting || !walletBalance || walletBalance.balance <= 0}
+                  className="btn-gold whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Amount to withdraw (USD)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={payoutAmount}
-                        onChange={(e) => setPayoutAmount(e.target.value)}
-                        className="luxury-input w-full"
-                        placeholder="Enter amount"
-                        required
-                      />
-                    </div>
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        USDT TRC20 Wallet Address <span className="text-red-400">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={payoutWallet}
-                        onChange={(e) => setPayoutWallet(e.target.value)}
-                        className="luxury-input w-full font-mono text-sm"
-                        placeholder="Enter your TRC20 wallet address (starts with T)"
-                        minLength={34}
-                        maxLength={34}
-                        pattern="T[A-Za-z0-9]{33}"
-                        title="Must be a valid TRC20 wallet address (34 characters, starts with T)"
-                        required
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        ⓘ Must be a valid USDT TRC20 wallet address (34 characters, starts with 'T')
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={payoutSubmitting || !earnings || earnings.availableBalance <= 0}
-                    className="btn-gold whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {payoutSubmitting ? 'Submitting...' : 'Request Payout'}
-                  </button>
-                </form>
-              </div>
-
-              {/* Payout History */}
-              <div className="border-t border-[rgba(212,175,55,0.1)] pt-6">
-                <h3 className="text-lg font-semibold text-white mb-4">Payout Requests History</h3>
-                {(!earnings.payoutRequests || earnings.payoutRequests.length === 0) ? (
-                  <p className="text-gray-400 text-sm">No payout requests yet.</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full text-sm">
-                      <thead>
-                        <tr className="text-left text-gray-400 border-b border-[rgba(212,175,55,0.1)]">
-                          <th className="py-2 pr-4">Date</th>
-                          <th className="py-2 pr-4">Amount</th>
-                          <th className="py-2 pr-4">Wallet Address</th>
-                          <th className="py-2 pr-4">Status</th>
-                          <th className="py-2 pr-4">Admin Note</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {earnings.payoutRequests.map((p) => (
-                          <tr key={p.id} className="border-b border-[rgba(212,175,55,0.05)]">
-                            <td className="py-2 pr-4 text-gray-300">
-                              {p.requestDate
-                                ? new Date(p.requestDate).toLocaleDateString('en-US', {
-                                    year: 'numeric',
-                                    month: 'short',
-                                    day: 'numeric',
-                                  })
-                                : '—'}
-                            </td>
-                            <td className="py-2 pr-4 text-[#D4AF37] font-semibold">
-                              ${p.requestedAmount?.toFixed(2)}
-                            </td>
-                            <td className="py-2 pr-4 font-mono text-xs text-gray-400">
-                              {p.payoutWallet ? (
-                                <span className="truncate max-w-[150px] inline-block" title={p.payoutWallet}>
-                                  {p.payoutWallet}
-                                </span>
-                              ) : (
-                                '—'
-                              )}
-                            </td>
-                            <td className="py-2 pr-4">
-                              <span
-                                className={`status-badge ${
-                                  p.status === 'pending'
-                                    ? 'status-pending'
-                                    : p.status === 'approved'
-                                    ? 'status-verified'
-                                    : p.status === 'paid'
-                                    ? 'status-verified'
-                                    : 'status-rejected'
-                                }`}
-                              >
-                                {p.status}
-                              </span>
-                            </td>
-                            <td className="py-2 pr-4 text-xs text-gray-400 max-w-xs truncate">
-                              {p.adminNote || '—'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
+                  {walletPayoutSubmitting ? 'Submitting...' : 'Request Withdrawal'}
+                </button>
+              </form>
             </div>
-          )}
+            
+            {/* Wallet Withdrawal History */}
+            <div className="border-t border-[rgba(212,175,55,0.1)] pt-6">
+              <h3 className="text-lg font-semibold text-white mb-4">Withdrawal History</h3>
+              {(!walletPayoutHistory || walletPayoutHistory.length === 0) ? (
+                <p className="text-gray-400 text-sm">No withdrawal requests yet.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-gray-400 border-b border-[rgba(212,175,55,0.1)]">
+                        <th className="py-2 pr-4">Date</th>
+                        <th className="py-2 pr-4">Amount</th>
+                        <th className="py-2 pr-4">Wallet Address</th>
+                        <th className="py-2 pr-4">Status</th>
+                        <th className="py-2 pr-4">Admin Note</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {walletPayoutHistory.map((p) => (
+                        <tr key={p.id} className="border-b border-[rgba(212,175,55,0.05)]">
+                          <td className="py-2 pr-4 text-gray-300">
+                            {p.requestDate
+                              ? new Date(p.requestDate).toLocaleDateString('en-US', {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric',
+                                })
+                              : '—'}
+                          </td>
+                          <td className="py-2 pr-4 text-[#D4AF37] font-semibold">
+                            ${(p.requestedAmount || 0).toFixed(2)}
+                          </td>
+                          <td className="py-2 pr-4 font-mono text-xs text-gray-400">
+                            {p.payoutWallet ? (
+                              <span className="truncate max-w-[150px] inline-block" title={p.payoutWallet}>
+                                {p.payoutWallet}
+                              </span>
+                            ) : (
+                              '—'
+                            )}
+                          </td>
+                          <td className="py-2 pr-4">
+                            <span
+                              className={`status-badge ${
+                                p.status === 'pending'
+                                  ? 'status-pending'
+                                  : p.status === 'approved'
+                                  ? 'status-verified'
+                                  : p.status === 'paid'
+                                  ? 'status-verified'
+                                  : 'status-rejected'
+                              }`}
+                            >
+                              {p.status}
+                            </span>
+                          </td>
+                          <td className="py-2 pr-4 text-xs text-gray-400 max-w-xs truncate">
+                            {p.adminNote || '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 

@@ -2137,7 +2137,9 @@ async def get_seller_earnings(current_user: dict = Depends(get_current_user)):
                 store_product = item.get("store_products") or {}
                 # Check if this product belongs to the current seller
                 if store_product.get("seller_id") == current_user["id"]:
-                    total_earnings += float(item.get("price", 0)) * int(item.get("quantity", 0))
+                    # Sellers earn 20% of each order amount
+                    full_amount = float(item.get("price", 0)) * int(item.get("quantity", 0))
+                    total_earnings += full_amount * 0.20  # 20% commission
 
         # 2) Fetch payout requests for this seller
         payouts_result = (
@@ -2176,77 +2178,6 @@ async def get_seller_earnings(current_user: dict = Depends(get_current_user)):
         }
     except Exception as e:
         logging.error(f"Get seller earnings error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@api_router.post("/seller/payout-requests")
-async def create_payout_request(req: CreatePayoutRequest, current_user: dict = Depends(get_current_user)):
-    """Seller creates a payout request from available balance."""
-    if current_user["role"] != "seller":
-        raise HTTPException(status_code=403, detail="Only sellers can request payouts")
-
-    if req.requestedAmount <= 0:
-        raise HTTPException(status_code=400, detail="Requested amount must be greater than zero")
-    
-    # Validate wallet address is provided
-    if not req.payoutWallet or not req.payoutWallet.strip():
-        raise HTTPException(status_code=400, detail="USDT TRC20 wallet address is required")
-    
-    # Basic TRC20 wallet validation (starts with 'T' and is 34 characters)
-    wallet_address = req.payoutWallet.strip()
-    if not wallet_address.startswith('T') or len(wallet_address) != 34:
-        raise HTTPException(status_code=400, detail="Invalid USDT TRC20 wallet address. Must start with 'T' and be 34 characters long")
-
-    try:
-        # Reuse earnings calculation to determine available balance
-        earnings_response = await get_seller_earnings(current_user)
-        available_balance = earnings_response["earnings"]["availableBalance"]
-
-        if req.requestedAmount > available_balance:
-            raise HTTPException(status_code=400, detail="Requested amount exceeds available balance")
-
-        data = {
-            "sellerId": current_user["id"],
-            "requestedAmount": req.requestedAmount,
-            "status": "pending",
-            "payoutWallet": wallet_address,
-            "requestDate": datetime.now(timezone.utc).isoformat(),
-            "createdAt": datetime.now(timezone.utc).isoformat(),
-            "updatedAt": datetime.now(timezone.utc).isoformat(),
-        }
-
-        result = supabase_admin.table("payout_requests").insert(data).execute()
-        created = result.data[0] if result.data else data
-
-        return {"success": True, "payoutRequest": format_payout_request_response(created)}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logging.error(f"Create payout request error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@api_router.get("/seller/payout-requests")
-async def get_seller_payout_requests(current_user: dict = Depends(get_current_user)):
-    """Seller views their payout request history"""
-    if current_user["role"] != "seller":
-        raise HTTPException(status_code=403, detail="Only sellers can view payout requests")
-
-    try:
-        # Get all payout requests for this seller
-        payouts_result = (
-            supabase_admin.table("payout_requests")
-            .select("*")
-            .eq("sellerId", current_user["id"])
-            .order("requestDate", desc=True)
-            .execute()
-        )
-
-        payouts = [format_payout_request_response(p) for p in (payouts_result.data or [])]
-
-        return {"success": True, "payoutRequests": payouts}
-    except Exception as e:
-        logging.error(f"Get payout requests error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -2304,6 +2235,92 @@ async def get_seller_recharge_requests(current_user: dict = Depends(get_current_
     except Exception as e:
         logging.error(f"Get seller recharge requests error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/seller/wallet/payout-requests")
+async def create_wallet_payout_request(req: CreatePayoutRequest, current_user: dict = Depends(get_current_user)):
+    """Seller creates a payout request from their wallet balance."""
+    if current_user["role"] != "seller":
+        raise HTTPException(status_code=403, detail="Only sellers can request wallet payouts")
+
+    if req.requestedAmount <= 0:
+        raise HTTPException(status_code=400, detail="Requested amount must be greater than zero")
+    
+    # Validate wallet address is provided
+    if not req.payoutWallet or not req.payoutWallet.strip():
+        raise HTTPException(status_code=400, detail="USDT TRC20 wallet address is required")
+    
+    # Basic TRC20 wallet validation (starts with 'T' and is 34 characters)
+    wallet_address = req.payoutWallet.strip()
+    if not wallet_address.startswith('T') or len(wallet_address) != 34:
+        raise HTTPException(status_code=400, detail="Invalid USDT TRC20 wallet address. Must start with 'T' and be 34 characters long")
+
+    try:
+        # Get seller's wallet balance
+        wallet = await get_or_create_seller_wallet(current_user['id'])
+        wallet_balance = float(wallet.get('balance', 0))
+        
+        # Check pending wallet payout requests (all pending requests for this seller)
+        pending_result = (
+            supabase_admin.table("payout_requests")
+            .select("requestedAmount")
+            .eq("sellerId", current_user["id"])
+            .eq("status", "pending")
+            .execute()
+        )
+        pending_amount = sum(float(p.get("requestedAmount", 0)) for p in (pending_result.data or []))
+        available_balance = wallet_balance - pending_amount
+
+        if req.requestedAmount > available_balance:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Requested amount exceeds available wallet balance. Available: ${available_balance:.2f}"
+            )
+
+        data = {
+            "sellerId": current_user["id"],
+            "requestedAmount": req.requestedAmount,
+            "status": "pending",
+            "payoutWallet": wallet_address,
+            "requestDate": datetime.now(timezone.utc).isoformat(),
+            "createdAt": datetime.now(timezone.utc).isoformat(),
+            "updatedAt": datetime.now(timezone.utc).isoformat(),
+        }
+
+        result = supabase_admin.table("payout_requests").insert(data).execute()
+        created = result.data[0] if result.data else data
+
+        return {"success": True, "payoutRequest": format_payout_request_response(created)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Create wallet payout request error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/seller/wallet/payout-requests")
+async def get_seller_wallet_payout_requests(current_user: dict = Depends(get_current_user)):
+    """Seller views their wallet balance payout request history"""
+    if current_user["role"] != "seller":
+        raise HTTPException(status_code=403, detail="Only sellers can view wallet payout requests")
+
+    try:
+        # Get all payout requests for this seller
+        payouts_result = (
+            supabase_admin.table("payout_requests")
+            .select("*")
+            .eq("sellerId", current_user["id"])
+            .order("requestDate", desc=True)
+            .execute()
+        )
+
+        payouts = [format_payout_request_response(p) for p in (payouts_result.data or [])]
+
+        return {"success": True, "payoutRequests": payouts}
+    except Exception as e:
+        logging.error(f"Get wallet payout requests error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @api_router.get("/seller/wallet/balance")
@@ -2690,12 +2707,15 @@ async def update_order_status(order_id: str, request: UpdateOrderStatusRequest, 
             order_items_result = supabase_admin.table('order_items').select('*, store_products!inner(seller_id)').eq('order_id', order_id).execute()
             
             # Group earnings by seller
+            # IMPORTANT: Sellers earn 20% of each order amount
             seller_earnings = {}
             for item in (order_items_result.data or []):
                 store_product = item.get('store_products', {})
                 seller_id = store_product.get('seller_id')
                 if seller_id:
-                    earnings = float(item.get('price', 0)) * int(item.get('quantity', 0))
+                    # Calculate 20% of the order amount as seller earnings
+                    full_amount = float(item.get('price', 0)) * int(item.get('quantity', 0))
+                    earnings = full_amount * 0.20  # 20% commission
                     seller_earnings[seller_id] = seller_earnings.get(seller_id, 0) + earnings
             
             # Update each seller's wallet
@@ -2717,14 +2737,16 @@ async def update_order_status(order_id: str, request: UpdateOrderStatusRequest, 
                 if deposit_result.data:
                     deposit_to_return = float(deposit_result.data[0].get('deposited_amount', 0))
                 
-                # IMPORTANT: Balance should ONLY change through approved recharge requests
-                # Do NOT add earnings to balance - only track in totalEarnings
-                # Do NOT modify balance for deposit returns
+                # NEW LOGIC: Add 20% earnings + return 80% deposit to wallet balance
+                # Sellers get: 20% commission + 80% deposit back = full withdrawable amount
                 new_deposit_balance = max(current_deposit_balance - deposit_to_return, 0)
                 new_total_earnings = current_total_earnings + earnings_amount
+                # Add BOTH 20% earnings AND 80% deposit back to withdrawable balance
+                new_balance = current_balance + earnings_amount + deposit_to_return
                 
-                # Prepare update data - DO NOT UPDATE BALANCE, only totalEarnings and depositBalance
+                # Prepare update data - Update balance, totalEarnings, and depositBalance
                 wallet_update = {
+                    'balance': new_balance,  # Add earnings + deposit to withdrawable balance
                     'totalEarnings': new_total_earnings,
                     'updatedAt': datetime.now(timezone.utc).isoformat()
                 }
@@ -2735,17 +2757,16 @@ async def update_order_status(order_id: str, request: UpdateOrderStatusRequest, 
                 
                 supabase_admin.table('seller_wallets').update(wallet_update).eq('userId', seller_id).execute()
                 
-                # Create transaction record for earnings tracking (not balance change)
-                # NOTE: This records the earning but does NOT change wallet balance
+                # Create transaction record for earnings + deposit return
                 await create_wallet_transaction(
                     user_id=seller_id,
                     user_role='seller',
                     transaction_type='earning',
-                    amount=earnings_amount,
+                    amount=earnings_amount + deposit_to_return,
                     previous_balance=current_balance,
-                    new_balance=current_balance,  # Balance unchanged - only recharge requests change balance
+                    new_balance=new_balance,
                     order_id=order_id,
-                    description=f"Earnings from order: ${earnings_amount:.2f} (Deposit: ${deposit_to_return:.2f} returned) [Balance unchanged - only recharge requests modify balance]"
+                    description=f"Order completed: 20% earnings (${earnings_amount:.2f}) + 80% deposit returned (${deposit_to_return:.2f}) = ${earnings_amount + deposit_to_return:.2f}"
                 )
         
         # Send email notifications based on status change
@@ -3097,6 +3118,33 @@ async def admin_update_payout_status(
             .execute()
         )
         updated = result.data[0] if result.data else {**payout, **update_data}
+        
+        # When payout is approved or paid, deduct from seller's wallet balance
+        if req.status in ("approved", "paid"):
+            seller_id = payout.get("sellerId") or payout.get("seller_id")
+            payout_amount = float(payout.get("requestedAmount") or payout.get("requested_amount", 0))
+            
+            # Get seller wallet
+            seller_wallet = await get_or_create_seller_wallet(seller_id)
+            current_balance = float(seller_wallet.get('balance', 0))
+            new_balance = max(current_balance - payout_amount, 0)
+            
+            # Update wallet balance
+            supabase_admin.table('seller_wallets').update({
+                'balance': new_balance,
+                'updatedAt': datetime.now(timezone.utc).isoformat()
+            }).eq('userId', seller_id).execute()
+            
+            # Create transaction record
+            await create_wallet_transaction(
+                user_id=seller_id,
+                user_role='seller',
+                transaction_type='payout',
+                amount=payout_amount,
+                previous_balance=current_balance,
+                new_balance=new_balance,
+                description=f"Wallet balance payout: ${payout_amount:.2f} - {req.status}"
+            )
 
         return {"success": True, "payoutRequest": format_payout_request_response(updated)}
     except HTTPException:
