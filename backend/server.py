@@ -2737,15 +2737,16 @@ async def update_order_status(order_id: str, request: UpdateOrderStatusRequest, 
                 if deposit_result.data:
                     deposit_to_return = float(deposit_result.data[0].get('deposited_amount', 0))
                 
-                # NEW LOGIC: Add 20% earnings to BOTH totalEarnings AND balance
-                # This allows sellers to withdraw their 20% earnings directly from wallet balance
+                # NEW LOGIC: Add 20% earnings + return 80% deposit to wallet balance
+                # Sellers get: 20% commission + 80% deposit back = full withdrawable amount
                 new_deposit_balance = max(current_deposit_balance - deposit_to_return, 0)
                 new_total_earnings = current_total_earnings + earnings_amount
-                new_balance = current_balance + earnings_amount  # Add 20% earnings to wallet balance
+                # Add BOTH 20% earnings AND 80% deposit back to withdrawable balance
+                new_balance = current_balance + earnings_amount + deposit_to_return
                 
-                # Prepare update data - Update BOTH totalEarnings AND balance
+                # Prepare update data - Update balance, totalEarnings, and depositBalance
                 wallet_update = {
-                    'balance': new_balance,  # NEW: Add earnings to withdrawable balance
+                    'balance': new_balance,  # Add earnings + deposit to withdrawable balance
                     'totalEarnings': new_total_earnings,
                     'updatedAt': datetime.now(timezone.utc).isoformat()
                 }
@@ -2756,16 +2757,16 @@ async def update_order_status(order_id: str, request: UpdateOrderStatusRequest, 
                 
                 supabase_admin.table('seller_wallets').update(wallet_update).eq('userId', seller_id).execute()
                 
-                # Create transaction record for earnings - NOW updates balance
+                # Create transaction record for earnings + deposit return
                 await create_wallet_transaction(
                     user_id=seller_id,
                     user_role='seller',
                     transaction_type='earning',
-                    amount=earnings_amount,
+                    amount=earnings_amount + deposit_to_return,
                     previous_balance=current_balance,
-                    new_balance=new_balance,  # Balance IS updated with 20% earnings
+                    new_balance=new_balance,
                     order_id=order_id,
-                    description=f"20% earnings from order: ${earnings_amount:.2f} (20% of order total) - Added to wallet balance"
+                    description=f"Order completed: 20% earnings (${earnings_amount:.2f}) + 80% deposit returned (${deposit_to_return:.2f}) = ${earnings_amount + deposit_to_return:.2f}"
                 )
         
         # Send email notifications based on status change
