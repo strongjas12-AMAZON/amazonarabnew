@@ -61,6 +61,7 @@ const SellerDashboard = () => {
       fetchEarnings();
       fetchRechargeHistory();
       fetchWalletBalance();
+      fetchWalletPayoutHistory(); // NEW: Fetch wallet payout history
       fetchPendingDepositOrders(); // NEW: Fetch orders needing deposits
     }
   }, [user]);
