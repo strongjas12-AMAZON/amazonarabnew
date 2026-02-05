@@ -2236,11 +2236,12 @@ async def get_seller_payout_requests(current_user: dict = Depends(get_current_us
         raise HTTPException(status_code=403, detail="Only sellers can view payout requests")
 
     try:
-        # Get all payout requests for this seller
+        # Get earnings payout requests for this seller (not wallet_balance payouts)
         payouts_result = (
             supabase_admin.table("payout_requests")
             .select("*")
             .eq("sellerId", current_user["id"])
+            .or_("payoutType.eq.earnings,payoutType.is.null")  # Include old records without payoutType
             .order("requestDate", desc=True)
             .execute()
         )
