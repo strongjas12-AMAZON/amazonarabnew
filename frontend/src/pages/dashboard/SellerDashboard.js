@@ -709,49 +709,42 @@ const SellerDashboard = () => {
         <div className="luxury-card">
           <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white mb-6">Product Catalog</h2>
           
-          {user.verificationStatus !== 'verified' ? (
-            <div className="text-center py-12">
-              <AlertCircle className="w-16 h-16 mx-auto text-yellow-500 mb-4" />
-              <p className="text-gray-400">You need to be verified to browse the catalog</p>
+          {/* Search and Filter */}
+          <div className="flex flex-col sm:flex-row gap-4 mb-6">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search products..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="luxury-input pl-10 w-full"
+                data-testid="search-catalog"
+              />
             </div>
-          ) : (
-            <>
-              {/* Search and Filter */}
-              <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search products..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="luxury-input pl-10 w-full"
-                    data-testid="search-catalog"
-                  />
-                </div>
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="luxury-input"
-                  data-testid="filter-category"
-                >
-                  <option value="">All Categories</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.icon} {cat.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="luxury-input"
+              data-testid="filter-category"
+            >
+              <option value="">All Categories</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.icon} {cat.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
-              <p className="text-gray-400 mb-4">
-                Found {filteredCatalog.length} products • 
-                <span className="text-green-400"> {filteredCatalog.filter(p => p.isSelected).length} in your store</span>
-              </p>
+          <p className="text-gray-400 mb-4">
+            Found {filteredCatalog.length} products • 
+            <span className="text-green-400"> {filteredCatalog.filter(p => p.isSelected).length} in your store</span>
+          </p>
 
-              {/* Catalog Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {filteredCatalog.map((product) => (
+          {/* Catalog Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {filteredCatalog.map((product) => (
                   <div 
                     key={product.id} 
                     className={`bg-[rgba(30,30,30,0.6)] rounded-lg overflow-hidden border ${
