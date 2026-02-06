@@ -621,25 +621,17 @@ const SellerDashboard = () => {
         <div className="luxury-card">
           <div className="flex justify-between items-center mb-6">
             <h2 className="font-['Playfair_Display'] text-2xl font-bold text-white">My Store Products</h2>
-            {user.verificationStatus === 'verified' && (
-              <button
-                onClick={() => setActiveTab('catalog')}
-                className="btn-gold"
-                data-testid="browse-catalog-btn"
-              >
-                <Plus className="w-4 h-4 inline mr-2" />
-                Add from Catalog
-              </button>
-            )}
+            <button
+              onClick={() => setActiveTab('catalog')}
+              className="btn-gold"
+              data-testid="browse-catalog-btn"
+            >
+              <Plus className="w-4 h-4 inline mr-2" />
+              Add from Catalog
+            </button>
           </div>
 
-          {user.verificationStatus !== 'verified' ? (
-            <div className="text-center py-12">
-              <AlertCircle className="w-16 h-16 mx-auto text-yellow-500 mb-4" />
-              <p className="text-gray-400">You need to be verified to add products</p>
-              <p className="text-gray-500 text-sm mt-2">Complete verification to browse the product catalog</p>
-            </div>
-          ) : myProducts.length === 0 ? (
+          {myProducts.length === 0 ? (
             <div className="text-center py-12">
               <Store className="w-16 h-16 mx-auto text-gray-600 mb-4" />
               <p className="text-gray-400">Your store is empty</p>
