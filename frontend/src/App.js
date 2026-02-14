@@ -5,6 +5,7 @@ import { CartProvider } from './context/CartContext';
 import { Toaster } from 'sonner';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
+import WhatsAppButton from './components/WhatsAppButton';
 
 // Pages
 import Home from './pages/Home';
