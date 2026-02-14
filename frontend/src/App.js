@@ -125,6 +125,7 @@ function App() {
               },
             }}
           />
+          <WhatsAppButton />
         </BrowserRouter>
       </CartProvider>
     </AuthProvider>
