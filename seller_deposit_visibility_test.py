@@ -41,7 +41,7 @@ from typing import Dict, Any, Optional
 import time
 
 # Configuration
-BASE_URL = "https://repo-cloner-19.preview.emergentagent.com/api"
+BASE_URL = "https://repo-clone-46.preview.emergentagent.com/api"
 
 # Test Credentials from review request
 SELLER_EMAIL = "testseller@test.com"
