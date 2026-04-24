@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../lib/api';
 import { supabase } from '../../lib/supabase';
@@ -58,6 +58,35 @@ const AdminDashboard = () => {
     fetchPlatformBalance(); // NEW: Fetch platform balance
   }, []);
 
+  // Throttled version of fetchData for real-time subscription triggers.
+  // Real-time events can fire rapidly in bursts (e.g. when an order is paid,
+  // multiple rows change across orders/platform_balance/wallet_transactions
+  // within milliseconds). Without throttling, each event would spawn 10
+  // parallel API requests, increasing the chance that one fails transiently.
+  const lastRefreshRef = useRef(0);
+  const pendingRefreshRef = useRef(null);
+  const throttledRefresh = useCallback(() => {
+    const MIN_INTERVAL = 1500; // at most one full refresh every 1.5s
+    const now = Date.now();
+    const elapsed = now - lastRefreshRef.current;
+
+    if (elapsed >= MIN_INTERVAL) {
+      lastRefreshRef.current = now;
+      fetchData();
+      fetchPlatformBalance();
+      return;
+    }
+
+    // Coalesce burst of events into a single trailing refresh
+    if (pendingRefreshRef.current) return;
+    pendingRefreshRef.current = setTimeout(() => {
+      pendingRefreshRef.current = null;
+      lastRefreshRef.current = Date.now();
+      fetchData();
+      fetchPlatformBalance();
+    }, MIN_INTERVAL - elapsed);
+  }, []);
+
   // Real-time subscription for platform balance updates
   useEffect(() => {
     if (!user) return;
@@ -103,8 +132,7 @@ const AdminDashboard = () => {
         table: 'orders'
       }, (payload) => {
         console.log('Order update received:', payload.eventType);
-        fetchPlatformBalance();
-        fetchData(); // Refresh all data
+        throttledRefresh();
       })
       .subscribe((status) => {
         console.log('Orders channel subscription status:', status);
@@ -119,8 +147,7 @@ const AdminDashboard = () => {
         table: 'order_deposits'
       }, (payload) => {
         console.log('Deposit update received:', payload.eventType);
-        fetchPlatformBalance();
-        fetchData(); // Refresh deposit confirmations
+        throttledRefresh();
       })
       .subscribe((status) => {
         console.log('Deposits channel subscription status:', status);
@@ -150,7 +177,7 @@ const AdminDashboard = () => {
       supabase.removeChannel(depositsChannel);
       supabase.removeChannel(walletTransactionsChannel);
     };
-  }, [user]);
+  }, [user, throttledRefresh]);
 
   const fetchCategories = async () => {
     try {
@@ -194,7 +221,7 @@ const AdminDashboard = () => {
 
   const fetchData = async () => {
     setLoading(true);
-    
+
     // Use Promise.allSettled so each request is handled independently
     // This way if one fails, others can still succeed
     const results = await Promise.allSettled([
@@ -210,80 +237,39 @@ const AdminDashboard = () => {
       api.get('/admin/deposit-confirmations').catch(err => ({ error: err }))
     ]);
 
-    // Handle each result independently
+    // Helper: update state ONLY on successful fetch.
+    // On transient failure (network hiccup, token refresh, etc.) we preserve
+    // the last known good data instead of wiping the UI to empty arrays.
+    const applyResult = (index, label, dataKey, setter) => {
+      const r = results[index];
+      if (r.status === 'fulfilled' && !r.value?.error) {
+        const data = r.value?.data?.[dataKey];
+        setter(Array.isArray(data) ? data : []);
+      } else {
+        // Log details for developers but don't show a scary toast or wipe state.
+        const err = r.status === 'fulfilled' ? r.value?.error : r.reason;
+        const status = err?.response?.status;
+        const detail = err?.response?.data?.detail || err?.message || 'unknown error';
+        // eslint-disable-next-line no-console
+        console.warn(`[AdminDashboard] Failed to load ${label}: status=${status || 'n/a'} - ${detail}`);
+      }
+    };
+
     try {
-      // Users (fetch all, pagination handled on frontend)
-      if (results[0].status === 'fulfilled' && !results[0].value.error) {
-        const usersResponse = results[0].value.data;
-        setAllUsers(usersResponse?.users || []);
-      } else {
-        setAllUsers([]);
-      }
-
-      // Orders
-      if (results[1].status === 'fulfilled' && !results[1].value.error) {
-        setOrders(results[1].value.data?.orders || []);
-      } else {
-        setOrders([]);
-      }
-
-      // Products
-      if (results[2].status === 'fulfilled' && !results[2].value.error) {
-        setProducts(results[2].value.data?.products || []);
-      } else {
-        toast.error('Failed to load products. Check backend logs.');
-        setProducts([]);
-      }
-      // Verification Documents
-      if (results[3].status === 'fulfilled' && !results[3].value.error) {
-        setVerificationDocs(results[3].value.data?.documents || []);
-      } else {
-        setVerificationDocs([]);
-      }
-
-      // Invite Codes
-      if (results[4].status === 'fulfilled' && !results[4].value.error) {
-        setInviteCodes(results[4].value.data?.codes || []);
-      } else {
-        setInviteCodes([]);
-      }
-
-      // Store name change requests
-      if (results[5].status === 'fulfilled' && !results[5].value.error) {
-        setStoreNameRequests(results[5].value.data?.requests || []);
-      } else {
-        setStoreNameRequests([]);
-      }
-
-      // Payout requests
-      if (results[6].status === 'fulfilled' && !results[6].value.error) {
-        setPayoutRequests(results[6].value.data?.requests || []);
-      } else {
-        setPayoutRequests([]);
-      }
-
-      // Recharge requests
-      if (results[7].status === 'fulfilled' && !results[7].value.error) {
-        setRechargeRequests(results[7].value.data?.requests || []);
-      } else {
-        setRechargeRequests([]);
-      }
-
-      // Seller Recharge Requests (results[8])
-      if (results[8].status === 'fulfilled' && !results[8].value.error) {
-        setSellerRechargeRequests(results[8].value.data?.requests || []);
-      } else {
-        setSellerRechargeRequests([]);
-      }
-
-      // Deposit Confirmations (results[9])
-      if (results[9].status === 'fulfilled' && !results[9].value.error) {
-        setDepositConfirmations(results[9].value.data?.deposits || []);
-      } else {
-        setDepositConfirmations([]);
-      }
+      applyResult(0, 'users', 'users', setAllUsers);
+      applyResult(1, 'orders', 'orders', setOrders);
+      applyResult(2, 'products', 'products', setProducts);
+      applyResult(3, 'verification documents', 'documents', setVerificationDocs);
+      applyResult(4, 'invite codes', 'codes', setInviteCodes);
+      applyResult(5, 'store name requests', 'requests', setStoreNameRequests);
+      applyResult(6, 'payout requests', 'requests', setPayoutRequests);
+      applyResult(7, 'recharge requests', 'requests', setRechargeRequests);
+      applyResult(8, 'seller recharge requests', 'requests', setSellerRechargeRequests);
+      applyResult(9, 'deposit confirmations', 'deposits', setDepositConfirmations);
     } catch (error) {
       // Silently handle errors - individual requests already handled above
+      // eslint-disable-next-line no-console
+      console.error('[AdminDashboard] Unexpected error processing results:', error);
     } finally {
       setLoading(false);
     }
