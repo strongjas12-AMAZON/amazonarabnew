@@ -12,7 +12,10 @@ const API_URL = `${BACKEND_URL}/api`;
 const api = axios.create({
   baseURL: API_URL,
   timeout: 30000, // 30 seconds timeout
-  withCredentials: true, // Include credentials for CORS
+  // Note: withCredentials NOT set — we use JWT bearer tokens in the
+  // Authorization header, not cookies. Setting withCredentials=true would
+  // conflict with the backend's wildcard CORS origin ('*') and make the
+  // browser reject every preflight response.
 });
 
 // ---- Token refresh state (prevents multiple parallel refreshes) ----
