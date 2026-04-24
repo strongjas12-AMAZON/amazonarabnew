@@ -4716,7 +4716,7 @@ async def clear_product_catalog_new(request: Request, current_user: dict = Depen
         
         return {
             "success": True,
-            "message": f"Cleared product catalog and store products"
+            "message": "Cleared product catalog and store products"
         }
     
     except HTTPException:
