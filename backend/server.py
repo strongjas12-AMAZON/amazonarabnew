@@ -4692,7 +4692,7 @@ async def get_store_products(store_id: str, limit: int = 50, offset: int = 0, cu
 async def get_catalog_products_for_seller(
     current_user: dict = Depends(get_current_user),
     category: Optional[str] = None,
-    limit: int = 200,  # Increased to show more products
+    limit: int = 500,  # Increased to show all available catalog products (300+)
     offset: int = 0
 ):
     """
@@ -4709,8 +4709,9 @@ async def get_catalog_products_for_seller(
         store_products_result = supabase_admin.table('store_products').select('catalog_product_id').execute()
         used_catalog_ids = set([sp['catalog_product_id'] for sp in (store_products_result.data or []) if sp.get('catalog_product_id')])
         
-        # Query catalog (RLS enforces seller-only access)
-        query = supabase.table('product_catalog').select('*')
+        # Role-check above already enforces seller-only access.
+        # Use admin client to bypass RLS and reliably fetch catalog.
+        query = supabase_admin.table('product_catalog').select('*')
         
         if category:
             query = query.eq('category', category)
