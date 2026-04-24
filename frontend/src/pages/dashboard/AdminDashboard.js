@@ -44,6 +44,12 @@ const AdminDashboard = () => {
   });
   const [seedingCatalog, setSeedingCatalog] = useState(false);
 
+  // Password reset modal state (admin-triggered)
+  const [passwordResetModal, setPasswordResetModal] = useState(null); // { userId, email, name } while awaiting response
+  const [passwordResetResult, setPasswordResetResult] = useState(null); // { email, reset_link, email_sent } after response
+  const [passwordResetLoading, setPasswordResetLoading] = useState(false);
+  const [resetLinkCopied, setResetLinkCopied] = useState(false);
+
   const USERS_PER_PAGE = 10;
 
   // Calculate pagination for users (client-side)
@@ -197,6 +203,52 @@ const AdminDashboard = () => {
       console.error('Failed to load platform balance', error);
     }
   };
+
+  // Send a secure password reset link to a user (admin-triggered)
+  const handleSendPasswordReset = async (user) => {
+    setPasswordResetLoading(true);
+    setResetLinkCopied(false);
+    try {
+      const res = await api.post(`/admin/users/${user.id}/send-password-reset`);
+      setPasswordResetResult({
+        email: res.data?.email || user.email,
+        reset_link: res.data?.reset_link || '',
+        email_sent: !!res.data?.email_sent,
+        message: res.data?.message || '',
+      });
+      if (res.data?.email_sent) {
+        toast.success('Password reset email sent');
+      } else {
+        toast.info('Reset link generated. Share it manually with the user.');
+      }
+    } catch (error) {
+      const detail = error?.response?.data?.detail || 'Failed to generate reset link';
+      toast.error(detail);
+      setPasswordResetModal(null);
+    } finally {
+      setPasswordResetLoading(false);
+    }
+  };
+
+  const closePasswordResetModal = () => {
+    setPasswordResetModal(null);
+    setPasswordResetResult(null);
+    setResetLinkCopied(false);
+  };
+
+  const copyResetLink = async () => {
+    if (!passwordResetResult?.reset_link) return;
+    try {
+      await navigator.clipboard.writeText(passwordResetResult.reset_link);
+      setResetLinkCopied(true);
+      toast.success('Reset link copied to clipboard');
+      setTimeout(() => setResetLinkCopied(false), 2500);
+    } catch (e) {
+      toast.error('Could not copy. Select and copy manually.');
+    }
+  };
+
+
   
   // NEW: Ship order by platform
   const handleShipByPlatform = async (orderId) => {
@@ -1508,6 +1560,15 @@ const AdminDashboard = () => {
                       {u.banStatus && u.banStatus !== 'active' ? (
                         <div className="flex flex-wrap gap-2 justify-end">
                           <button
+                            onClick={() =>
+                              setPasswordResetModal({ userId: u.id, email: u.email, name: u.name })
+                            }
+                            className="px-3 py-1 rounded-md text-xs bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors whitespace-nowrap"
+                            data-testid={`reset-password-btn-${u.id}`}
+                          >
+                            Reset Password
+                          </button>
+                          <button
                             onClick={async () => {
                               try {
                                 await api.post(`/admin/users/${u.id}/unban`);
@@ -1524,6 +1585,15 @@ const AdminDashboard = () => {
                         </div>
                       ) : (
                         <div className="flex flex-wrap gap-2 justify-end">
+                          <button
+                            onClick={() =>
+                              setPasswordResetModal({ userId: u.id, email: u.email, name: u.name })
+                            }
+                            className="px-3 py-1 rounded-md text-xs bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors whitespace-nowrap"
+                            data-testid={`reset-password-btn-${u.id}`}
+                          >
+                            Reset Password
+                          </button>
                           <button
                             onClick={async () => {
                               const reason = window.prompt('Enter reason for ban:');
@@ -2326,6 +2396,105 @@ const AdminDashboard = () => {
                 </table>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Password Reset Modal */}
+      {passwordResetModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          onClick={passwordResetLoading ? undefined : closePasswordResetModal}
+        >
+          <div
+            className="w-full max-w-lg bg-[rgba(18,18,18,0.98)] border border-[rgba(212,175,55,0.25)] rounded-xl shadow-2xl p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {!passwordResetResult ? (
+              <>
+                <h3 className="text-xl font-semibold text-[#D4AF37] mb-2">Send Password Reset</h3>
+                <p className="text-gray-400 text-sm mb-5">
+                  This will generate a secure one-time reset link and email it to{' '}
+                  <span className="text-white">{passwordResetModal.email}</span>
+                  {passwordResetModal.name ? (
+                    <> ({passwordResetModal.name})</>
+                  ) : null}
+                  . The link expires in 1 hour. The user's current password will not change until they open the link and choose a new one.
+                </p>
+                <div className="flex flex-wrap gap-2 justify-end">
+                  <button
+                    onClick={closePasswordResetModal}
+                    disabled={passwordResetLoading}
+                    className="px-4 py-2 rounded-md text-sm bg-[rgba(50,50,50,0.8)] text-gray-300 hover:bg-[rgba(70,70,70,0.9)] transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => handleSendPasswordReset(passwordResetModal)}
+                    disabled={passwordResetLoading}
+                    className="px-4 py-2 rounded-md text-sm bg-[#D4AF37] text-black font-semibold hover:bg-[#c9a531] transition-colors disabled:opacity-60"
+                    data-testid="confirm-reset-password-btn"
+                  >
+                    {passwordResetLoading ? 'Sending...' : 'Send Reset Email'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="text-xl font-semibold text-[#D4AF37] mb-2">
+                  {passwordResetResult.email_sent ? 'Reset Email Sent' : 'Reset Link Generated'}
+                </h3>
+                <p className="text-gray-400 text-sm mb-4">
+                  {passwordResetResult.email_sent ? (
+                    <>
+                      A password reset email has been sent to{' '}
+                      <span className="text-white">{passwordResetResult.email}</span>. The link
+                      expires in 1 hour.
+                    </>
+                  ) : (
+                    <>
+                      Email delivery was not confirmed. You can share this one-time reset link with{' '}
+                      <span className="text-white">{passwordResetResult.email}</span> manually via
+                      WhatsApp, SMS, or in person. The link expires in 1 hour.
+                    </>
+                  )}
+                </p>
+                {passwordResetResult.reset_link ? (
+                  <div className="mb-5">
+                    <label className="block text-xs uppercase tracking-wide text-gray-500 mb-1">
+                      Reset Link
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        readOnly
+                        value={passwordResetResult.reset_link}
+                        onFocus={(e) => e.target.select()}
+                        className="luxury-input flex-1 text-xs"
+                        data-testid="reset-link-input"
+                      />
+                      <button
+                        onClick={copyResetLink}
+                        className="px-3 py-2 rounded-md text-xs bg-[#D4AF37] text-black font-semibold hover:bg-[#c9a531] transition-colors whitespace-nowrap"
+                        data-testid="copy-reset-link-btn"
+                      >
+                        {resetLinkCopied ? 'Copied ✓' : 'Copy'}
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      ⚠️ Treat this link like a password. Anyone with it can reset this account.
+                    </p>
+                  </div>
+                ) : null}
+                <div className="flex justify-end">
+                  <button
+                    onClick={closePasswordResetModal}
+                    className="px-4 py-2 rounded-md text-sm bg-[#D4AF37] text-black font-semibold hover:bg-[#c9a531] transition-colors"
+                  >
+                    Done
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
