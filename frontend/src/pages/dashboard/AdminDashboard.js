@@ -231,7 +231,16 @@ const AdminDashboard = () => {
       if (results[2].status === 'fulfilled' && !results[2].value.error) {
         setProducts(results[2].value.data?.products || []);
       } else {
-        toast.error('Failed to load products. Check backend logs.');
+        const err = results[2].status === 'fulfilled' ? results[2].value.error : results[2].reason;
+        const status = err?.response?.status;
+        // 401 is handled by the axios interceptor (auto-refresh + redirect).
+        // Only show a toast for genuine server/network problems.
+        if (status && status !== 401) {
+          toast.error(`Failed to load products (HTTP ${status}). Please refresh the page.`);
+        } else if (!status) {
+          // Network error or timeout
+          console.warn('[AdminDashboard] Products fetch failed:', err?.message || err);
+        }
         setProducts([]);
       }
       // Verification Documents

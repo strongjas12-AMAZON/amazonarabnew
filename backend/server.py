@@ -1223,6 +1223,40 @@ async def logout(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
+@api_router.post("/auth/refresh")
+@limiter.limit("30/minute")
+async def refresh_token_endpoint(request: Request, req: RefreshTokenRequest):
+    """Exchange a refresh_token for a fresh access_token + refresh_token.
+
+    Used by the frontend axios interceptor to transparently keep long-lived
+    admin/seller/buyer sessions alive past the 1-hour Supabase JWT expiry.
+    """
+    try:
+        session_resp = supabase.auth.refresh_session(req.refresh_token)
+        session = getattr(session_resp, "session", None)
+        if not session or not session.access_token:
+            raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+
+        return {
+            "success": True,
+            "session": {
+                "access_token": session.access_token,
+                "refresh_token": session.refresh_token,
+                "expires_in": getattr(session, "expires_in", 3600),
+                "expires_at": getattr(session, "expires_at", None),
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.warning(f"Refresh token failed: {e}")
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+
+
 class BanUserRequest(BaseModel):
     status: str = Field(..., pattern="^(banned|suspended)$")
     reason: str
