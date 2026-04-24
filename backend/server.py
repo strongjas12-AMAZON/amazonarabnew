@@ -4832,7 +4832,7 @@ async def get_my_store_products(current_user: dict = Depends(get_current_user)):
         
         seller_id = current_user['id']
         
-        # Get store products with catalog info
+        # Get store products with catalog info - only active (not soft-deleted)
         result = supabase_admin.table('store_products').select(
             '''
             id,
@@ -4846,7 +4846,7 @@ async def get_my_store_products(current_user: dict = Depends(get_current_user)):
             created_at,
             product_catalog:catalog_product_id(name, description, base_price, images, category)
             '''
-        ).eq('seller_id', seller_id).order('created_at', desc=True).execute()
+        ).eq('seller_id', seller_id).eq('is_active', True).order('created_at', desc=True).execute()
         
         # Format response
         products = []
@@ -4937,25 +4937,57 @@ async def remove_product_from_store(
     product_id: str,
     current_user: dict = Depends(get_current_user)
 ):
-    """Seller-only: Remove a product from their store"""
+    """Seller-only: Remove a product from their store.
+
+    If the product has associated order history (referenced from order_items),
+    we cannot hard-delete it without breaking referential integrity. In that
+    case we perform a SOFT delete by setting is_active=false, which hides it
+    from buyers/stores while preserving order history. Otherwise we hard-delete.
+    """
     try:
         # Verify seller role
         if current_user.get('role') != 'seller':
             raise HTTPException(status_code=403, detail="Seller access required")
-        
+
         seller_id = current_user['id']
-        
-        # Delete product (RLS ensures only own products)
-        result = supabase_admin.table('store_products').delete().eq('id', product_id).eq('seller_id', seller_id).execute()
-        
-        if not result.data:
+
+        # First, verify the product belongs to this seller
+        owned = supabase_admin.table('store_products').select('id').eq('id', product_id).eq('seller_id', seller_id).limit(1).execute()
+        if not owned.data:
             raise HTTPException(status_code=404, detail="Product not found in your store")
-        
-        return {
-            "success": True,
-            "message": "Product removed from store successfully"
-        }
-    
+
+        # Check whether any order_items reference this store product.
+        # order_items.product_id is a FK to store_products.id.
+        order_items_ref = supabase_admin.table('order_items').select('id').eq('product_id', product_id).limit(1).execute()
+        has_orders = bool(order_items_ref.data)
+
+        if has_orders:
+            # SOFT delete: preserve order history, hide from catalog/store listings
+            update_result = supabase_admin.table('store_products').update({
+                'is_active': False
+            }).eq('id', product_id).eq('seller_id', seller_id).execute()
+
+            if not update_result.data:
+                raise HTTPException(status_code=404, detail="Product not found in your store")
+
+            return {
+                "success": True,
+                "message": "Product removed from your store. Existing order history is preserved.",
+                "soft_deleted": True
+            }
+        else:
+            # Safe to hard delete (no order references)
+            result = supabase_admin.table('store_products').delete().eq('id', product_id).eq('seller_id', seller_id).execute()
+
+            if not result.data:
+                raise HTTPException(status_code=404, detail="Product not found in your store")
+
+            return {
+                "success": True,
+                "message": "Product removed from store successfully",
+                "soft_deleted": False
+            }
+
     except HTTPException:
         raise
     except Exception as e:
