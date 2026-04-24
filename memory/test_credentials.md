@@ -1,9 +1,20 @@
 # Test Credentials
 
-These are the known test accounts for the marketplace. Exact passwords have been reset/unknown from prior sessions — confirm with the user before automated login tests.
+These are the verified working test accounts for the marketplace:
 
-- Admin email: support@arabshopping.org
-- Test seller emails used historically: testseller@test.com, testseller_new@test.com
-- Test buyer email: testbuyer@test.com
+## Admin Account
+- Email: support@arabshopping.org
+- Password: Hadi1247@
+- Role: admin
 
-(Main agent could not verify passwords during this session. If testing agent fails auth, please ask the user to provide current passwords.)
+## Seller Account  
+- Email: testseller@test.com
+- Password: TestPass123!
+- Role: seller
+
+## Buyer Account
+- Email: testbuyer@test.com  
+- Password: TestPass123!
+- Role: buyer
+
+All credentials verified working as of 2026-04-24.
