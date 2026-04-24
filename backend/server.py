@@ -835,19 +835,20 @@ async def send_order_notifications(order_data: dict, order_items: list, notifica
             await asyncio.sleep(0.6)  # Rate limit
             
             # 2. Get order items and notify sellers
-            order_items_result = supabase_admin.table('order_items').select('*, products(*, users!seller_id(*))').eq('order_id', order_data['id']).execute()
+            order_items_result = supabase_admin.table('order_items').select('*, store_products(*, product_catalog(*), users!seller_id(*))').eq('order_id', order_data['id']).execute()
             
             notified_sellers = set()  # Track notified sellers to avoid duplicates
             for item in order_items_result.data:
-                product = item.get('products', {})
-                seller_info = product.get('users', {})
+                sp = item.get('store_products', {}) or {}
+                catalog = sp.get('product_catalog', {}) or {}
+                seller_info = sp.get('users', {}) or {}
                 seller_email = seller_info.get('email')
                 
                 if seller_email and seller_email not in notified_sellers:
                     subject, html = get_email_template("order_completed_seller", {
                         'order_id': order_data['id'],
                         'seller_name': seller_info.get('name', 'Seller'),
-                        'product_title': product.get('title', 'Product'),
+                        'product_title': catalog.get('name', 'Product'),
                         'quantity': item.get('quantity', 1),
                         'item_total': float(item.get('price', 0)) * item.get('quantity', 1)
                     })
@@ -3766,7 +3767,7 @@ async def get_seller_order_detail(order_id: str, current_user: dict = Depends(ge
     
     try:
         order_result = supabase_admin.table('orders')\
-            .select('*, order_items(*, products(*)), shipments(*), refunds(*, users!buyer_id(name, email)), users!buyer_id(name, email)')\
+            .select('*, order_items(*, store_products(*, product_catalog(*))), shipments(*), refunds(*, users!buyer_id(name, email)), users!buyer_id(name, email)')\
             .eq('id', order_id)\
             .execute()
         
@@ -3775,22 +3776,14 @@ async def get_seller_order_detail(order_id: str, current_user: dict = Depends(ge
         
         order = order_result.data[0]
         
-        # Verify seller has products in this order
+        # Verify seller has products in this order (check store_products.seller_id from embedded data)
         has_seller_item = False
         seller_items = []
         for item in order.get('order_items', []):
-            product = item.get('products')
-            if product:
-                seller_product = supabase_admin.table('seller_products')\
-                    .select('id')\
-                    .eq('seller_id', current_user['id'])\
-                    .eq('product_id', product.get('id'))\
-                    .eq('is_active', True)\
-                    .execute()
-                
-                if seller_product.data:
-                    has_seller_item = True
-                    seller_items.append(item)
+            sp = item.get('store_products') or {}
+            if sp.get('seller_id') == current_user['id']:
+                has_seller_item = True
+                seller_items.append(item)
         
         if not has_seller_item:
             raise HTTPException(status_code=403, detail="You don't have products in this order")
@@ -4112,7 +4105,7 @@ async def create_refund_request(req: CreateRefundRequest, current_user: dict = D
     try:
         # Verify order belongs to buyer
         order_result = supabase_admin.table('orders')\
-            .select('*, order_items(*, products(*))')\
+            .select('*, order_items(*, store_products(*, product_catalog(*)))')\
             .eq('id', req.orderId)\
             .eq('buyer_id', current_user['id'])\
             .execute()
@@ -4132,20 +4125,13 @@ async def create_refund_request(req: CreateRefundRequest, current_user: dict = D
         if existing_refund.data:
             raise HTTPException(status_code=400, detail="A refund request already exists for this order")
         
-        # Get seller_id from order items
+        # Get seller_id directly from store_products embedded in order items
         seller_id = None
         for item in order.get('order_items', []):
-            product = item.get('products')
-            if product:
-                # Find seller who has this product in their store
-                seller_product = supabase_admin.table('seller_products')\
-                    .select('seller_id')\
-                    .eq('product_id', product.get('id'))\
-                    .eq('is_active', True)\
-                    .execute()
-                if seller_product.data:
-                    seller_id = seller_product.data[0].get('seller_id')
-                    break
+            sp = item.get('store_products') or {}
+            if sp.get('seller_id'):
+                seller_id = sp['seller_id']
+                break
         
         refund_data = {
             'id': str(uuid.uuid4()),
@@ -4184,7 +4170,7 @@ async def get_buyer_refunds(current_user: dict = Depends(get_current_user)):
     
     try:
         refunds_result = supabase_admin.table('refunds')\
-            .select('*, orders!order_id(id, total_amount, created_at, order_items(*, products(*)))')\
+            .select('*, orders!order_id(id, total_amount, created_at, order_items(*, store_products(*, product_catalog(*))))')\
             .eq('buyer_id', current_user['id'])\
             .order('created_at', desc=True)\
             .execute()
@@ -4215,7 +4201,7 @@ async def update_seller_order_status(order_id: str, status: str, current_user: d
     try:
         # Verify order and seller ownership
         order_result = supabase_admin.table('orders')\
-            .select('*, order_items(*, products(*))')\
+            .select('*, order_items(*, store_products(*, product_catalog(*)))')\
             .eq('id', order_id)\
             .execute()
         
@@ -4226,17 +4212,10 @@ async def update_seller_order_status(order_id: str, status: str, current_user: d
         
         has_seller_item = False
         for item in order.get('order_items', []):
-            product = item.get('products')
-            if product:
-                seller_product = supabase_admin.table('seller_products')\
-                    .select('id')\
-                    .eq('seller_id', current_user['id'])\
-                    .eq('product_id', product.get('id'))\
-                    .eq('is_active', True)\
-                    .execute()
-                if seller_product.data:
-                    has_seller_item = True
-                    break
+            sp = item.get('store_products') or {}
+            if sp.get('seller_id') == current_user['id']:
+                has_seller_item = True
+                break
         
         if not has_seller_item:
             raise HTTPException(status_code=403, detail="You cannot update this order")
