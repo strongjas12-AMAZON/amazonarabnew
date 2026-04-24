@@ -206,12 +206,19 @@ const AdminDashboard = () => {
 
   // Send a secure password reset link to a user (admin-triggered)
   const handleSendPasswordReset = async (user) => {
+    // Support both {id} (direct user row) and {userId} (modal state shape)
+    const targetUserId = user?.id || user?.userId;
+    const targetEmail = user?.email;
+    if (!targetUserId) {
+      toast.error('Missing user id. Please try again.');
+      return;
+    }
     setPasswordResetLoading(true);
     setResetLinkCopied(false);
     try {
-      const res = await api.post(`/admin/users/${user.id}/send-password-reset`);
+      const res = await api.post(`/admin/users/${targetUserId}/send-password-reset`);
       setPasswordResetResult({
-        email: res.data?.email || user.email,
+        email: res.data?.email || targetEmail,
         reset_link: res.data?.reset_link || '',
         email_sent: !!res.data?.email_sent,
         message: res.data?.message || '',

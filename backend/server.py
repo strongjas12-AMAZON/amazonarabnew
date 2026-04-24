@@ -1394,6 +1394,13 @@ async def admin_send_password_reset(
     if current_user.get('role') != 'admin':
         raise HTTPException(status_code=403, detail="Admin access required")
 
+    # Basic sanity-check on the path param: must be a valid UUID.
+    # Prevents raw Postgres errors when the frontend sends "undefined" etc.
+    try:
+        uuid.UUID(str(user_id))
+    except (ValueError, AttributeError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid user id")
+
     try:
         # Look up the target user
         user_result = supabase_admin.table('users').select('*').eq('id', user_id).execute()
