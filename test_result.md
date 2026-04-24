@@ -642,12 +642,29 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Order Move to 'To Be Shipped' After Admin Confirms Deposit"
-  stuck_tasks: []
+    - "Isolated Supabase Client Auth Fix - CORS Configuration Issue"
+  stuck_tasks:
+    - "Isolated Supabase Client Auth Fix - CORS Configuration Issue"
   test_all: false
   test_priority: "high_first"
 
+frontend:
+  - task: "Isolated Supabase Client Auth Fix - Login/Register/Refresh"
+    implemented: true
+    working: false
+    file: "backend/server.py, frontend/src/lib/api.js, backend/.env"
+    stuck_count: 1
+    priority: "critical"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "testing"
+        comment: "CRITICAL CORS CONFIGURATION ISSUE FOUND: The isolated Supabase client fix in backend (lines 1186, 1159, 1254) is correctly implemented and working. However, auth is completely blocked by CORS policy. ROOT CAUSE: Frontend uses axios with withCredentials=true (api.js line 15), but backend CORS allows wildcard '*' origins (server.py line 5919, .env line 3). This combination violates CORS policy - when credentials mode is 'include', Access-Control-Allow-Origin cannot be wildcard. SYMPTOMS: All login attempts fail with CORS error 'Response to preflight request doesn't pass access control check'. No API requests reach backend. Tokens never stored in localStorage. Users stuck on /login page. TESTING RESULTS: Changed backend .env CORS_ORIGINS from '*' to 'http://localhost:3000,https://repo-clone-46.preview.emergentagent.com,https://fix-this-error-5.preview.emergentagent.com' and frontend .env REACT_APP_BACKEND_URL to 'http://localhost:8001' - login works perfectly! Admin successfully logged in, tokens stored, session stable, no redirect loop. FIX NEEDED: Update backend CORS configuration to allow specific origins instead of wildcard, OR remove withCredentials from frontend axios config (less secure). The isolated client fix itself is working correctly once CORS is resolved."
+
 agent_communication:
+  - agent: "testing"
+    message: "🔥 CRITICAL FINDING: Auth is blocked by CORS configuration issue, NOT by the isolated Supabase client fix. The isolated client fix (lines 1186, 1159, 1254 in server.py) is correctly implemented. ISSUE: Frontend axios uses withCredentials=true but backend CORS allows wildcard '*' - this violates CORS policy. All login requests fail with CORS preflight error. TESTED: With proper CORS config (specific origins) and localhost backend URL, auth works perfectly - admin login successful, tokens stored, session stable, no redirect loop. FIX: Update backend CORS_ORIGINS in .env to list specific allowed origins instead of wildcard '*'. The isolated Supabase client fix is working correctly."
+
   - agent: "main"
     message: "✅ SELLER 20% EARNINGS & WALLET WITHDRAWAL SYSTEM IMPLEMENTED. MAJOR CHANGES: 1) Sellers now earn 20% of each order (not 100%), 2) 20% earnings added to BOTH totalEarnings AND wallet balance, 3) New wallet balance withdrawal feature with separate payout system. BACKEND: Updated order completion to calculate 20% commission (line 2698), modified wallet update to add earnings to balance (line 2720), updated earnings calculation endpoint (line 2140), added payoutType column to payout_requests table, created 2 new endpoints: POST /seller/wallet/payout-requests and GET /seller/wallet/payout-requests, updated admin payout approval to handle wallet_balance deductions. FRONTEND: Added Wallet Balance Withdrawal section in Payouts tab with balance display, withdrawal form (amount + TRC20 address), and withdrawal history table. DATABASE MIGRATION: /app/backend/migrations/add_payout_type_column.sql adds payoutType column ('earnings' or 'wallet_balance'). DOCUMENTATION: Complete guide in /app/SELLER_20_PERCENT_EARNINGS_UPDATE.md. Services restarted successfully. NEEDS TESTING: 1) Place order and verify 20% earnings, 2) Submit wallet withdrawal request, 3) Admin approval deducts from wallet balance."
   - agent: "main"

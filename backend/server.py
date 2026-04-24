@@ -1154,13 +1154,15 @@ async def register(request: Request, req: RegisterRequest):
         supabase_admin.table('users').insert(user_data).execute()
         
         # Create a session for the user by signing them in
+        # Use isolated client to avoid polluting shared global supabase session state.
         try:
-            login_response = supabase.auth.sign_in_with_password({
+            isolated_sb = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+            login_response = isolated_sb.auth.sign_in_with_password({
                 "email": req.email,
                 "password": req.password
             })
             session = login_response.session
-        except:
+        except Exception:
             session = None
         
         return {
@@ -1178,7 +1180,11 @@ async def register(request: Request, req: RegisterRequest):
 async def login(request: Request, req: LoginRequest):
     """Login user"""
     try:
-        auth_response = supabase.auth.sign_in_with_password({
+        # Use an isolated client so concurrent logins don't overwrite each
+        # other's session on the shared global supabase client (which would
+        # invalidate their refresh_tokens and break /api/auth/refresh).
+        isolated_sb = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+        auth_response = isolated_sb.auth.sign_in_with_password({
             "email": req.email,
             "password": req.password
         })
@@ -1235,9 +1241,18 @@ async def refresh_token_endpoint(request: Request, req: RefreshTokenRequest):
 
     Used by the frontend axios interceptor to transparently keep long-lived
     admin/seller/buyer sessions alive past the 1-hour Supabase JWT expiry.
+
+    IMPORTANT: Uses an ISOLATED Supabase client (not the global one) so that
+    one user's refresh call cannot overwrite another user's session state on
+    the shared client, which would invalidate their refresh_token.
     """
+    if not req.refresh_token or not req.refresh_token.strip():
+        raise HTTPException(status_code=400, detail="refresh_token is required")
+
     try:
-        session_resp = supabase.auth.refresh_session(req.refresh_token)
+        # Fresh client per call → no shared session state between users.
+        isolated_sb = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+        session_resp = isolated_sb.auth.refresh_session(req.refresh_token.strip())
         session = getattr(session_resp, "session", None)
         if not session or not session.access_token:
             raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
