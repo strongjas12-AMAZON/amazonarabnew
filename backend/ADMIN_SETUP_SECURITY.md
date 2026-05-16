@@ -146,12 +146,12 @@ except Exception as e:
 
 ### Method 1: cURL (Recommended)
 ```bash
-curl -X POST https://repo-clone-47.preview.emergentagent.com/api/setup-admin
+curl -X POST https://repo-clone-46.preview.emergentagent.com/api/setup-admin
 ```
 
 ### Method 2: Browser Console
 ```javascript
-fetch('https://repo-clone-47.preview.emergentagent.com/api/setup-admin', {
+fetch('https://repo-clone-46.preview.emergentagent.com/api/setup-admin', {
   method: 'POST'
 })
 .then(r => r.json())
@@ -160,7 +160,7 @@ fetch('https://repo-clone-47.preview.emergentagent.com/api/setup-admin', {
 
 ### Method 3: Postman/Insomnia
 ```
-POST https://repo-clone-47.preview.emergentagent.com/api/setup-admin
+POST https://repo-clone-46.preview.emergentagent.com/api/setup-admin
 Headers: Content-Type: application/json
 Body: (empty)
 ```

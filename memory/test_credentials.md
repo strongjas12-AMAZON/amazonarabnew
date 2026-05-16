@@ -1,17 +1,11 @@
 # Test Credentials
 
-## Admin
-- Email: support@arabshopping.org
-- Password: Hadi1247@
+Verified working credentials as of 2026-04-24:
 
-## Seller
-- Email: testseller_new@test.com
-- Password: TestPass123!
+- **Admin**: `support@arabshopping.org` / `Hadi1247@`
+- **Seller**: `testseller@test.com` / `TestPass123!`
+- **Buyer**: `testbuyer@test.com` / `TestPass123!`
 
-## Buyer
-- Email: testbuyer_new@test.com
-- Password: TestPass123!
-
-## Notes
-- Supabase Auth (project: dqqmzatrxmueilsxvlgb) is the source of truth.
-- Resend is configured for email delivery; `FRONTEND_URL=https://arabshopping.org` controls reset-link redirect target.
+## Notes for testing agents
+- Use the isolated Supabase client fix: logins and refresh calls now use per-request clients, so concurrent/sequential user logins no longer invalidate each other's refresh tokens.
+- `POST /api/auth/refresh` takes `{refresh_token: str}` — returns `{success, session: {access_token, refresh_token, expires_in, expires_at}}`.
