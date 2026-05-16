@@ -835,19 +835,20 @@ async def send_order_notifications(order_data: dict, order_items: list, notifica
             await asyncio.sleep(0.6)  # Rate limit
             
             # 2. Get order items and notify sellers
-            order_items_result = supabase_admin.table('order_items').select('*, products(*, users!seller_id(*))').eq('order_id', order_data['id']).execute()
+            order_items_result = supabase_admin.table('order_items').select('*, store_products(*, product_catalog(*), users!seller_id(*))').eq('order_id', order_data['id']).execute()
             
             notified_sellers = set()  # Track notified sellers to avoid duplicates
             for item in order_items_result.data:
-                product = item.get('products', {})
-                seller_info = product.get('users', {})
+                sp = item.get('store_products', {}) or {}
+                catalog = sp.get('product_catalog', {}) or {}
+                seller_info = sp.get('users', {}) or {}
                 seller_email = seller_info.get('email')
                 
                 if seller_email and seller_email not in notified_sellers:
                     subject, html = get_email_template("order_completed_seller", {
                         'order_id': order_data['id'],
                         'seller_name': seller_info.get('name', 'Seller'),
-                        'product_title': product.get('title', 'Product'),
+                        'product_title': catalog.get('name', 'Product'),
                         'quantity': item.get('quantity', 1),
                         'item_total': float(item.get('price', 0)) * item.get('quantity', 1)
                     })
@@ -1153,13 +1154,15 @@ async def register(request: Request, req: RegisterRequest):
         supabase_admin.table('users').insert(user_data).execute()
         
         # Create a session for the user by signing them in
+        # Use isolated client to avoid polluting shared global supabase session state.
         try:
-            login_response = supabase.auth.sign_in_with_password({
+            isolated_sb = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+            login_response = isolated_sb.auth.sign_in_with_password({
                 "email": req.email,
                 "password": req.password
             })
             session = login_response.session
-        except:
+        except Exception:
             session = None
         
         return {
@@ -1177,7 +1180,11 @@ async def register(request: Request, req: RegisterRequest):
 async def login(request: Request, req: LoginRequest):
     """Login user"""
     try:
-        auth_response = supabase.auth.sign_in_with_password({
+        # Use an isolated client so concurrent logins don't overwrite each
+        # other's session on the shared global supabase client (which would
+        # invalidate their refresh_tokens and break /api/auth/refresh).
+        isolated_sb = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+        auth_response = isolated_sb.auth.sign_in_with_password({
             "email": req.email,
             "password": req.password
         })
@@ -1221,6 +1228,49 @@ async def logout(current_user: dict = Depends(get_current_user)):
         return {"success": True, "message": "Logged out successfully"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
+@api_router.post("/auth/refresh")
+@limiter.limit("30/minute")
+async def refresh_token_endpoint(request: Request, req: RefreshTokenRequest):
+    """Exchange a refresh_token for a fresh access_token + refresh_token.
+
+    Used by the frontend axios interceptor to transparently keep long-lived
+    admin/seller/buyer sessions alive past the 1-hour Supabase JWT expiry.
+
+    IMPORTANT: Uses an ISOLATED Supabase client (not the global one) so that
+    one user's refresh call cannot overwrite another user's session state on
+    the shared client, which would invalidate their refresh_token.
+    """
+    if not req.refresh_token or not req.refresh_token.strip():
+        raise HTTPException(status_code=400, detail="refresh_token is required")
+
+    try:
+        # Fresh client per call → no shared session state between users.
+        isolated_sb = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+        session_resp = isolated_sb.auth.refresh_session(req.refresh_token.strip())
+        session = getattr(session_resp, "session", None)
+        if not session or not session.access_token:
+            raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+
+        return {
+            "success": True,
+            "session": {
+                "access_token": session.access_token,
+                "refresh_token": session.refresh_token,
+                "expires_in": getattr(session, "expires_in", 3600),
+                "expires_at": getattr(session, "expires_at", None),
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.warning(f"Refresh token failed: {e}")
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
 
 
 class BanUserRequest(BaseModel):
@@ -3973,7 +4023,7 @@ async def get_seller_order_detail(order_id: str, current_user: dict = Depends(ge
     
     try:
         order_result = supabase_admin.table('orders')\
-            .select('*, order_items(*, products(*)), shipments(*), refunds(*, users!buyer_id(name, email)), users!buyer_id(name, email)')\
+            .select('*, order_items(*, store_products(*, product_catalog(*))), shipments(*), refunds(*, users!buyer_id(name, email)), users!buyer_id(name, email)')\
             .eq('id', order_id)\
             .execute()
         
@@ -3982,22 +4032,14 @@ async def get_seller_order_detail(order_id: str, current_user: dict = Depends(ge
         
         order = order_result.data[0]
         
-        # Verify seller has products in this order
+        # Verify seller has products in this order (check store_products.seller_id from embedded data)
         has_seller_item = False
         seller_items = []
         for item in order.get('order_items', []):
-            product = item.get('products')
-            if product:
-                seller_product = supabase_admin.table('seller_products')\
-                    .select('id')\
-                    .eq('seller_id', current_user['id'])\
-                    .eq('product_id', product.get('id'))\
-                    .eq('is_active', True)\
-                    .execute()
-                
-                if seller_product.data:
-                    has_seller_item = True
-                    seller_items.append(item)
+            sp = item.get('store_products') or {}
+            if sp.get('seller_id') == current_user['id']:
+                has_seller_item = True
+                seller_items.append(item)
         
         if not has_seller_item:
             raise HTTPException(status_code=403, detail="You don't have products in this order")
@@ -4319,7 +4361,7 @@ async def create_refund_request(req: CreateRefundRequest, current_user: dict = D
     try:
         # Verify order belongs to buyer
         order_result = supabase_admin.table('orders')\
-            .select('*, order_items(*, products(*))')\
+            .select('*, order_items(*, store_products(*, product_catalog(*)))')\
             .eq('id', req.orderId)\
             .eq('buyer_id', current_user['id'])\
             .execute()
@@ -4339,20 +4381,13 @@ async def create_refund_request(req: CreateRefundRequest, current_user: dict = D
         if existing_refund.data:
             raise HTTPException(status_code=400, detail="A refund request already exists for this order")
         
-        # Get seller_id from order items
+        # Get seller_id directly from store_products embedded in order items
         seller_id = None
         for item in order.get('order_items', []):
-            product = item.get('products')
-            if product:
-                # Find seller who has this product in their store
-                seller_product = supabase_admin.table('seller_products')\
-                    .select('seller_id')\
-                    .eq('product_id', product.get('id'))\
-                    .eq('is_active', True)\
-                    .execute()
-                if seller_product.data:
-                    seller_id = seller_product.data[0].get('seller_id')
-                    break
+            sp = item.get('store_products') or {}
+            if sp.get('seller_id'):
+                seller_id = sp['seller_id']
+                break
         
         refund_data = {
             'id': str(uuid.uuid4()),
@@ -4391,7 +4426,7 @@ async def get_buyer_refunds(current_user: dict = Depends(get_current_user)):
     
     try:
         refunds_result = supabase_admin.table('refunds')\
-            .select('*, orders!order_id(id, total_amount, created_at, order_items(*, products(*)))')\
+            .select('*, orders!order_id(id, total_amount, created_at, order_items(*, store_products(*, product_catalog(*))))')\
             .eq('buyer_id', current_user['id'])\
             .order('created_at', desc=True)\
             .execute()
@@ -4422,7 +4457,7 @@ async def update_seller_order_status(order_id: str, status: str, current_user: d
     try:
         # Verify order and seller ownership
         order_result = supabase_admin.table('orders')\
-            .select('*, order_items(*, products(*))')\
+            .select('*, order_items(*, store_products(*, product_catalog(*)))')\
             .eq('id', order_id)\
             .execute()
         
@@ -4433,17 +4468,10 @@ async def update_seller_order_status(order_id: str, status: str, current_user: d
         
         has_seller_item = False
         for item in order.get('order_items', []):
-            product = item.get('products')
-            if product:
-                seller_product = supabase_admin.table('seller_products')\
-                    .select('id')\
-                    .eq('seller_id', current_user['id'])\
-                    .eq('product_id', product.get('id'))\
-                    .eq('is_active', True)\
-                    .execute()
-                if seller_product.data:
-                    has_seller_item = True
-                    break
+            sp = item.get('store_products') or {}
+            if sp.get('seller_id') == current_user['id']:
+                has_seller_item = True
+                break
         
         if not has_seller_item:
             raise HTTPException(status_code=403, detail="You cannot update this order")
@@ -4933,7 +4961,7 @@ async def get_store_products(store_id: str, limit: int = 50, offset: int = 0, cu
 async def get_catalog_products_for_seller(
     current_user: dict = Depends(get_current_user),
     category: Optional[str] = None,
-    limit: int = 200,  # Increased to show more products
+    limit: int = 500,  # Increased to show all available catalog products (300+)
     offset: int = 0
 ):
     """
@@ -4950,8 +4978,9 @@ async def get_catalog_products_for_seller(
         store_products_result = supabase_admin.table('store_products').select('catalog_product_id').execute()
         used_catalog_ids = set([sp['catalog_product_id'] for sp in (store_products_result.data or []) if sp.get('catalog_product_id')])
         
-        # Query catalog (RLS enforces seller-only access)
-        query = supabase.table('product_catalog').select('*')
+        # Role-check above already enforces seller-only access.
+        # Use admin client to bypass RLS and reliably fetch catalog.
+        query = supabase_admin.table('product_catalog').select('*')
         
         if category:
             query = query.eq('category', category)
