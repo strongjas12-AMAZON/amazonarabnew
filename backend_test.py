@@ -35,6 +35,8 @@ class PasswordResetTester:
         self.seller_token = None
         self.buyer_token = None
         self.test_results = []
+        self.created_order_id = None
+        self.created_address_id = None
         
     def log_test(self, test_name: str, success: bool, details: str = ""):
         """Log test result"""
