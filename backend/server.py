@@ -32,6 +32,12 @@ RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'support@arabshopping.org')
 ADMIN_EMAIL = 'support@arabshopping.org'
 
+# Frontend URL — used as the destination for password reset links and any
+# other deep links embedded in emails. When set, this always wins over the
+# request's Origin header so reset links always point to a stable URL even
+# when users request resets from a temporary preview environment.
+FRONTEND_URL = (os.environ.get('FRONTEND_URL', '') or '').rstrip('/')
+
 # Initialize Resend
 if RESEND_API_KEY:
     resend.api_key = RESEND_API_KEY
@@ -1413,17 +1419,22 @@ async def admin_send_password_reset(
         if not email:
             raise HTTPException(status_code=400, detail="User has no email on file")
 
-        # Determine redirect URL — use the admin's frontend origin so the
-        # reset page opens in the same environment (preview/production).
-        origin = request.headers.get('origin') or request.headers.get('referer') or ''
-        # Sanitize: take scheme+host only
-        try:
-            from urllib.parse import urlparse
-            parsed = urlparse(origin)
-            base_origin = f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme and parsed.netloc else ''
-        except Exception:
-            base_origin = ''
-        redirect_to = f"{base_origin}/reset-password" if base_origin else "https://arabshopping.org/reset-password"
+        # Determine redirect URL — prefer FRONTEND_URL env var (set to your
+        # stable production URL) so the link in the email always points to a
+        # reliable host. Fall back to the request's Origin (works for
+        # development/preview but those URLs can be unreliable).
+        if FRONTEND_URL:
+            redirect_to = f"{FRONTEND_URL}/reset-password"
+        else:
+            origin = request.headers.get('origin') or request.headers.get('referer') or ''
+            # Sanitize: take scheme+host only
+            try:
+                from urllib.parse import urlparse
+                parsed = urlparse(origin)
+                base_origin = f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme and parsed.netloc else ''
+            except Exception:
+                base_origin = ''
+            redirect_to = f"{base_origin}/reset-password" if base_origin else "https://arabshopping.org/reset-password"
 
         link = await _create_recovery_link(email, redirect_to)
         if not link:
@@ -1489,7 +1500,11 @@ async def forgot_password(request: Request, payload: ForgotPasswordRequest):
         except Exception:
             redirect_to = None
 
-    if not redirect_to:
+    # Prefer the configured FRONTEND_URL — see top of file. Falls back to
+    # Origin header and finally to a hardcoded production URL.
+    if FRONTEND_URL:
+        redirect_to = f"{FRONTEND_URL}/reset-password"
+    elif not redirect_to:
         origin = request.headers.get('origin') or request.headers.get('referer') or ''
         try:
             from urllib.parse import urlparse
