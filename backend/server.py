@@ -32,6 +32,12 @@ RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'support@arabshopping.org')
 ADMIN_EMAIL = 'support@arabshopping.org'
 
+# Frontend URL — used as the destination for password reset links and any
+# other deep links embedded in emails. When set, this always wins over the
+# request's Origin header so reset links always point to a stable URL even
+# when users request resets from a temporary preview environment.
+FRONTEND_URL = (os.environ.get('FRONTEND_URL', '') or '').rstrip('/')
+
 # Initialize Resend
 if RESEND_API_KEY:
     resend.api_key = RESEND_API_KEY
@@ -1463,17 +1469,22 @@ async def admin_send_password_reset(
         if not email:
             raise HTTPException(status_code=400, detail="User has no email on file")
 
-        # Determine redirect URL — use the admin's frontend origin so the
-        # reset page opens in the same environment (preview/production).
-        origin = request.headers.get('origin') or request.headers.get('referer') or ''
-        # Sanitize: take scheme+host only
-        try:
-            from urllib.parse import urlparse
-            parsed = urlparse(origin)
-            base_origin = f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme and parsed.netloc else ''
-        except Exception:
-            base_origin = ''
-        redirect_to = f"{base_origin}/reset-password" if base_origin else "https://arabshopping.org/reset-password"
+        # Determine redirect URL — prefer FRONTEND_URL env var (set to your
+        # stable production URL) so the link in the email always points to a
+        # reliable host. Fall back to the request's Origin (works for
+        # development/preview but those URLs can be unreliable).
+        if FRONTEND_URL:
+            redirect_to = f"{FRONTEND_URL}/reset-password"
+        else:
+            origin = request.headers.get('origin') or request.headers.get('referer') or ''
+            # Sanitize: take scheme+host only
+            try:
+                from urllib.parse import urlparse
+                parsed = urlparse(origin)
+                base_origin = f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme and parsed.netloc else ''
+            except Exception:
+                base_origin = ''
+            redirect_to = f"{base_origin}/reset-password" if base_origin else "https://arabshopping.org/reset-password"
 
         link = await _create_recovery_link(email, redirect_to)
         if not link:
@@ -1517,6 +1528,12 @@ async def forgot_password(request: Request, payload: ForgotPasswordRequest):
     """Public: user-initiated password reset.
 
     Always returns success to avoid leaking which emails are registered.
+
+    Implementation note: we DON'T gate on a public.users lookup because:
+      (1) a user may exist in auth.users without a matching public.users row
+          (partial signup, case-mismatch in email column, etc.)
+      (2) Supabase's auth.users is the source of truth for "can this email
+          log in". Letting generate_link decide is the most accurate test.
     """
     email = payload.email.lower().strip()
     redirect_to = payload.redirect_url
@@ -1533,7 +1550,11 @@ async def forgot_password(request: Request, payload: ForgotPasswordRequest):
         except Exception:
             redirect_to = None
 
-    if not redirect_to:
+    # Prefer the configured FRONTEND_URL — see top of file. Falls back to
+    # Origin header and finally to a hardcoded production URL.
+    if FRONTEND_URL:
+        redirect_to = f"{FRONTEND_URL}/reset-password"
+    elif not redirect_to:
         origin = request.headers.get('origin') or request.headers.get('referer') or ''
         try:
             from urllib.parse import urlparse
@@ -1542,28 +1563,43 @@ async def forgot_password(request: Request, payload: ForgotPasswordRequest):
         except Exception:
             redirect_to = "https://arabshopping.org/reset-password"
 
+    # Optionally fetch the user's name (case-insensitively) for a personalized
+    # greeting — but absence of this row does NOT block the reset attempt.
+    user_name = ''
     try:
-        # Only send if user actually exists (but response is identical either way)
-        user_lookup = supabase_admin.table('users').select('id, name, email').eq('email', email).limit(1).execute()
+        user_lookup = supabase_admin.table('users').select('name, email').ilike('email', email).limit(1).execute()
         if user_lookup.data:
-            user = user_lookup.data[0]
-            link = await _create_recovery_link(email, redirect_to)
-            if link:
-                try:
-                    await send_email_async(
-                        to_email=email,
-                        subject="Reset your Amazon Arab password",
-                        html_content=_password_reset_email_html(
-                            user.get('name') or '', link, triggered_by_admin=False
-                        ),
-                    )
-                except Exception as e:
-                    logging.error(f"Resend failure during self-serve password reset for {email}: {e}")
+            user_name = user_lookup.data[0].get('name') or ''
     except Exception as e:
-        # Swallow errors to avoid leaking account existence
-        logging.error(f"forgot_password internal error for {email}: {e}")
+        logging.warning(f"[forgot-password] public.users lookup failed for {email}: {e}")
 
-    # Always identical response
+    # Always attempt to generate a recovery link via Supabase. If the email is
+    # not registered in auth.users, generate_link will raise and we silently
+    # ignore (still returning the generic success response).
+    try:
+        link = await _create_recovery_link(email, redirect_to)
+        if link:
+            logging.info(f"[forgot-password] Recovery link generated for {email}, sending email...")
+            try:
+                result = await send_email_async(
+                    to_email=email,
+                    subject="Reset your Amazon Arab password",
+                    html_content=_password_reset_email_html(user_name, link, triggered_by_admin=False),
+                )
+                if result:
+                    logging.info(f"[forgot-password] Resend accepted email for {email}: id={result.get('id')}")
+                else:
+                    logging.warning(f"[forgot-password] Resend returned no result for {email}")
+            except Exception as e:
+                logging.error(f"[forgot-password] Resend failure for {email}: {e}")
+        else:
+            # Most common case: the email is not registered. We log this for
+            # operators but return the same generic response to the user.
+            logging.info(f"[forgot-password] No recovery link generated for {email} (likely not registered)")
+    except Exception as e:
+        logging.error(f"[forgot-password] internal error for {email}: {e}")
+
+    # Always identical response (anti-enumeration)
     return {
         "success": True,
         "message": "If an account exists for that email, a password reset link has been sent.",
