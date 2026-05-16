@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../lib/api';
 import { supabase } from '../../lib/supabase';
@@ -44,6 +44,12 @@ const AdminDashboard = () => {
   });
   const [seedingCatalog, setSeedingCatalog] = useState(false);
 
+  // Password reset modal state (admin-triggered)
+  const [passwordResetModal, setPasswordResetModal] = useState(null); // { userId, email, name } while awaiting response
+  const [passwordResetResult, setPasswordResetResult] = useState(null); // { email, reset_link, email_sent } after response
+  const [passwordResetLoading, setPasswordResetLoading] = useState(false);
+  const [resetLinkCopied, setResetLinkCopied] = useState(false);
+
   const USERS_PER_PAGE = 10;
 
   // Calculate pagination for users (client-side)
@@ -56,6 +62,35 @@ const AdminDashboard = () => {
     fetchData();
     fetchCategories();
     fetchPlatformBalance(); // NEW: Fetch platform balance
+  }, []);
+
+  // Throttled version of fetchData for real-time subscription triggers.
+  // Real-time events can fire rapidly in bursts (e.g. when an order is paid,
+  // multiple rows change across orders/platform_balance/wallet_transactions
+  // within milliseconds). Without throttling, each event would spawn 10
+  // parallel API requests, increasing the chance that one fails transiently.
+  const lastRefreshRef = useRef(0);
+  const pendingRefreshRef = useRef(null);
+  const throttledRefresh = useCallback(() => {
+    const MIN_INTERVAL = 1500; // at most one full refresh every 1.5s
+    const now = Date.now();
+    const elapsed = now - lastRefreshRef.current;
+
+    if (elapsed >= MIN_INTERVAL) {
+      lastRefreshRef.current = now;
+      fetchData();
+      fetchPlatformBalance();
+      return;
+    }
+
+    // Coalesce burst of events into a single trailing refresh
+    if (pendingRefreshRef.current) return;
+    pendingRefreshRef.current = setTimeout(() => {
+      pendingRefreshRef.current = null;
+      lastRefreshRef.current = Date.now();
+      fetchData();
+      fetchPlatformBalance();
+    }, MIN_INTERVAL - elapsed);
   }, []);
 
   // Real-time subscription for platform balance updates
@@ -103,8 +138,7 @@ const AdminDashboard = () => {
         table: 'orders'
       }, (payload) => {
         console.log('Order update received:', payload.eventType);
-        fetchPlatformBalance();
-        fetchData(); // Refresh all data
+        throttledRefresh();
       })
       .subscribe((status) => {
         console.log('Orders channel subscription status:', status);
@@ -119,8 +153,7 @@ const AdminDashboard = () => {
         table: 'order_deposits'
       }, (payload) => {
         console.log('Deposit update received:', payload.eventType);
-        fetchPlatformBalance();
-        fetchData(); // Refresh deposit confirmations
+        throttledRefresh();
       })
       .subscribe((status) => {
         console.log('Deposits channel subscription status:', status);
@@ -150,7 +183,7 @@ const AdminDashboard = () => {
       supabase.removeChannel(depositsChannel);
       supabase.removeChannel(walletTransactionsChannel);
     };
-  }, [user]);
+  }, [user, throttledRefresh]);
 
   const fetchCategories = async () => {
     try {
@@ -170,6 +203,59 @@ const AdminDashboard = () => {
       console.error('Failed to load platform balance', error);
     }
   };
+
+  // Send a secure password reset link to a user (admin-triggered)
+  const handleSendPasswordReset = async (user) => {
+    // Support both {id} (direct user row) and {userId} (modal state shape)
+    const targetUserId = user?.id || user?.userId;
+    const targetEmail = user?.email;
+    if (!targetUserId) {
+      toast.error('Missing user id. Please try again.');
+      return;
+    }
+    setPasswordResetLoading(true);
+    setResetLinkCopied(false);
+    try {
+      const res = await api.post(`/admin/users/${targetUserId}/send-password-reset`);
+      setPasswordResetResult({
+        email: res.data?.email || targetEmail,
+        reset_link: res.data?.reset_link || '',
+        email_sent: !!res.data?.email_sent,
+        message: res.data?.message || '',
+      });
+      if (res.data?.email_sent) {
+        toast.success('Password reset email sent');
+      } else {
+        toast.info('Reset link generated. Share it manually with the user.');
+      }
+    } catch (error) {
+      const detail = error?.response?.data?.detail || 'Failed to generate reset link';
+      toast.error(detail);
+      setPasswordResetModal(null);
+    } finally {
+      setPasswordResetLoading(false);
+    }
+  };
+
+  const closePasswordResetModal = () => {
+    setPasswordResetModal(null);
+    setPasswordResetResult(null);
+    setResetLinkCopied(false);
+  };
+
+  const copyResetLink = async () => {
+    if (!passwordResetResult?.reset_link) return;
+    try {
+      await navigator.clipboard.writeText(passwordResetResult.reset_link);
+      setResetLinkCopied(true);
+      toast.success('Reset link copied to clipboard');
+      setTimeout(() => setResetLinkCopied(false), 2500);
+    } catch (e) {
+      toast.error('Could not copy. Select and copy manually.');
+    }
+  };
+
+
   
   // NEW: Ship order by platform
   const handleShipByPlatform = async (orderId) => {
@@ -194,7 +280,7 @@ const AdminDashboard = () => {
 
   const fetchData = async () => {
     setLoading(true);
-    
+
     // Use Promise.allSettled so each request is handled independently
     // This way if one fails, others can still succeed
     const results = await Promise.allSettled([
@@ -210,89 +296,39 @@ const AdminDashboard = () => {
       api.get('/admin/deposit-confirmations').catch(err => ({ error: err }))
     ]);
 
-    // Handle each result independently
-    try {
-      // Users (fetch all, pagination handled on frontend)
-      if (results[0].status === 'fulfilled' && !results[0].value.error) {
-        const usersResponse = results[0].value.data;
-        setAllUsers(usersResponse?.users || []);
+    // Helper: update state ONLY on successful fetch.
+    // On transient failure (network hiccup, token refresh, etc.) we preserve
+    // the last known good data instead of wiping the UI to empty arrays.
+    const applyResult = (index, label, dataKey, setter) => {
+      const r = results[index];
+      if (r.status === 'fulfilled' && !r.value?.error) {
+        const data = r.value?.data?.[dataKey];
+        setter(Array.isArray(data) ? data : []);
       } else {
-        setAllUsers([]);
-      }
-
-      // Orders
-      if (results[1].status === 'fulfilled' && !results[1].value.error) {
-        setOrders(results[1].value.data?.orders || []);
-      } else {
-        setOrders([]);
-      }
-
-      // Products
-      if (results[2].status === 'fulfilled' && !results[2].value.error) {
-        setProducts(results[2].value.data?.products || []);
-      } else {
-        const err = results[2].status === 'fulfilled' ? results[2].value.error : results[2].reason;
+        // Log details for developers but don't show a scary toast or wipe state.
+        const err = r.status === 'fulfilled' ? r.value?.error : r.reason;
         const status = err?.response?.status;
-        // 401 is handled by the axios interceptor (auto-refresh + redirect).
-        // Only show a toast for genuine server/network problems.
-        if (status && status !== 401) {
-          toast.error(`Failed to load products (HTTP ${status}). Please refresh the page.`);
-        } else if (!status) {
-          // Network error or timeout
-          console.warn('[AdminDashboard] Products fetch failed:', err?.message || err);
-        }
-        setProducts([]);
+        const detail = err?.response?.data?.detail || err?.message || 'unknown error';
+        // eslint-disable-next-line no-console
+        console.warn(`[AdminDashboard] Failed to load ${label}: status=${status || 'n/a'} - ${detail}`);
       }
-      // Verification Documents
-      if (results[3].status === 'fulfilled' && !results[3].value.error) {
-        setVerificationDocs(results[3].value.data?.documents || []);
-      } else {
-        setVerificationDocs([]);
-      }
+    };
 
-      // Invite Codes
-      if (results[4].status === 'fulfilled' && !results[4].value.error) {
-        setInviteCodes(results[4].value.data?.codes || []);
-      } else {
-        setInviteCodes([]);
-      }
-
-      // Store name change requests
-      if (results[5].status === 'fulfilled' && !results[5].value.error) {
-        setStoreNameRequests(results[5].value.data?.requests || []);
-      } else {
-        setStoreNameRequests([]);
-      }
-
-      // Payout requests
-      if (results[6].status === 'fulfilled' && !results[6].value.error) {
-        setPayoutRequests(results[6].value.data?.requests || []);
-      } else {
-        setPayoutRequests([]);
-      }
-
-      // Recharge requests
-      if (results[7].status === 'fulfilled' && !results[7].value.error) {
-        setRechargeRequests(results[7].value.data?.requests || []);
-      } else {
-        setRechargeRequests([]);
-      }
-
-      // Seller Recharge Requests (results[8])
-      if (results[8].status === 'fulfilled' && !results[8].value.error) {
-        setSellerRechargeRequests(results[8].value.data?.requests || []);
-      } else {
-        setSellerRechargeRequests([]);
-      }
-
-      // Deposit Confirmations (results[9])
-      if (results[9].status === 'fulfilled' && !results[9].value.error) {
-        setDepositConfirmations(results[9].value.data?.deposits || []);
-      } else {
-        setDepositConfirmations([]);
-      }
+    try {
+      applyResult(0, 'users', 'users', setAllUsers);
+      applyResult(1, 'orders', 'orders', setOrders);
+      applyResult(2, 'products', 'products', setProducts);
+      applyResult(3, 'verification documents', 'documents', setVerificationDocs);
+      applyResult(4, 'invite codes', 'codes', setInviteCodes);
+      applyResult(5, 'store name requests', 'requests', setStoreNameRequests);
+      applyResult(6, 'payout requests', 'requests', setPayoutRequests);
+      applyResult(7, 'recharge requests', 'requests', setRechargeRequests);
+      applyResult(8, 'seller recharge requests', 'requests', setSellerRechargeRequests);
+      applyResult(9, 'deposit confirmations', 'deposits', setDepositConfirmations);
     } catch (error) {
       // Silently handle errors - individual requests already handled above
+      // eslint-disable-next-line no-console
+      console.error('[AdminDashboard] Unexpected error processing results:', error);
     } finally {
       setLoading(false);
     }
@@ -1531,6 +1567,15 @@ const AdminDashboard = () => {
                       {u.banStatus && u.banStatus !== 'active' ? (
                         <div className="flex flex-wrap gap-2 justify-end">
                           <button
+                            onClick={() =>
+                              setPasswordResetModal({ userId: u.id, email: u.email, name: u.name })
+                            }
+                            className="px-3 py-1 rounded-md text-xs bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors whitespace-nowrap"
+                            data-testid={`reset-password-btn-${u.id}`}
+                          >
+                            Reset Password
+                          </button>
+                          <button
                             onClick={async () => {
                               try {
                                 await api.post(`/admin/users/${u.id}/unban`);
@@ -1547,6 +1592,15 @@ const AdminDashboard = () => {
                         </div>
                       ) : (
                         <div className="flex flex-wrap gap-2 justify-end">
+                          <button
+                            onClick={() =>
+                              setPasswordResetModal({ userId: u.id, email: u.email, name: u.name })
+                            }
+                            className="px-3 py-1 rounded-md text-xs bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors whitespace-nowrap"
+                            data-testid={`reset-password-btn-${u.id}`}
+                          >
+                            Reset Password
+                          </button>
                           <button
                             onClick={async () => {
                               const reason = window.prompt('Enter reason for ban:');
@@ -2349,6 +2403,105 @@ const AdminDashboard = () => {
                 </table>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Password Reset Modal */}
+      {passwordResetModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          onClick={passwordResetLoading ? undefined : closePasswordResetModal}
+        >
+          <div
+            className="w-full max-w-lg bg-[rgba(18,18,18,0.98)] border border-[rgba(212,175,55,0.25)] rounded-xl shadow-2xl p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {!passwordResetResult ? (
+              <>
+                <h3 className="text-xl font-semibold text-[#D4AF37] mb-2">Send Password Reset</h3>
+                <p className="text-gray-400 text-sm mb-5">
+                  This will generate a secure one-time reset link and email it to{' '}
+                  <span className="text-white">{passwordResetModal.email}</span>
+                  {passwordResetModal.name ? (
+                    <> ({passwordResetModal.name})</>
+                  ) : null}
+                  . The link expires in 1 hour. The user's current password will not change until they open the link and choose a new one.
+                </p>
+                <div className="flex flex-wrap gap-2 justify-end">
+                  <button
+                    onClick={closePasswordResetModal}
+                    disabled={passwordResetLoading}
+                    className="px-4 py-2 rounded-md text-sm bg-[rgba(50,50,50,0.8)] text-gray-300 hover:bg-[rgba(70,70,70,0.9)] transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => handleSendPasswordReset(passwordResetModal)}
+                    disabled={passwordResetLoading}
+                    className="px-4 py-2 rounded-md text-sm bg-[#D4AF37] text-black font-semibold hover:bg-[#c9a531] transition-colors disabled:opacity-60"
+                    data-testid="confirm-reset-password-btn"
+                  >
+                    {passwordResetLoading ? 'Sending...' : 'Send Reset Email'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="text-xl font-semibold text-[#D4AF37] mb-2">
+                  {passwordResetResult.email_sent ? 'Reset Email Sent' : 'Reset Link Generated'}
+                </h3>
+                <p className="text-gray-400 text-sm mb-4">
+                  {passwordResetResult.email_sent ? (
+                    <>
+                      A password reset email has been sent to{' '}
+                      <span className="text-white">{passwordResetResult.email}</span>. The link
+                      expires in 1 hour.
+                    </>
+                  ) : (
+                    <>
+                      Email delivery was not confirmed. You can share this one-time reset link with{' '}
+                      <span className="text-white">{passwordResetResult.email}</span> manually via
+                      WhatsApp, SMS, or in person. The link expires in 1 hour.
+                    </>
+                  )}
+                </p>
+                {passwordResetResult.reset_link ? (
+                  <div className="mb-5">
+                    <label className="block text-xs uppercase tracking-wide text-gray-500 mb-1">
+                      Reset Link
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        readOnly
+                        value={passwordResetResult.reset_link}
+                        onFocus={(e) => e.target.select()}
+                        className="luxury-input flex-1 text-xs"
+                        data-testid="reset-link-input"
+                      />
+                      <button
+                        onClick={copyResetLink}
+                        className="px-3 py-2 rounded-md text-xs bg-[#D4AF37] text-black font-semibold hover:bg-[#c9a531] transition-colors whitespace-nowrap"
+                        data-testid="copy-reset-link-btn"
+                      >
+                        {resetLinkCopied ? 'Copied ✓' : 'Copy'}
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      ⚠️ Treat this link like a password. Anyone with it can reset this account.
+                    </p>
+                  </div>
+                ) : null}
+                <div className="flex justify-end">
+                  <button
+                    onClick={closePasswordResetModal}
+                    className="px-4 py-2 rounded-md text-sm bg-[#D4AF37] text-black font-semibold hover:bg-[#c9a531] transition-colors"
+                  >
+                    Done
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

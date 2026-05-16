@@ -1,24 +1,35 @@
 #!/usr/bin/env python3
 """
-Comprehensive Backend API Testing for Bug Fixes
-Testing specific endpoints that were fixed for table relationship issues
+Comprehensive Backend Testing for Secure Password Reset Endpoints
+Testing the newly added password reset functionality as requested in review.
 """
 
 import requests
 import json
-import uuid
-from datetime import datetime
 import time
+import uuid
+from typing import Dict, Any, Optional
 
 # Configuration
-BASE_URL = "https://repo-clone-46.preview.emergentagent.com/api"
+BASE_URL = "https://repo-clone-47.preview.emergentagent.com/api"
 
-# Test credentials from /app/memory/test_credentials.md
-ADMIN_CREDS = {"email": "support@arabshopping.org", "password": "Hadi1247@"}
-SELLER_CREDS = {"email": "testseller@test.com", "password": "TestPass123!"}
-BUYER_CREDS = {"email": "testbuyer@test.com", "password": "TestPass123!"}
+# Test credentials from test_result.md
+ADMIN_CREDENTIALS = {
+    "email": "support@arabshopping.org",
+    "password": "Hadi1247@"
+}
 
-class APITester:
+SELLER_CREDENTIALS = {
+    "email": "testseller@test.com", 
+    "password": "TestPass123!"
+}
+
+BUYER_CREDENTIALS = {
+    "email": "testbuyer@test.com",
+    "password": "TestPass123!"
+}
+
+class PasswordResetTester:
     def __init__(self):
         self.admin_token = None
         self.seller_token = None
@@ -27,446 +38,401 @@ class APITester:
         self.created_order_id = None
         self.created_address_id = None
         
-    def log_result(self, test_name, success, details="", error=""):
+    def log_test(self, test_name: str, success: bool, details: str = ""):
         """Log test result"""
-        status = "✅" if success else "❌"
-        self.test_results.append({
-            "test": test_name,
-            "success": success,
-            "status": status,
-            "details": details,
-            "error": error
-        })
-        print(f"{status} {test_name}: {details}")
-        if error:
-            print(f"   Error: {error}")
+        status = "✅ PASS" if success else "❌ FAIL"
+        self.test_results.append(f"{status}: {test_name} - {details}")
+        print(f"{status}: {test_name}")
+        if details:
+            print(f"    Details: {details}")
     
-    def authenticate_all_users(self):
-        """Authenticate all test users"""
-        print("\n=== AUTHENTICATION TESTS ===")
-        
-        # Admin login
+    def login_user(self, credentials: Dict[str, str], role: str) -> Optional[str]:
+        """Login and return auth token"""
         try:
-            response = requests.post(f"{BASE_URL}/auth/login", json=ADMIN_CREDS)
+            response = requests.post(f"{BASE_URL}/auth/login", json=credentials, timeout=30)
             if response.status_code == 200:
                 data = response.json()
-                self.admin_token = data.get("session", {}).get("access_token")
-                self.log_result("Admin Login", True, f"Admin authenticated successfully")
-            else:
-                self.log_result("Admin Login", False, f"Status: {response.status_code}", response.text)
-        except Exception as e:
-            self.log_result("Admin Login", False, "", str(e))
-        
-        # Wait a bit to avoid rate limiting
-        time.sleep(2)
-        
-        # Seller login
-        try:
-            response = requests.post(f"{BASE_URL}/auth/login", json=SELLER_CREDS)
-            if response.status_code == 200:
-                data = response.json()
-                self.seller_token = data.get("session", {}).get("access_token")
-                self.log_result("Seller Login", True, f"Seller authenticated successfully")
-            else:
-                self.log_result("Seller Login", False, f"Status: {response.status_code}", response.text)
-        except Exception as e:
-            self.log_result("Seller Login", False, "", str(e))
-        
-        # Wait a bit to avoid rate limiting
-        time.sleep(2)
-        
-        # Buyer login
-        try:
-            response = requests.post(f"{BASE_URL}/auth/login", json=BUYER_CREDS)
-            if response.status_code == 200:
-                data = response.json()
-                self.buyer_token = data.get("session", {}).get("access_token")
-                self.log_result("Buyer Login", True, f"Buyer authenticated successfully")
-            else:
-                self.log_result("Buyer Login", False, f"Status: {response.status_code}", response.text)
-        except Exception as e:
-            self.log_result("Buyer Login", False, "", str(e))
-    
-    def get_headers(self, token):
-        """Get authorization headers"""
-        return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-    
-    def test_specific_fixed_endpoints(self):
-        """Test the specific endpoints that were fixed for table relationship issues"""
-        print("\n=== TESTING SPECIFIC FIXED ENDPOINTS ===")
-        
-        # 1. GET /api/buyer/refunds - should return 200 with {success: true, refunds: []}
-        if self.buyer_token:
-            try:
-                response = requests.get(f"{BASE_URL}/buyer/refunds", headers=self.get_headers(self.buyer_token))
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get("success") and "refunds" in data:
-                        self.log_result("GET /api/buyer/refunds", True, f"Returns {len(data['refunds'])} refunds")
-                    else:
-                        self.log_result("GET /api/buyer/refunds", False, "Invalid response format", str(data))
+                # Try different token locations
+                token = (data.get('access_token') or 
+                        data.get('session', {}).get('access_token') or
+                        data.get('token'))
+                if token:
+                    self.log_test(f"{role.title()} Login", True, f"Successfully authenticated as {credentials['email']}")
+                    return token
                 else:
-                    self.log_result("GET /api/buyer/refunds", False, f"Status: {response.status_code}", response.text)
-            except Exception as e:
-                self.log_result("GET /api/buyer/refunds", False, "", str(e))
-        else:
-            self.log_result("GET /api/buyer/refunds", False, "No buyer token available")
+                    self.log_test(f"{role.title()} Login", False, f"No access_token found in response structure")
+            else:
+                self.log_test(f"{role.title()} Login", False, f"HTTP {response.status_code}: {response.text}")
+        except Exception as e:
+            self.log_test(f"{role.title()} Login", False, f"Exception: {str(e)}")
+        return None
+    
+    def get_auth_headers(self, token: str) -> Dict[str, str]:
+        """Get authorization headers"""
+        return {"Authorization": f"Bearer {token}"}
+    
+    def get_test_user_id(self) -> Optional[str]:
+        """Get a non-admin user ID for testing"""
+        try:
+            headers = self.get_auth_headers(self.admin_token)
+            response = requests.get(f"{BASE_URL}/admin/users", headers=headers, timeout=30)
+            if response.status_code == 200:
+                data = response.json()
+                # Handle both direct list and wrapped response
+                users = data if isinstance(data, list) else data.get('users', [])
+                # Find a non-admin user (seller or buyer)
+                for user in users:
+                    if user.get('role') != 'admin' and user.get('email') in ['testseller@test.com', 'testbuyer@test.com']:
+                        return user.get('id')
+            return None
+        except Exception as e:
+            print(f"Error getting test user ID: {e}")
+            return None
+    
+    def test_admin_password_reset_happy_path(self):
+        """Test A: Admin-triggered reset — happy path"""
+        if not self.admin_token:
+            self.log_test("Admin Password Reset - Happy Path", False, "Admin not logged in")
+            return
         
-        # 2. GET /api/seller/catalog/products - should return 200+ products
+        user_id = self.get_test_user_id()
+        if not user_id:
+            self.log_test("Admin Password Reset - Happy Path", False, "Could not find test user ID")
+            return
+        
+        try:
+            headers = self.get_auth_headers(self.admin_token)
+            response = requests.post(
+                f"{BASE_URL}/admin/users/{user_id}/send-password-reset",
+                headers=headers,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                # Verify response structure
+                required_fields = ['success', 'email', 'reset_link']
+                missing_fields = [field for field in required_fields if field not in data]
+                
+                if missing_fields:
+                    self.log_test("Admin Password Reset - Happy Path", False, f"Missing fields: {missing_fields}")
+                    return
+                
+                if not data.get('success'):
+                    self.log_test("Admin Password Reset - Happy Path", False, f"success=false: {data}")
+                    return
+                
+                reset_link = data.get('reset_link', '')
+                if not reset_link or 'type=recovery' not in reset_link:
+                    self.log_test("Admin Password Reset - Happy Path", False, f"Invalid reset_link: {reset_link}")
+                    return
+                
+                if 'token=' not in reset_link and 'token_hash=' not in reset_link:
+                    self.log_test("Admin Password Reset - Happy Path", False, f"Reset link missing token parameter: {reset_link}")
+                    return
+                
+                email = data.get('email', '')
+                if not email or '@' not in email:
+                    self.log_test("Admin Password Reset - Happy Path", False, f"Invalid email: {email}")
+                    return
+                
+                email_sent = data.get('email_sent')
+                if not isinstance(email_sent, bool):
+                    self.log_test("Admin Password Reset - Happy Path", False, f"email_sent should be boolean: {email_sent}")
+                    return
+                
+                self.log_test("Admin Password Reset - Happy Path", True, 
+                            f"Reset link generated for {email}, email_sent={email_sent}, link contains recovery token")
+            else:
+                self.log_test("Admin Password Reset - Happy Path", False, f"HTTP {response.status_code}: {response.text}")
+        
+        except Exception as e:
+            self.log_test("Admin Password Reset - Happy Path", False, f"Exception: {str(e)}")
+    
+    def test_admin_password_reset_authorization(self):
+        """Test B: Admin-triggered reset — authorization"""
+        user_id = self.get_test_user_id()
+        if not user_id:
+            self.log_test("Admin Password Reset - Authorization Tests", False, "Could not find test user ID")
+            return
+        
+        # Test 4: Seller access (should be 403)
         if self.seller_token:
             try:
-                response = requests.get(f"{BASE_URL}/seller/catalog/products", headers=self.get_headers(self.seller_token))
-                if response.status_code == 200:
-                    data = response.json()
-                    if isinstance(data, dict) and "products" in data:
-                        products = data["products"]
-                        self.log_result("GET /api/seller/catalog/products", True, f"Returns {len(products)} products")
-                    elif isinstance(data, list):
-                        self.log_result("GET /api/seller/catalog/products", True, f"Returns {len(data)} products")
-                    else:
-                        self.log_result("GET /api/seller/catalog/products", False, "Invalid response format", str(data)[:200])
+                headers = self.get_auth_headers(self.seller_token)
+                response = requests.post(
+                    f"{BASE_URL}/admin/users/{user_id}/send-password-reset",
+                    headers=headers,
+                    timeout=30
+                )
+                
+                if response.status_code == 403:
+                    self.log_test("Admin Password Reset - Seller Access Denied", True, "Seller correctly denied with 403")
                 else:
-                    self.log_result("GET /api/seller/catalog/products", False, f"Status: {response.status_code}", response.text)
+                    self.log_test("Admin Password Reset - Seller Access Denied", False, f"Expected 403, got {response.status_code}")
             except Exception as e:
-                self.log_result("GET /api/seller/catalog/products", False, "", str(e))
-        else:
-            self.log_result("GET /api/seller/catalog/products", False, "No seller token available")
+                self.log_test("Admin Password Reset - Seller Access Denied", False, f"Exception: {str(e)}")
         
-        # 3. POST /api/auth/refresh - test token refresh
+        # Test 5: Buyer access (should be 403)
         if self.buyer_token:
             try:
-                # First get refresh token by checking current token
-                response = requests.post(f"{BASE_URL}/auth/refresh", 
-                                       headers=self.get_headers(self.buyer_token),
-                                       json={})
-                if response.status_code in [200, 401]:  # 401 is expected for invalid refresh token
-                    if response.status_code == 200:
-                        self.log_result("POST /api/auth/refresh", True, "Token refresh successful")
-                    else:
-                        self.log_result("POST /api/auth/refresh", True, "Returns 401 for invalid token (expected)")
+                headers = self.get_auth_headers(self.buyer_token)
+                response = requests.post(
+                    f"{BASE_URL}/admin/users/{user_id}/send-password-reset",
+                    headers=headers,
+                    timeout=30
+                )
+                
+                if response.status_code == 403:
+                    self.log_test("Admin Password Reset - Buyer Access Denied", True, "Buyer correctly denied with 403")
                 else:
-                    self.log_result("POST /api/auth/refresh", False, f"Status: {response.status_code}", response.text)
+                    self.log_test("Admin Password Reset - Buyer Access Denied", False, f"Expected 403, got {response.status_code}")
             except Exception as e:
-                self.log_result("POST /api/auth/refresh", False, "", str(e))
-        else:
-            self.log_result("POST /api/auth/refresh", False, "No buyer token available")
-    
-    def test_order_lifecycle(self):
-        """Test complete order lifecycle"""
-        print("\n=== TESTING ORDER LIFECYCLE ===")
+                self.log_test("Admin Password Reset - Buyer Access Denied", False, f"Exception: {str(e)}")
         
-        if not self.buyer_token or not self.seller_token or not self.admin_token:
-            self.log_result("Order Lifecycle", False, "Missing authentication tokens")
-            return
-        
-        # Step 1: Create shipping address for buyer
+        # Test 6: No auth (should be 401/403)
         try:
-            address_data = {
-                "name": "Test User",
-                "phone": "+1234567890",
-                "address": "123 Test Street",
-                "city": "Test City",
-                "state": "Test State",
-                "zipCode": "12345",
-                "country": "Test Country"
-            }
-            response = requests.post(f"{BASE_URL}/buyer/addresses", 
-                                   headers=self.get_headers(self.buyer_token),
-                                   json=address_data)
-            if response.status_code == 201:
-                self.created_address_id = response.json().get("id")
-                self.log_result("Create Shipping Address", True, f"Address ID: {self.created_address_id}")
-            else:
-                self.log_result("Create Shipping Address", False, f"Status: {response.status_code}", response.text)
-        except Exception as e:
-            self.log_result("Create Shipping Address", False, "", str(e))
-        
-        # Step 2: Get seller's store products to create order
-        seller_product_id = None
-        try:
-            response = requests.get(f"{BASE_URL}/seller/store/products", headers=self.get_headers(self.seller_token))
-            if response.status_code == 200:
-                products = response.json()
-                if products and len(products) > 0:
-                    seller_product_id = products[0]["id"]
-                    self.log_result("Get Seller Products", True, f"Found {len(products)} products")
-                else:
-                    self.log_result("Get Seller Products", False, "No products found in seller store")
-            else:
-                self.log_result("Get Seller Products", False, f"Status: {response.status_code}", response.text)
-        except Exception as e:
-            self.log_result("Get Seller Products", False, "", str(e))
-        
-        # Step 3: Create order if we have product and address
-        if seller_product_id and self.created_address_id:
-            try:
-                order_data = {
-                    "items": [{"product_id": seller_product_id, "quantity": 1, "price": 25.99}],
-                    "totalAmount": 25.99,
-                    "shippingAddressId": self.created_address_id,
-                    "useWallet": False
-                }
-                response = requests.post(f"{BASE_URL}/orders", 
-                                       headers=self.get_headers(self.buyer_token),
-                                       json=order_data)
-                if response.status_code == 201:
-                    self.created_order_id = response.json().get("id")
-                    self.log_result("Create Order", True, f"Order ID: {self.created_order_id}")
-                else:
-                    self.log_result("Create Order", False, f"Status: {response.status_code}", response.text)
-            except Exception as e:
-                self.log_result("Create Order", False, "", str(e))
-        
-        # Step 4: Test seller order center endpoints
-        if self.created_order_id:
-            try:
-                response = requests.get(f"{BASE_URL}/seller/order-center/{self.created_order_id}", 
-                                      headers=self.get_headers(self.seller_token))
-                if response.status_code == 200:
-                    self.log_result("GET /api/seller/order-center/{id}", True, "Order details retrieved")
-                else:
-                    self.log_result("GET /api/seller/order-center/{id}", False, f"Status: {response.status_code}", response.text)
-            except Exception as e:
-                self.log_result("GET /api/seller/order-center/{id}", False, "", str(e))
+            response = requests.post(
+                f"{BASE_URL}/admin/users/{user_id}/send-password-reset",
+                timeout=30
+            )
             
-            # Test order status update
-            try:
-                response = requests.put(f"{BASE_URL}/seller/orders/{self.created_order_id}/status", 
-                                      headers=self.get_headers(self.seller_token),
-                                      json={"status": "to_be_shipped"})
-                if response.status_code == 200:
-                    self.log_result("PUT /api/seller/orders/{id}/status", True, "Order status updated")
-                else:
-                    self.log_result("PUT /api/seller/orders/{id}/status", False, f"Status: {response.status_code}", response.text)
-            except Exception as e:
-                self.log_result("PUT /api/seller/orders/{id}/status", False, "", str(e))
+            if response.status_code in [401, 403]:
+                self.log_test("Admin Password Reset - No Auth Denied", True, f"Unauthenticated request correctly denied with {response.status_code}")
+            else:
+                self.log_test("Admin Password Reset - No Auth Denied", False, f"Expected 401/403, got {response.status_code}")
+        except Exception as e:
+            self.log_test("Admin Password Reset - No Auth Denied", False, f"Exception: {str(e)}")
     
-    def test_wallet_recharge_lifecycle(self):
-        """Test wallet recharge lifecycle"""
-        print("\n=== TESTING WALLET RECHARGE LIFECYCLE ===")
-        
-        if not self.seller_token or not self.admin_token:
-            self.log_result("Wallet Recharge Lifecycle", False, "Missing authentication tokens")
+    def test_admin_password_reset_not_found(self):
+        """Test C: Admin-triggered reset — not found"""
+        if not self.admin_token:
+            self.log_test("Admin Password Reset - User Not Found", False, "Admin not logged in")
             return
         
-        # Step 1: Seller submits wallet recharge request
-        recharge_id = None
+        # Test 7: Random UUID that doesn't exist
+        fake_user_id = str(uuid.uuid4())
         try:
-            recharge_data = {
-                "amount": 100.0,
-                "transactionHash": f"test_hash_{uuid.uuid4().hex[:8]}"
-            }
-            response = requests.post(f"{BASE_URL}/seller/wallet/recharge", 
-                                   headers=self.get_headers(self.seller_token),
-                                   json=recharge_data)
-            if response.status_code == 201:
-                recharge_id = response.json().get("id")
-                self.log_result("Seller Submit Recharge", True, f"Recharge ID: {recharge_id}")
+            headers = self.get_auth_headers(self.admin_token)
+            response = requests.post(
+                f"{BASE_URL}/admin/users/{fake_user_id}/send-password-reset",
+                headers=headers,
+                timeout=30
+            )
+            
+            if response.status_code == 404:
+                self.log_test("Admin Password Reset - User Not Found", True, "Non-existent user correctly returns 404")
             else:
-                self.log_result("Seller Submit Recharge", False, f"Status: {response.status_code}", response.text)
+                self.log_test("Admin Password Reset - User Not Found", False, f"Expected 404, got {response.status_code}: {response.text}")
         except Exception as e:
-            self.log_result("Seller Submit Recharge", False, "", str(e))
-        
-        # Step 2: Admin lists recharge requests
-        try:
-            response = requests.get(f"{BASE_URL}/admin/seller-wallet-recharge-requests", 
-                                  headers=self.get_headers(self.admin_token))
-            if response.status_code == 200:
-                requests_list = response.json()
-                self.log_result("Admin List Recharge Requests", True, f"Found {len(requests_list)} requests")
-            else:
-                self.log_result("Admin List Recharge Requests", False, f"Status: {response.status_code}", response.text)
-        except Exception as e:
-            self.log_result("Admin List Recharge Requests", False, "", str(e))
-        
-        # Step 3: Admin approves recharge request
-        if recharge_id:
-            try:
-                response = requests.post(f"{BASE_URL}/admin/seller-wallet-recharge-requests/{recharge_id}/status", 
-                                       headers=self.get_headers(self.admin_token),
-                                       json={"status": "approved"})
-                if response.status_code == 200:
-                    self.log_result("Admin Approve Recharge", True, "Recharge approved successfully")
-                else:
-                    self.log_result("Admin Approve Recharge", False, f"Status: {response.status_code}", response.text)
-            except Exception as e:
-                self.log_result("Admin Approve Recharge", False, "", str(e))
+            self.log_test("Admin Password Reset - User Not Found", False, f"Exception: {str(e)}")
     
-    def test_payout_lifecycle(self):
-        """Test payout lifecycle"""
-        print("\n=== TESTING PAYOUT LIFECYCLE ===")
+    def test_public_forgot_password_existing_email(self):
+        """Test D: Public forgot-password — existing email"""
+        try:
+            payload = {
+                "email": "testbuyer@test.com",
+                "redirect_url": "https://example.com"
+            }
+            
+            response = requests.post(
+                f"{BASE_URL}/auth/forgot-password",
+                json=payload,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                if data.get('success') is True:
+                    message = data.get('message', '')
+                    # Should be generic message, not revealing if email exists
+                    if 'If an account exists' in message or 'has been sent' in message:
+                        self.log_test("Public Forgot Password - Existing Email", True, 
+                                    f"Generic response received: {message}")
+                    else:
+                        self.log_test("Public Forgot Password - Existing Email", False, 
+                                    f"Unexpected message format: {message}")
+                else:
+                    self.log_test("Public Forgot Password - Existing Email", False, f"success=false: {data}")
+            else:
+                self.log_test("Public Forgot Password - Existing Email", False, f"HTTP {response.status_code}: {response.text}")
         
-        if not self.seller_token or not self.admin_token:
-            self.log_result("Payout Lifecycle", False, "Missing authentication tokens")
+        except Exception as e:
+            self.log_test("Public Forgot Password - Existing Email", False, f"Exception: {str(e)}")
+    
+    def test_public_forgot_password_non_existent_email(self):
+        """Test E: Public forgot-password — non-existent email (anti-enumeration)"""
+        try:
+            fake_email = f"nobody-xyz-{uuid.uuid4()}@example.com"
+            payload = {
+                "email": fake_email,
+                "redirect_url": "https://example.com"
+            }
+            
+            response = requests.post(
+                f"{BASE_URL}/auth/forgot-password",
+                json=payload,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                if data.get('success') is True:
+                    message = data.get('message', '')
+                    # Should be IDENTICAL to existing email response
+                    if 'If an account exists' in message or 'has been sent' in message:
+                        self.log_test("Public Forgot Password - Non-existent Email", True, 
+                                    f"Anti-enumeration working: identical response for non-existent email")
+                    else:
+                        self.log_test("Public Forgot Password - Non-existent Email", False, 
+                                    f"Unexpected message format: {message}")
+                else:
+                    self.log_test("Public Forgot Password - Non-existent Email", False, f"success=false: {data}")
+            else:
+                self.log_test("Public Forgot Password - Non-existent Email", False, f"HTTP {response.status_code}: {response.text}")
+        
+        except Exception as e:
+            self.log_test("Public Forgot Password - Non-existent Email", False, f"Exception: {str(e)}")
+    
+    def test_public_forgot_password_rate_limit(self):
+        """Test F: Public forgot-password — rate limit"""
+        try:
+            payload = {
+                "email": "testbuyer@test.com",
+                "redirect_url": "https://example.com"
+            }
+            
+            # Make 6 requests quickly to trigger rate limit (limit is 5/hour)
+            rate_limit_triggered = False
+            for i in range(6):
+                response = requests.post(
+                    f"{BASE_URL}/auth/forgot-password",
+                    json=payload,
+                    timeout=30
+                )
+                
+                if response.status_code == 429:
+                    rate_limit_triggered = True
+                    self.log_test("Public Forgot Password - Rate Limit", True, 
+                                f"Rate limit triggered on request {i+1} with HTTP 429")
+                    break
+                elif response.status_code != 200:
+                    self.log_test("Public Forgot Password - Rate Limit", False, 
+                                f"Unexpected status on request {i+1}: {response.status_code}")
+                    break
+                
+                # Small delay between requests
+                time.sleep(0.1)
+            
+            if not rate_limit_triggered:
+                self.log_test("Public Forgot Password - Rate Limit", False, 
+                            "Rate limit not triggered after 6 requests (expected after 5)")
+        
+        except Exception as e:
+            self.log_test("Public Forgot Password - Rate Limit", False, f"Exception: {str(e)}")
+    
+    def test_sanity_check_endpoints(self):
+        """Test G: Sanity check - verify unrelated endpoints still work"""
+        if not self.admin_token:
+            self.log_test("Sanity Check", False, "Admin not logged in")
             return
         
-        # Step 1: Seller requests payout
-        payout_id = None
         try:
-            payout_data = {
-                "amount": 50.0,
-                "payoutWallet": "TY8Z91NMCjREyZVj9NjDsF8hVjyqfxFFRU"  # Valid TRC20 address
-            }
-            response = requests.post(f"{BASE_URL}/seller/payout-requests", 
-                                   headers=self.get_headers(self.seller_token),
-                                   json=payout_data)
-            if response.status_code == 201:
-                payout_id = response.json().get("id")
-                self.log_result("Seller Request Payout", True, f"Payout ID: {payout_id}")
-            else:
-                self.log_result("Seller Request Payout", False, f"Status: {response.status_code}", response.text)
-        except Exception as e:
-            self.log_result("Seller Request Payout", False, "", str(e))
-        
-        # Step 2: Admin lists payout requests
-        try:
-            response = requests.get(f"{BASE_URL}/admin/payout-requests", 
-                                  headers=self.get_headers(self.admin_token))
+            headers = self.get_auth_headers(self.admin_token)
+            
+            # Test admin users endpoint
+            response = requests.get(f"{BASE_URL}/admin/users", headers=headers, timeout=30)
             if response.status_code == 200:
-                requests_list = response.json()
-                self.log_result("Admin List Payout Requests", True, f"Found {len(requests_list)} requests")
+                data = response.json()
+                users = data if isinstance(data, list) else data.get('users', [])
+                if isinstance(users, list) and len(users) > 0:
+                    self.log_test("Sanity Check - Admin Users", True, f"Admin users endpoint working ({len(users)} users)")
+                else:
+                    self.log_test("Sanity Check - Admin Users", False, f"Unexpected users response structure")
             else:
-                self.log_result("Admin List Payout Requests", False, f"Status: {response.status_code}", response.text)
+                self.log_test("Sanity Check - Admin Users", False, f"HTTP {response.status_code}: {response.text}")
+            
+            # Test admin products endpoint
+            response = requests.get(f"{BASE_URL}/admin/products", headers=headers, timeout=30)
+            if response.status_code == 200:
+                data = response.json()
+                products = data if isinstance(data, list) else data.get('products', [])
+                if isinstance(products, list):
+                    self.log_test("Sanity Check - Admin Products", True, f"Admin products endpoint working ({len(products)} products)")
+                else:
+                    self.log_test("Sanity Check - Admin Products", False, f"Unexpected products response structure")
+            else:
+                self.log_test("Sanity Check - Admin Products", False, f"HTTP {response.status_code}: {response.text}")
+        
         except Exception as e:
-            self.log_result("Admin List Payout Requests", False, "", str(e))
-        
-        # Step 3: Admin approves/rejects payout request
-        if payout_id:
-            try:
-                response = requests.post(f"{BASE_URL}/admin/payout-requests/{payout_id}/status", 
-                                       headers=self.get_headers(self.admin_token),
-                                       json={"status": "approved"})
-                if response.status_code == 200:
-                    self.log_result("Admin Approve Payout", True, "Payout approved successfully")
-                else:
-                    self.log_result("Admin Approve Payout", False, f"Status: {response.status_code}", response.text)
-            except Exception as e:
-                self.log_result("Admin Approve Payout", False, "", str(e))
-    
-    def test_additional_endpoints(self):
-        """Test additional endpoints mentioned in review"""
-        print("\n=== TESTING ADDITIONAL ENDPOINTS ===")
-        
-        # Test order status endpoint
-        if self.created_order_id and self.buyer_token:
-            try:
-                response = requests.get(f"{BASE_URL}/orders/{self.created_order_id}/status", 
-                                      headers=self.get_headers(self.buyer_token))
-                if response.status_code == 200:
-                    self.log_result("GET /api/orders/{id}/status", True, "Order status retrieved")
-                else:
-                    self.log_result("GET /api/orders/{id}/status", False, f"Status: {response.status_code}", response.text)
-            except Exception as e:
-                self.log_result("GET /api/orders/{id}/status", False, "", str(e))
-        
-        # Test buyer addresses endpoints
-        if self.buyer_token:
-            try:
-                response = requests.get(f"{BASE_URL}/buyer/addresses", headers=self.get_headers(self.buyer_token))
-                if response.status_code == 200:
-                    addresses = response.json()
-                    self.log_result("GET /api/buyer/addresses", True, f"Found {len(addresses)} addresses")
-                else:
-                    self.log_result("GET /api/buyer/addresses", False, f"Status: {response.status_code}", response.text)
-            except Exception as e:
-                self.log_result("GET /api/buyer/addresses", False, "", str(e))
-        
-        # Test products endpoints
-        if self.buyer_token:
-            try:
-                response = requests.get(f"{BASE_URL}/products", headers=self.get_headers(self.buyer_token))
-                if response.status_code == 200:
-                    products = response.json()
-                    self.log_result("GET /api/products", True, f"Found {len(products)} products")
-                else:
-                    self.log_result("GET /api/products", False, f"Status: {response.status_code}", response.text)
-            except Exception as e:
-                self.log_result("GET /api/products", False, "", str(e))
-        
-        # Test store search
-        if self.buyer_token:
-            try:
-                response = requests.get(f"{BASE_URL}/stores/search", headers=self.get_headers(self.buyer_token))
-                if response.status_code == 200:
-                    stores = response.json()
-                    self.log_result("GET /api/stores/search", True, f"Found {len(stores)} stores")
-                else:
-                    self.log_result("GET /api/stores/search", False, f"Status: {response.status_code}", response.text)
-            except Exception as e:
-                self.log_result("GET /api/stores/search", False, "", str(e))
-    
-    def test_refund_creation(self):
-        """Test refund creation if we have an order"""
-        print("\n=== TESTING REFUND CREATION ===")
-        
-        if self.created_order_id and self.buyer_token:
-            try:
-                refund_data = {
-                    "orderId": self.created_order_id,
-                    "reason": "Test refund request",
-                    "amount": 25.99
-                }
-                response = requests.post(f"{BASE_URL}/buyer/refunds", 
-                                       headers=self.get_headers(self.buyer_token),
-                                       json=refund_data)
-                if response.status_code == 201:
-                    self.log_result("POST /api/buyer/refunds", True, "Refund created successfully")
-                else:
-                    self.log_result("POST /api/buyer/refunds", False, f"Status: {response.status_code}", response.text)
-            except Exception as e:
-                self.log_result("POST /api/buyer/refunds", False, "", str(e))
+            self.log_test("Sanity Check", False, f"Exception: {str(e)}")
     
     def run_all_tests(self):
-        """Run all tests"""
-        print("🚀 Starting Comprehensive Backend API Testing")
-        print("=" * 60)
+        """Run all password reset tests"""
+        print("=" * 80)
+        print("SECURE PASSWORD RESET ENDPOINTS TESTING")
+        print("=" * 80)
         
-        # Authenticate all users first
-        self.authenticate_all_users()
+        # Step 1: Authentication
+        print("\n1. AUTHENTICATION SETUP")
+        print("-" * 40)
+        self.admin_token = self.login_user(ADMIN_CREDENTIALS, "admin")
+        self.seller_token = self.login_user(SELLER_CREDENTIALS, "seller")
+        self.buyer_token = self.login_user(BUYER_CREDENTIALS, "buyer")
         
-        # Test specific fixed endpoints
-        self.test_specific_fixed_endpoints()
+        if not self.admin_token:
+            print("❌ CRITICAL: Admin authentication failed. Cannot proceed with admin tests.")
+            return 0, 0, 0
         
-        # Test complete flows
-        self.test_order_lifecycle()
-        self.test_wallet_recharge_lifecycle()
-        self.test_payout_lifecycle()
+        # Step 2: Admin-triggered reset tests
+        print("\n2. ADMIN-TRIGGERED PASSWORD RESET TESTS")
+        print("-" * 40)
+        self.test_admin_password_reset_happy_path()
+        self.test_admin_password_reset_authorization()
+        self.test_admin_password_reset_not_found()
         
-        # Test additional endpoints
-        self.test_additional_endpoints()
+        # Step 3: Public forgot password tests
+        print("\n3. PUBLIC FORGOT PASSWORD TESTS")
+        print("-" * 40)
+        self.test_public_forgot_password_existing_email()
+        self.test_public_forgot_password_non_existent_email()
+        self.test_public_forgot_password_rate_limit()
         
-        # Test refund creation
-        self.test_refund_creation()
+        # Step 4: Sanity checks
+        print("\n4. SANITY CHECKS")
+        print("-" * 40)
+        self.test_sanity_check_endpoints()
         
-        # Print summary
-        self.print_summary()
-    
-    def print_summary(self):
-        """Print test summary"""
-        print("\n" + "=" * 60)
-        print("📊 TEST SUMMARY")
-        print("=" * 60)
+        # Summary
+        print("\n" + "=" * 80)
+        print("TEST RESULTS SUMMARY")
+        print("=" * 80)
         
-        total_tests = len(self.test_results)
-        passed_tests = sum(1 for result in self.test_results if result["success"])
-        failed_tests = total_tests - passed_tests
+        passed = sum(1 for result in self.test_results if "✅ PASS" in result)
+        failed = sum(1 for result in self.test_results if "❌ FAIL" in result)
+        total = len(self.test_results)
         
-        print(f"Total Tests: {total_tests}")
-        print(f"✅ Passed: {passed_tests}")
-        print(f"❌ Failed: {failed_tests}")
-        print(f"Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+        print(f"TOTAL TESTS: {total}")
+        print(f"PASSED: {passed}")
+        print(f"FAILED: {failed}")
+        print(f"SUCCESS RATE: {(passed/total*100):.1f}%" if total > 0 else "0%")
         
-        if failed_tests > 0:
-            print("\n🔥 FAILED TESTS:")
-            for result in self.test_results:
-                if not result["success"]:
-                    print(f"❌ {result['test']}: {result['error']}")
-        
-        print("\n✅ SUCCESSFUL TESTS:")
+        print("\nDETAILED RESULTS:")
         for result in self.test_results:
-            if result["success"]:
-                print(f"✅ {result['test']}: {result['details']}")
+            print(result)
+        
+        return passed, failed, total
 
 if __name__ == "__main__":
-    tester = APITester()
-    tester.run_all_tests()
+    tester = PasswordResetTester()
+    passed, failed, total = tester.run_all_tests()
+    
+    if failed > 0:
+        print(f"\n❌ {failed} test(s) failed. Please review the issues above.")
+        exit(1)
+    else:
+        print(f"\n✅ All {passed} tests passed successfully!")
+        exit(0)

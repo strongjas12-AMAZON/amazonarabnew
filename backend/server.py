@@ -1331,6 +1331,247 @@ async def unban_user(user_id: str, current_user: dict = Depends(get_current_user
         raise HTTPException(status_code=400, detail=str(e))
 
 
+# =====================================================
+# PASSWORD RESET ENDPOINTS
+# =====================================================
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+    redirect_url: Optional[str] = None
+
+
+def _password_reset_email_html(user_name: str, reset_link: str, triggered_by_admin: bool) -> str:
+    """Branded HTML email body for a password reset."""
+    intro = (
+        "A password reset was requested for your Amazon Arab account by an administrator."
+        if triggered_by_admin
+        else "We received a request to reset the password for your Amazon Arab account."
+    )
+    return f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #1a1a1a; color: #fff; padding: 20px;">
+      <div style="text-align: center; padding: 20px 0; border-bottom: 2px solid #D4AF37;">
+        <h1 style="color: #D4AF37; margin: 0;">Amazon Arab</h1>
+      </div>
+      <div style="padding: 30px 20px;">
+        <h2 style="color: #D4AF37; margin-top: 0;">Reset your password</h2>
+        <p>Hi {user_name or 'there'},</p>
+        <p>{intro}</p>
+        <p>Click the button below to set a new password. This link will expire in 1 hour.</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="{reset_link}"
+             style="background: #D4AF37; color: #000; padding: 14px 32px; border-radius: 6px;
+                    text-decoration: none; font-weight: bold; display: inline-block;">
+            Reset Password
+          </a>
+        </div>
+        <p style="color: #aaa; font-size: 13px;">If the button doesn't work, copy and paste this URL into your browser:</p>
+        <p style="word-break: break-all; color: #D4AF37; font-size: 12px;">{reset_link}</p>
+        <p style="color: #aaa; font-size: 13px; margin-top: 30px;">
+          If you did not request this, you can safely ignore this email — your password will not change.
+        </p>
+      </div>
+      <div style="padding: 15px; text-align: center; border-top: 1px solid #333; color: #888; font-size: 12px;">
+        &copy; Amazon Arab — This is an automated message, please do not reply.
+      </div>
+    </div>
+    """
+
+
+def _extract_action_link(generate_link_response) -> Optional[str]:
+    """Extract the reset action URL from a supabase generate_link response.
+
+    The response shape differs slightly across supabase-py versions, so check
+    a few common locations defensively.
+    """
+    try:
+        # supabase-py v2 returns an object with .properties.action_link
+        props = getattr(generate_link_response, 'properties', None)
+        if props is not None:
+            link = getattr(props, 'action_link', None)
+            if link:
+                return link
+            if isinstance(props, dict):
+                return props.get('action_link')
+
+        # Some versions put it directly on the response
+        direct = getattr(generate_link_response, 'action_link', None)
+        if direct:
+            return direct
+
+        # Dict-like fallback
+        if isinstance(generate_link_response, dict):
+            return (
+                generate_link_response.get('properties', {}).get('action_link')
+                or generate_link_response.get('action_link')
+            )
+    except Exception:
+        pass
+    return None
+
+
+async def _create_recovery_link(email: str, redirect_to: str) -> Optional[str]:
+    """Create a Supabase recovery (password reset) link for the given email."""
+    try:
+        response = await asyncio.to_thread(
+            supabase_admin.auth.admin.generate_link,
+            {
+                "type": "recovery",
+                "email": email,
+                "options": {"redirect_to": redirect_to},
+            },
+        )
+        link = _extract_action_link(response)
+        if not link:
+            logging.error(f"generate_link returned no action_link for {email}: {response}")
+        return link
+    except Exception as e:
+        logging.error(f"Failed to generate recovery link for {email}: {str(e)}")
+        return None
+
+
+@api_router.post("/admin/users/{user_id}/send-password-reset")
+async def admin_send_password_reset(
+    user_id: str,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    """Admin-only: trigger a secure password reset for a user.
+
+    We generate a Supabase recovery link and email it to the user via Resend.
+    The link is also returned in the response so the admin can share it via
+    another channel (WhatsApp/SMS/phone) if the user has email issues.
+    """
+    if current_user.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    # Basic sanity-check on the path param: must be a valid UUID.
+    # Prevents raw Postgres errors when the frontend sends "undefined" etc.
+    try:
+        uuid.UUID(str(user_id))
+    except (ValueError, AttributeError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid user id")
+
+    try:
+        # Look up the target user
+        user_result = supabase_admin.table('users').select('*').eq('id', user_id).execute()
+        if not user_result.data:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        target_user = user_result.data[0]
+        email = target_user.get('email')
+        name = target_user.get('name') or target_user.get('fullName') or ''
+        if not email:
+            raise HTTPException(status_code=400, detail="User has no email on file")
+
+        # Determine redirect URL — use the admin's frontend origin so the
+        # reset page opens in the same environment (preview/production).
+        origin = request.headers.get('origin') or request.headers.get('referer') or ''
+        # Sanitize: take scheme+host only
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(origin)
+            base_origin = f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme and parsed.netloc else ''
+        except Exception:
+            base_origin = ''
+        redirect_to = f"{base_origin}/reset-password" if base_origin else "https://arabshopping.org/reset-password"
+
+        link = await _create_recovery_link(email, redirect_to)
+        if not link:
+            raise HTTPException(
+                status_code=502,
+                detail="Failed to generate password reset link. Please try again or contact Supabase support."
+            )
+
+        # Send the email (non-blocking of the response on failure)
+        email_sent = False
+        try:
+            result = await send_email_async(
+                to_email=email,
+                subject="Reset your Amazon Arab password",
+                html_content=_password_reset_email_html(name, link, triggered_by_admin=True),
+            )
+            email_sent = bool(result)
+        except Exception as e:
+            logging.error(f"Resend failure during admin password reset for {email}: {e}")
+
+        return {
+            "success": True,
+            "message": f"Password reset link generated for {email}."
+                       + (" Email delivered." if email_sent else " Email delivery failed — share the link manually."),
+            "email_sent": email_sent,
+            "email": email,
+            # Returning the link intentionally so admins can share it via
+            # another channel if email delivery is unreliable.
+            "reset_link": link,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"admin_send_password_reset error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/auth/forgot-password")
+@limiter.limit("5/hour")
+async def forgot_password(request: Request, payload: ForgotPasswordRequest):
+    """Public: user-initiated password reset.
+
+    Always returns success to avoid leaking which emails are registered.
+    """
+    email = payload.email.lower().strip()
+    redirect_to = payload.redirect_url
+
+    # Sanitize redirect URL to just the origin portion
+    if redirect_to:
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(redirect_to)
+            if parsed.scheme and parsed.netloc:
+                redirect_to = f"{parsed.scheme}://{parsed.netloc}/reset-password"
+            else:
+                redirect_to = None
+        except Exception:
+            redirect_to = None
+
+    if not redirect_to:
+        origin = request.headers.get('origin') or request.headers.get('referer') or ''
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(origin)
+            redirect_to = f"{parsed.scheme}://{parsed.netloc}/reset-password" if parsed.scheme and parsed.netloc else "https://arabshopping.org/reset-password"
+        except Exception:
+            redirect_to = "https://arabshopping.org/reset-password"
+
+    try:
+        # Only send if user actually exists (but response is identical either way)
+        user_lookup = supabase_admin.table('users').select('id, name, email').eq('email', email).limit(1).execute()
+        if user_lookup.data:
+            user = user_lookup.data[0]
+            link = await _create_recovery_link(email, redirect_to)
+            if link:
+                try:
+                    await send_email_async(
+                        to_email=email,
+                        subject="Reset your Amazon Arab password",
+                        html_content=_password_reset_email_html(
+                            user.get('name') or '', link, triggered_by_admin=False
+                        ),
+                    )
+                except Exception as e:
+                    logging.error(f"Resend failure during self-serve password reset for {email}: {e}")
+    except Exception as e:
+        # Swallow errors to avoid leaking account existence
+        logging.error(f"forgot_password internal error for {email}: {e}")
+
+    # Always identical response
+    return {
+        "success": True,
+        "message": "If an account exists for that email, a password reset link has been sent.",
+    }
+
+
+
+
 # Product Routes
 @api_router.get("/categories")
 async def get_categories():
@@ -4503,7 +4744,7 @@ async def clear_product_catalog_new(request: Request, current_user: dict = Depen
         
         return {
             "success": True,
-            "message": f"Cleared product catalog and store products"
+            "message": "Cleared product catalog and store products"
         }
     
     except HTTPException:
@@ -4861,7 +5102,7 @@ async def get_my_store_products(current_user: dict = Depends(get_current_user)):
         
         seller_id = current_user['id']
         
-        # Get store products with catalog info
+        # Get store products with catalog info - only active (not soft-deleted)
         result = supabase_admin.table('store_products').select(
             '''
             id,
@@ -4875,7 +5116,7 @@ async def get_my_store_products(current_user: dict = Depends(get_current_user)):
             created_at,
             product_catalog:catalog_product_id(name, description, base_price, images, category)
             '''
-        ).eq('seller_id', seller_id).order('created_at', desc=True).execute()
+        ).eq('seller_id', seller_id).eq('is_active', True).order('created_at', desc=True).execute()
         
         # Format response
         products = []
@@ -4966,25 +5207,57 @@ async def remove_product_from_store(
     product_id: str,
     current_user: dict = Depends(get_current_user)
 ):
-    """Seller-only: Remove a product from their store"""
+    """Seller-only: Remove a product from their store.
+
+    If the product has associated order history (referenced from order_items),
+    we cannot hard-delete it without breaking referential integrity. In that
+    case we perform a SOFT delete by setting is_active=false, which hides it
+    from buyers/stores while preserving order history. Otherwise we hard-delete.
+    """
     try:
         # Verify seller role
         if current_user.get('role') != 'seller':
             raise HTTPException(status_code=403, detail="Seller access required")
-        
+
         seller_id = current_user['id']
-        
-        # Delete product (RLS ensures only own products)
-        result = supabase_admin.table('store_products').delete().eq('id', product_id).eq('seller_id', seller_id).execute()
-        
-        if not result.data:
+
+        # First, verify the product belongs to this seller
+        owned = supabase_admin.table('store_products').select('id').eq('id', product_id).eq('seller_id', seller_id).limit(1).execute()
+        if not owned.data:
             raise HTTPException(status_code=404, detail="Product not found in your store")
-        
-        return {
-            "success": True,
-            "message": "Product removed from store successfully"
-        }
-    
+
+        # Check whether any order_items reference this store product.
+        # order_items.product_id is a FK to store_products.id.
+        order_items_ref = supabase_admin.table('order_items').select('id').eq('product_id', product_id).limit(1).execute()
+        has_orders = bool(order_items_ref.data)
+
+        if has_orders:
+            # SOFT delete: preserve order history, hide from catalog/store listings
+            update_result = supabase_admin.table('store_products').update({
+                'is_active': False
+            }).eq('id', product_id).eq('seller_id', seller_id).execute()
+
+            if not update_result.data:
+                raise HTTPException(status_code=404, detail="Product not found in your store")
+
+            return {
+                "success": True,
+                "message": "Product removed from your store. Existing order history is preserved.",
+                "soft_deleted": True
+            }
+        else:
+            # Safe to hard delete (no order references)
+            result = supabase_admin.table('store_products').delete().eq('id', product_id).eq('seller_id', seller_id).execute()
+
+            if not result.data:
+                raise HTTPException(status_code=404, detail="Product not found in your store")
+
+            return {
+                "success": True,
+                "message": "Product removed from store successfully",
+                "soft_deleted": False
+            }
+
     except HTTPException:
         raise
     except Exception as e:

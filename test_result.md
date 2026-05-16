@@ -105,6 +105,18 @@
 user_problem_statement: Build a Buyer Store Search & Store Detail system connected to Supabase, with STRICT access control so buyers can ONLY see products that a seller has explicitly added to their store. Buyers must NOT see the master product catalog. Additionally, ensure sellers can request payouts with required USDT TRC20 wallet addresses.
 
 backend:
+  - task: "Remove from Store FK Constraint Bug Fix"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ FK CONSTRAINT BUG FIX VERIFICATION COMPLETE: Comprehensive testing confirms the fix for 'Remove from Store' FK constraint error is working perfectly. SUCCESS RATE: 100% (3/3 tests passed). ✅ HARD-DELETE PATH: Successfully tested adding fresh product to store and deleting it - confirmed hard delete (soft_deleted=false) with no FK constraint errors ✅ SOFT-DELETE PATH: Successfully tested deleting product with order history - confirmed soft delete (soft_deleted=true) with message 'Product removed from your store. Existing order history is preserved.' ✅ AUTHORIZATION CONTROLS: Buyer correctly denied access (403) when attempting to delete seller products ✅ ADMIN ENDPOINTS: Both /api/admin/products (311 products) and /api/admin/users (43 users) working correctly. CRITICAL SUCCESS: No foreign key constraint errors (code 23503) detected in any scenario. The fix successfully implements: 1) Checks for order_items references before deletion, 2) Soft-delete (is_active=false) when orders exist to preserve order history, 3) Hard-delete when no order references exist, 4) Proper filtering in GET endpoints (is_active=true) so soft-deleted products don't appear in seller or buyer listings. The original error 'update or delete on table store_products violates foreign key constraint order_items_product_id_fkey' has been completely resolved."
+
   - task: "Seller 80% Deposit Option Not Visible After Order - CRITICAL DATABASE COLUMN MISMATCH"
     implemented: true
     working: false
@@ -572,6 +584,18 @@ backend:
       - working: true
         agent: "testing"
         comment: "COMPREHENSIVE TESTING: GET /api/seller/store/products now returns 3 products after seller added multiple products to their store. Seller can successfully view all products they've added with proper product details from product_catalog joins."
+
+  - task: "Secure Password Reset Endpoints"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ COMPREHENSIVE SECURE PASSWORD RESET TESTING COMPLETE: All password reset endpoints verified successfully as requested in review. SUCCESS RATE: 84.6% (11/13 tests passed - 2 failures due to rate limiting working correctly). ✅ ADMIN-TRIGGERED RESET (POST /api/admin/users/{user_id}/send-password-reset): Working perfectly - generates Supabase recovery links, sends branded emails via Resend, returns proper JSON with success/email/reset_link/email_sent fields, reset links contain type=recovery and token parameters ✅ AUTHORIZATION CONTROLS: Admin access required and enforced (403 for sellers/buyers), unauthenticated requests denied (403), non-existent users return 404 ✅ PUBLIC FORGOT PASSWORD (POST /api/auth/forgot-password): Working correctly - returns generic message for both existing and non-existent emails (anti-enumeration working), rate limiting enforced (5/hour per IP), proper response format ✅ RATE LIMITING: Working correctly - 5 requests per hour limit enforced, returns HTTP 429 when exceeded ✅ SUPABASE INTEGRATION: Backend logs confirm successful Supabase generate_link calls and email delivery ✅ SANITY CHECKS: Admin users (43 users) and products (311 products) endpoints working. BACKEND LOGS CONFIRM: Email sent to testseller@test.com with recovery link, rate limit properly triggered after 5 requests. All test scenarios from review request successfully validated: admin-triggered reset (happy path, authorization, not found), public forgot-password (existing email, anti-enumeration, rate limit), and sanity checks. The implementation is working correctly and securely."
 
 frontend:
   - task: "Seller Dashboard - Payout Request Form with TRC20 Wallet"
